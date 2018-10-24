@@ -158,6 +158,20 @@ http://sack.sf.net
   - [Fraction](http://sack.sourceforge.net/sack__math__fraction.html)
   - [Vector](http://sack.sourceforge.net/sack__math__vector.html)
   
+## Build Flags
+
+Some platforms/permutations need flags defined to compile 'correctly'. The 
+CMake build system for SACK takes care of these typically...
+
+| Flag | Usage |
+|-----|------|
+| __LINUX__ | compile for posix type system.  This should be defaulted if not _WIN32 |
+| _WIN32 | compile for windows platform |
+| __ARM__ | compile targeting arm (some assembly otherwise available is replaced |
+| __MAC__ | comppile targeting Mac; minor differences in SockAddr structure |
+| __NO_LOGGING__ | Disable any internal logging; compiles to `(0);` |
+| __64__ | This should have a good default set; but this sets 64 bit platform target |
+| __ANDROID__ | certain changes for android system |
 
 ## Behavior
 
