@@ -1,3 +1,7 @@
+#ifdef _MSC_VER
+// because snprintf IS secure; and _snprintf doesn't help.
+#  define _CRT_SECURE_NO_WARNINGS
+#endif
 #ifndef HAVE_SSL
 #  define NO_SSL 1
 #endif
@@ -46,6 +50,11 @@
 #endif
 #ifndef WINVER
 #  define WINVER 0x0601
+#endif
+#ifndef _WIN32
+#  ifndef __LINUX__
+#    define __LINUX__
+#  endif
 #endif
 #if !defined(__LINUX__)
 #  ifndef STRICT
@@ -1843,6 +1852,7 @@ TYPELIB_PROC  void TYPELIB_CALLTYPE         EmptyList      ( PLIST *pList );
    gave up doing this sort of thing afterwards after realizing
    the methods of a library and these static methods for a class
    aren't much different.                                        */
+#  if defined( INCLUDE_SAMPLE_CPLUSPLUS_WRAPPERS )
 typedef class iList
 {
 public:
@@ -1857,6 +1867,7 @@ public:
 	inline POINTER next( void ) { POINTER p; for( idx++;list && (( p = GetLink( &list, idx ) )==0) && idx < list->Cnt; )idx++; return p; }
 	inline POINTER get(INDEX index) { return GetLink( &list, index ); }
 } *piList;
+#  endif
 #endif
 // address of the thing...
 typedef uintptr_t (CPROC *ForProc)( uintptr_t user, INDEX idx, POINTER *item );
@@ -3577,8 +3588,23 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  FlattenLine ( PTEXT pLine );
 /* Create a highest precision signed integer from a PTEXT. */
 TYPELIB_PROC  int64_t TYPELIB_CALLTYPE  IntCreateFromSeg( PTEXT pText );
 /* Converts a text to the longest precision signed integer
-   value.                                                  */
+   value.
+     allows +/- leadin ([-*]|[+*])*
+     supports 0x### (hex), 0b#### (binary), 0o#### (octal), 0### (octal)
+	 decimal 1-9[0-9]*
+	 buggy implementation supports +/- inline continue number and are either ignored(+)
+	 or changes the overall sign of the number(-).  A Decimal definatly ends the number.
+	 And octal/binary digits aren't checked for range, so 8/9 will over-flow in octal,
+	 and 2-9 overflow to upper bits in octal...
+	    0b901090 // would be like   0b 10100110    0b1001 +  010 + 1001<<3 + 0
+   */
 TYPELIB_PROC  int64_t TYPELIB_CALLTYPE  IntCreateFromText( CTEXTSTR p );
+/* Converts a text to the longest precision signed integer
+   value.  Does the work of IntCreateFromText.
+   IntCreateFromTextRef updates the pointer passed by reference so
+   the pointer ends at the first character after the returned number.
+   */
+TYPELIB_PROC  int64_t TYPELIB_CALLTYPE  IntCreateFromTextRef( CTEXTSTR *p_ );
 /* Create a high precision floating point value from PTEXT
    segment.                                                */
 TYPELIB_PROC  double TYPELIB_CALLTYPE  FloatCreateFromSeg( PTEXT pText );
@@ -3979,12 +4005,12 @@ TYPELIB_PROC  INDEX TYPELIB_CALLTYPE  vvtprintf( PVARTEXT pvt, CTEXTSTR format, 
 /* encode binary buffer into base64 encoding.
    outsize is updated with the length of the buffer.
  */
-TYPELIB_PROC  TEXTCHAR * TYPELIB_CALLTYPE  EncodeBase64Ex( uint8_t* buf, size_t length, size_t *outsize, const char *encoding );
+TYPELIB_PROC  TEXTCHAR * TYPELIB_CALLTYPE  EncodeBase64Ex( const uint8_t* buf, size_t length, size_t *outsize, const char *encoding );
 /* decode base64 buffer into binary buffer
    outsize is updated with the length of the buffer.
    result should be Release()'d
  */
-TYPELIB_PROC  uint8_t * TYPELIB_CALLTYPE  DecodeBase64Ex( char* buf, size_t length, size_t *outsize, const char *encoding );
+TYPELIB_PROC  uint8_t * TYPELIB_CALLTYPE  DecodeBase64Ex( const char* buf, size_t length, size_t *outsize, const char *encoding );
 /* xor a base64 encoded string over a utf8 string, keeping the utf8 characters in the same length...
    although technically this can result in invalid character encoding where upper bits get zeroed
    result should be Release()'d
@@ -3998,8 +4024,8 @@ TYPELIB_PROC  char * TYPELIB_CALLTYPE  b64xor( const char *a, const char *b );
 // extended command entry stuff... handles editing buffers with insert/overwrite/copy/paste/etc...
 typedef struct user_input_buffer_tag {
 	// -------------------- custom cmd buffer extension
-  // position counter for pulling history
-	INDEX nHistory;
+  // position counter for pulling history; negative indexes are recalled commands.
+	int nHistory;
   // a link queue which contains the prior lines of text entered for commands.
 	PLINKQUEUE InputHistory;
  // set to TRUE when nHistory has wrapped...
@@ -4748,6 +4774,40 @@ SYSLOG_SOCKET_SYSLOGD
 SYSLOG_PROC  LOGICAL SYSLOG_API  IsBadReadPtr ( CPOINTER pointer, uintptr_t len );
 #endif
 SYSLOG_PROC  CTEXTSTR SYSLOG_API  GetPackedTime ( void );
+//  returns the millisecond of the day (since UNIX Epoch) * 256 ( << 8 )
+// the lowest 8 bits are the timezone / 15.
+// The effect of the low [7/]8 bits being the time zone is that within the same millisecond
+// UTC +0 sorts first, followed by +1, +2, ... etc until -14, -13, -12,... -1
+// the low [7/]8 bits are the signed timezone
+// (timezone could have been either be hr*60 + min (ISO TZ format)
+// or in minutes (hr*60+mn) this would only take 7 bits
+// one would think 8 bit shifts would be slightly more efficient than 7 bits.
+// and sign extension for 8 bits already exists.
+// - REVISION - timezone with hr*100 does not divide by 15 cleanly.
+//     The timezone is ( hour*60 + min ) / 15 which is a range from -56 to 48
+//     minimal representation is 7 bits (0 - 127 or -64 - 63)
+//     still keeping 8 bits for shifting, so the effective range is only -56 to 48 of -128 to 127
+// struct time_of_day {
+//    uint64_t epoch_milliseconds : 56;
+//    int64_t timezone : 8; divided by 15... hours * 60 / 15
+// }
+SYSLOG_PROC  int64_t SYSLOG_API GetTimeOfDay( void );
+// binary little endian order; somewhat
+typedef struct sack_expanded_time_tag
+{
+	uint16_t ms;
+	uint8_t sc,mn,hr,dy,mo;
+	uint16_t yr;
+	int8_t zhr, zmn;
+} SACK_TIME;
+typedef struct sack_expanded_time_tag *PSACK_TIME;
+// convert a integer time value to an expanded structure.
+SYSLOG_PROC void     SYSLOG_API ConvertTickToTime( int64_t, PSACK_TIME st );
+// convert a expanded time structure to a integer value.
+SYSLOG_PROC int64_t SYSLOG_API ConvertTimeToTick( PSACK_TIME st );
+// returns timezone as hours*100 + minutes.
+// result is often negated?
+SYSLOG_PROC  int SYSLOG_API GetTimeZone(void);
 //
 typedef void (CPROC*UserLoggingCallback)( CTEXTSTR log_string );
 SYSLOG_PROC  void SYSLOG_API  SetSystemLog ( enum syslog_types type, const void *data );
@@ -5403,6 +5463,12 @@ typedef struct win_sockaddr_in SOCKADDR_IN;
 #undef StrRChr
 #undef StrStr
 #endif
+#if defined( __MAC__ )
+#  define strdup(s) StrDup(s)
+#  define strdup_free(s) Release(s)
+#else
+#  define strdup_free(s) free(s)
+#endif
 #ifdef __cplusplus
 #define SACK_MEMORY_NAMESPACE SACK_NAMESPACE namespace memory {
 #define SACK_MEMORY_NAMESPACE_END } SACK_NAMESPACE_END
@@ -5979,11 +6045,11 @@ MEM_PROC  uint64_t MEM_API  LockedExchange64 ( volatile uint64_t* p, uint64_t va
 /* A multi-processor safe increment of a variable.
    Parameters
    p :  pointer to a 32 bit value to increment.    */
-MEM_PROC  uint32_t MEM_API  LockedIncrement ( uint32_t* p );
+MEM_PROC  uint32_t MEM_API  LockedIncrement ( volatile uint32_t* p );
 /* Does a multi-processor safe decrement on a variable.
    Parameters
    p :  pointer to a 32 bit value to decrement.         */
-MEM_PROC  uint32_t MEM_API  LockedDecrement ( uint32_t* p );
+MEM_PROC  uint32_t MEM_API  LockedDecrement ( volatile uint32_t* p );
 #ifdef __cplusplus
 // like also __if_assembly__
 //extern "C" {
@@ -6370,10 +6436,17 @@ inline void operator delete (void * p)
 #endif
 // this is a method replacement to use PIPEs instead of SEMAPHORES
 // replacement code only affects linux.
-#if defined( __QNX__ ) || defined( __MAC__) || defined( __LINUX__ ) || defined( __ANDROID__ )
-#  define USE_PIPE_SEMS
+#if defined( __QNX__ ) || defined( __MAC__) || defined( __LINUX__ )
+#  if defined( __ANDROID__ ) || defined( EMSCRIPTEN ) || defined( __MAC__ )
+// android > 21 can use pthread_mutex_timedop
+#    define USE_PIPE_SEMS
+#  else
+//   Default behavior is to use pthread_mutex_timedlock for wakeable sleeps.
 // no semtimedop; no semctl, etc
-//#include <sys/sem.h>
+//#    include <sys/sem.h>
+//originally used semctl; but that consumes system resources that are not
+//cleaned up when the process exits.
+#endif
 #endif
 #ifdef USE_PIPE_SEMS
 #  define _NO_SEMTIMEDOP_
@@ -7083,6 +7156,11 @@ namespace sack {
 #ifndef WINVER
 #  define WINVER 0x0601
 #endif
+#ifndef _WIN32
+#  ifndef __LINUX__
+#    define __LINUX__
+#  endif
+#endif
 #if !defined(__LINUX__)
 #  ifndef STRICT
 #    define STRICT
@@ -8880,6 +8958,7 @@ TYPELIB_PROC  void TYPELIB_CALLTYPE         EmptyList      ( PLIST *pList );
    gave up doing this sort of thing afterwards after realizing
    the methods of a library and these static methods for a class
    aren't much different.                                        */
+#  if defined( INCLUDE_SAMPLE_CPLUSPLUS_WRAPPERS )
 typedef class iList
 {
 public:
@@ -8894,6 +8973,7 @@ public:
 	inline POINTER next( void ) { POINTER p; for( idx++;list && (( p = GetLink( &list, idx ) )==0) && idx < list->Cnt; )idx++; return p; }
 	inline POINTER get(INDEX index) { return GetLink( &list, index ); }
 } *piList;
+#  endif
 #endif
 // address of the thing...
 typedef uintptr_t (CPROC *ForProc)( uintptr_t user, INDEX idx, POINTER *item );
@@ -10614,8 +10694,23 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  FlattenLine ( PTEXT pLine );
 /* Create a highest precision signed integer from a PTEXT. */
 TYPELIB_PROC  int64_t TYPELIB_CALLTYPE  IntCreateFromSeg( PTEXT pText );
 /* Converts a text to the longest precision signed integer
-   value.                                                  */
+   value.
+     allows +/- leadin ([-*]|[+*])*
+     supports 0x### (hex), 0b#### (binary), 0o#### (octal), 0### (octal)
+	 decimal 1-9[0-9]*
+	 buggy implementation supports +/- inline continue number and are either ignored(+)
+	 or changes the overall sign of the number(-).  A Decimal definatly ends the number.
+	 And octal/binary digits aren't checked for range, so 8/9 will over-flow in octal,
+	 and 2-9 overflow to upper bits in octal...
+	    0b901090 // would be like   0b 10100110    0b1001 +  010 + 1001<<3 + 0
+   */
 TYPELIB_PROC  int64_t TYPELIB_CALLTYPE  IntCreateFromText( CTEXTSTR p );
+/* Converts a text to the longest precision signed integer
+   value.  Does the work of IntCreateFromText.
+   IntCreateFromTextRef updates the pointer passed by reference so
+   the pointer ends at the first character after the returned number.
+   */
+TYPELIB_PROC  int64_t TYPELIB_CALLTYPE  IntCreateFromTextRef( CTEXTSTR *p_ );
 /* Create a high precision floating point value from PTEXT
    segment.                                                */
 TYPELIB_PROC  double TYPELIB_CALLTYPE  FloatCreateFromSeg( PTEXT pText );
@@ -11016,12 +11111,12 @@ TYPELIB_PROC  INDEX TYPELIB_CALLTYPE  vvtprintf( PVARTEXT pvt, CTEXTSTR format, 
 /* encode binary buffer into base64 encoding.
    outsize is updated with the length of the buffer.
  */
-TYPELIB_PROC  TEXTCHAR * TYPELIB_CALLTYPE  EncodeBase64Ex( uint8_t* buf, size_t length, size_t *outsize, const char *encoding );
+TYPELIB_PROC  TEXTCHAR * TYPELIB_CALLTYPE  EncodeBase64Ex( const uint8_t* buf, size_t length, size_t *outsize, const char *encoding );
 /* decode base64 buffer into binary buffer
    outsize is updated with the length of the buffer.
    result should be Release()'d
  */
-TYPELIB_PROC  uint8_t * TYPELIB_CALLTYPE  DecodeBase64Ex( char* buf, size_t length, size_t *outsize, const char *encoding );
+TYPELIB_PROC  uint8_t * TYPELIB_CALLTYPE  DecodeBase64Ex( const char* buf, size_t length, size_t *outsize, const char *encoding );
 /* xor a base64 encoded string over a utf8 string, keeping the utf8 characters in the same length...
    although technically this can result in invalid character encoding where upper bits get zeroed
    result should be Release()'d
@@ -11035,8 +11130,8 @@ TYPELIB_PROC  char * TYPELIB_CALLTYPE  b64xor( const char *a, const char *b );
 // extended command entry stuff... handles editing buffers with insert/overwrite/copy/paste/etc...
 typedef struct user_input_buffer_tag {
 	// -------------------- custom cmd buffer extension
-  // position counter for pulling history
-	INDEX nHistory;
+  // position counter for pulling history; negative indexes are recalled commands.
+	int nHistory;
   // a link queue which contains the prior lines of text entered for commands.
 	PLINKQUEUE InputHistory;
  // set to TRUE when nHistory has wrapped...
@@ -11785,6 +11880,40 @@ SYSLOG_SOCKET_SYSLOGD
 SYSLOG_PROC  LOGICAL SYSLOG_API  IsBadReadPtr ( CPOINTER pointer, uintptr_t len );
 #endif
 SYSLOG_PROC  CTEXTSTR SYSLOG_API  GetPackedTime ( void );
+//  returns the millisecond of the day (since UNIX Epoch) * 256 ( << 8 )
+// the lowest 8 bits are the timezone / 15.
+// The effect of the low [7/]8 bits being the time zone is that within the same millisecond
+// UTC +0 sorts first, followed by +1, +2, ... etc until -14, -13, -12,... -1
+// the low [7/]8 bits are the signed timezone
+// (timezone could have been either be hr*60 + min (ISO TZ format)
+// or in minutes (hr*60+mn) this would only take 7 bits
+// one would think 8 bit shifts would be slightly more efficient than 7 bits.
+// and sign extension for 8 bits already exists.
+// - REVISION - timezone with hr*100 does not divide by 15 cleanly.
+//     The timezone is ( hour*60 + min ) / 15 which is a range from -56 to 48
+//     minimal representation is 7 bits (0 - 127 or -64 - 63)
+//     still keeping 8 bits for shifting, so the effective range is only -56 to 48 of -128 to 127
+// struct time_of_day {
+//    uint64_t epoch_milliseconds : 56;
+//    int64_t timezone : 8; divided by 15... hours * 60 / 15
+// }
+SYSLOG_PROC  int64_t SYSLOG_API GetTimeOfDay( void );
+// binary little endian order; somewhat
+typedef struct sack_expanded_time_tag
+{
+	uint16_t ms;
+	uint8_t sc,mn,hr,dy,mo;
+	uint16_t yr;
+	int8_t zhr, zmn;
+} SACK_TIME;
+typedef struct sack_expanded_time_tag *PSACK_TIME;
+// convert a integer time value to an expanded structure.
+SYSLOG_PROC void     SYSLOG_API ConvertTickToTime( int64_t, PSACK_TIME st );
+// convert a expanded time structure to a integer value.
+SYSLOG_PROC int64_t SYSLOG_API ConvertTimeToTick( PSACK_TIME st );
+// returns timezone as hours*100 + minutes.
+// result is often negated?
+SYSLOG_PROC  int SYSLOG_API GetTimeZone(void);
 //
 typedef void (CPROC*UserLoggingCallback)( CTEXTSTR log_string );
 SYSLOG_PROC  void SYSLOG_API  SetSystemLog ( enum syslog_types type, const void *data );
@@ -12440,6 +12569,12 @@ typedef struct win_sockaddr_in SOCKADDR_IN;
 #undef StrRChr
 #undef StrStr
 #endif
+#if defined( __MAC__ )
+#  define strdup(s) StrDup(s)
+#  define strdup_free(s) Release(s)
+#else
+#  define strdup_free(s) free(s)
+#endif
 #ifdef __cplusplus
 #define SACK_MEMORY_NAMESPACE SACK_NAMESPACE namespace memory {
 #define SACK_MEMORY_NAMESPACE_END } SACK_NAMESPACE_END
@@ -13016,11 +13151,11 @@ MEM_PROC  uint64_t MEM_API  LockedExchange64 ( volatile uint64_t* p, uint64_t va
 /* A multi-processor safe increment of a variable.
    Parameters
    p :  pointer to a 32 bit value to increment.    */
-MEM_PROC  uint32_t MEM_API  LockedIncrement ( uint32_t* p );
+MEM_PROC  uint32_t MEM_API  LockedIncrement ( volatile uint32_t* p );
 /* Does a multi-processor safe decrement on a variable.
    Parameters
    p :  pointer to a 32 bit value to decrement.         */
-MEM_PROC  uint32_t MEM_API  LockedDecrement ( uint32_t* p );
+MEM_PROC  uint32_t MEM_API  LockedDecrement ( volatile uint32_t* p );
 #ifdef __cplusplus
 // like also __if_assembly__
 //extern "C" {
@@ -13407,10 +13542,17 @@ inline void operator delete (void * p)
 #endif
 // this is a method replacement to use PIPEs instead of SEMAPHORES
 // replacement code only affects linux.
-#if defined( __QNX__ ) || defined( __MAC__) || defined( __LINUX__ ) || defined( __ANDROID__ )
-#  define USE_PIPE_SEMS
+#if defined( __QNX__ ) || defined( __MAC__) || defined( __LINUX__ )
+#  if defined( __ANDROID__ ) || defined( EMSCRIPTEN ) || defined( __MAC__ )
+// android > 21 can use pthread_mutex_timedop
+#    define USE_PIPE_SEMS
+#  else
+//   Default behavior is to use pthread_mutex_timedlock for wakeable sleeps.
 // no semtimedop; no semctl, etc
-//#include <sys/sem.h>
+//#    include <sys/sem.h>
+//originally used semctl; but that consumes system resources that are not
+//cleaned up when the process exits.
+#endif
 #endif
 #ifdef USE_PIPE_SEMS
 #  define _NO_SEMTIMEDOP_
@@ -15085,6 +15227,8 @@ PROCREG_PROC( int, LoadTree )( void );
    DropInterface( p );
    </code>                                                     */
 PROCREG_PROC( void, DropInterface )( CTEXTSTR pServiceName, POINTER interface_x );
+PROCREG_PROC( POINTER, GetInterface_v4 )( CTEXTSTR pServiceName, LOGICAL ReadConfig, int quietFail DBG_PASS );
+#define GetInterfaceV4( a, b )  GetInterface_v4( a, FALSE, b DBG_SRC )
 /* \Returns the pointer to a registered interface. This is
    typically a structure that contains pointer to functions. Takes
    a text string to an interface. Interfaces are registered at a
@@ -15313,6 +15457,7 @@ PLIST  DeleteListEx ( PLIST *pList DBG_PASS )
 //--------------------------------------------------------------------------
 static PLIST ExpandListEx( PLIST *pList, INDEX amount DBG_PASS )
 {
+ //-V595
 	PLIST old_list = (*pList);
 	PLIST pl;
 	uintptr_t size;
@@ -15565,6 +15710,7 @@ static struct data_list_local_data
 //--------------------------------------------------------------------------
 PDATALIST ExpandDataListEx( PDATALIST *ppdl, INDEX entries DBG_PASS )
 {
+ //-V595
 	PDATALIST pdl = (*ppdl);
 	PDATALIST pNewList;
 	if( !ppdl || !*ppdl )
@@ -15687,12 +15833,8 @@ POINTER  PeekLinkEx ( PLINKSTACK *pls, INDEX n )
 {
 	// should lock - but it's fast enough?
 	POINTER p = NULL;
-	if( pls && (*pls) && n >= (*pls)->Top )
-		return NULL;
-	if( pls && *pls && ((*pls)->Top-n) )
-		p = (*pls)->pNode[(*pls)->Top-(n+1)];
-	else
-		return NULL;
+	if( pls && *pls && ((*pls)->Top > n) )
+		p = (*pls)->pNode[(*pls)->Top - (n + 1)];
 	return p;
 }
 //--------------------------------------------------------------------------
@@ -15713,6 +15855,7 @@ static PLINKSTACK ExpandStackEx( PLINKSTACK *stack, INDEX entries DBG_PASS )
 	PLINKSTACK pNewStack;
 	if( *stack )
 		entries += (*stack)->Cnt;
+ //-V595
 	pNewStack = (PLINKSTACK)AllocateEx( my_offsetof( stack, pNode[entries] ) DBG_RELAY );
 	if( *stack )
 	{
@@ -15887,6 +16030,7 @@ static struct link_queue_local_data
 PLINKQUEUE CreateLinkQueueEx( DBG_VOIDPASS )
 {
 	PLINKQUEUE plq = 0;
+ //-V557
 	plq = (PLINKQUEUE)AllocateEx( MY_OFFSETOF( &plq, pNode[8] ) DBG_RELAY );
 #if USE_CUSTOM_ALLOCER
 	plq->Lock     = 0;
@@ -17086,6 +17230,7 @@ PTEXT SegCreateFromIntEx( int value DBG_PASS )
 #ifdef _UNICODE
 	pResult->data.size = swprintf( pResult->data.data, 12, WIDE("%d"), value );
 #else
+ //-V512
 	pResult->data.size = snprintf( pResult->data.data, 12, WIDE("%d"), value );
 #endif
 	pResult->data.data[11] = 0;
@@ -17099,6 +17244,7 @@ PTEXT SegCreateFrom_64Ex( int64_t value DBG_PASS )
 #ifdef _UNICODE
 	pResult->data.size = swprintf( pResult->data.data, 32, WIDE("%")_64f, value );
 #else
+ //-V512
 	pResult->data.size = snprintf( pResult->data.data, 32, WIDE("%")_64f, value );
 #endif
 pResult->data.data[31] = 0;
@@ -17112,6 +17258,7 @@ PTEXT SegCreateFromFloatEx( float value DBG_PASS )
 #ifdef _UNICODE
 	pResult->data.size = swprintf( pResult->data.data, 32, WIDE("%f"), value );
 #else
+ //-V512
 	pResult->data.size = snprintf( pResult->data.data, 32, WIDE("%f"), value );
 #endif
 	pResult->data.data[31] = 0;
@@ -17363,9 +17510,11 @@ PTEXT SegSplitEx( PTEXT *pLine, INDEX nPos  DBG_PASS)
 	if( nPos == nLen )
 		return *pLine;
 	here = SegCreateEx( nPos DBG_RELAY );
+ //-V595
 	here->flags  = (*pLine)->flags;
 	here->format = (*pLine)->format;
 	there = SegCreateEx( (nLen - nPos) DBG_RELAY );
+ //-V595
 	there->flags  = (*pLine)->flags;
 	there->format = (*pLine)->format;
  // was two characters presumably...
@@ -17535,6 +17684,7 @@ PTEXT TextParse( PTEXT input, CTEXTSTR punctuation, CTEXTSTR filter_space, int b
 				spaces++;
 				break;
 			}
+ //-V517
 				if(0) {
 		case '\t':
 					if( bTabs )
@@ -17553,6 +17703,7 @@ PTEXT TextParse( PTEXT input, CTEXTSTR punctuation, CTEXTSTR filter_space, int b
 						tabs++;
 						break;
 					}
+ //-V517
 				} else if(0) {
  // a space space character...
 		case '\r':
@@ -17562,6 +17713,7 @@ PTEXT TextParse( PTEXT input, CTEXTSTR punctuation, CTEXTSTR filter_space, int b
 						outdata = SegAppend( outdata, word );
 					}
 					break;
+ //-V517
 				} else if(0) {
  // handle multiple periods grouped (elipses)
 		case '.':
@@ -18404,16 +18556,15 @@ int CompareStrings( PTEXT pt1, int single1
 	return FALSE;
 }
 //--------------------------------------------------------------------------
-int64_t IntCreateFromText( CTEXTSTR p )
+int64_t IntCreateFromTextRef( CTEXTSTR *p_ )
 {
-	//CTEXTSTR p;
+	CTEXTSTR p = p_[0];
 	int s;
 	int begin;
 	int64_t num;
 	LOGICAL altBase = FALSE;
 	LOGICAL altBase2 = FALSE;
 	int64_t base = 10;
-	//p = GetText( pText );
 	if( !p )
 		return 0;
 	//if( pText->flags & TF_INDIRECT )
@@ -18436,6 +18587,7 @@ int64_t IntCreateFromText( CTEXTSTR p )
 		{
 			if( !altBase2 ) {
 				if( *p == 'x' ) { altBase2 = TRUE; base = 16; }
+				else if( *p == 'o' ) { altBase2 = TRUE; base = 8; }
 				else if( *p == 'b' ) { altBase2 = TRUE; base = 2; }
 				else break;
 			} else {
@@ -18463,9 +18615,15 @@ int64_t IntCreateFromText( CTEXTSTR p )
 		begin = FALSE;
 		p++;
 	}
+	p_[0] = p;
 	if( s & 1 )
 		num *= -1;
 	return num;
+}
+//--------------------------------------------------------------------------
+int64_t IntCreateFromText( CTEXTSTR p )
+{
+	return IntCreateFromTextRef( &p );
 }
 //--------------------------------------------------------------------------
 int64_t IntCreateFromSeg( PTEXT pText )
@@ -18548,7 +18706,7 @@ double FloatCreateFromSeg( PTEXT pText )
 // otherwise, only as many segments as are needed for the number are used...
 int IsSegAnyNumberEx( PTEXT *ppText, double *fNumber, int64_t *iNumber, int *bIntNumber, int bUseAll )
 {
-	CTEXTSTR pCurrentCharacter;
+	CTEXTSTR pCurrentCharacter = NULL;
 	PTEXT pBegin;
 	PTEXT pText = *ppText;
 	int decimal_count, s, begin = TRUE, digits;
@@ -20185,19 +20343,19 @@ char * u8xor( const char *a, size_t alen, const char *b, size_t blen, int *ofs )
 		if( (v & 0x80) == 0x00 ) { if( l ) lprintf( "short utf8 sequence found" ); mask = 0x3f; _mask = 0x3f; }
 		else if( (v & 0xC0) == 0x80 ) { if( !l ) lprintf( "invalid utf8 sequence" ); l--; _mask = 0x3f; }
 		else if( (v & 0xE0) == 0xC0 ) { if( l )
-  // 6 + 1 == 7
+  // 6 + 1 == 7 //-V640
 			lprintf( "short utf8 sequence found" ); l = 1; mask = 0x1; _mask = 0x3f; }
 		else if( (v & 0xF0) == 0xE0 ) { if( l )
-  // 6 + 5 + 0 == 11
+  // 6 + 5 + 0 == 11 //-V640
 			lprintf( "short utf8 sequence found" ); l = 2; mask = 0;  _mask = 0x1f; }
 		else if( (v & 0xF8) == 0xF0 ) { if( l )
-  // 6(2) + 4 + 0 == 16
+  // 6(2) + 4 + 0 == 16 //-V640
 			lprintf( "short utf8 sequence found" ); l = 3; mask = 0;  _mask = 0x0f; }
 		else if( (v & 0xFC) == 0xF8 ) { if( l )
-  // 6(3) + 3 + 0 == 21
+  // 6(3) + 3 + 0 == 21 //-V640
 			lprintf( "short utf8 sequence found" ); l = 4; mask = 0;  _mask = 0x07; }
 		else if( (v & 0xFE) == 0xFC ) { if( l )
-  // 6(4) + 2 + 0 == 26
+  // 6(4) + 2 + 0 == 26 //-V640
 			lprintf( "short utf8 sequence found" ); l = 5; mask = 0;  _mask = 0x03; }
 		char bchar = b[(n+o)%(keylen)];
 		(*out) = (v & ~mask ) | ( u8xor_table[v & mask ][bchar] & mask );
@@ -20218,24 +20376,24 @@ static void encodeblock( unsigned char in[3], TEXTCHAR out[4], size_t len, const
 	out[2] = (len > 1 ? base64[ ((in[1] & 0x0f) << 2) | ( ( len > 2 ) ? ((in[2] & 0xc0) >> 6) : 0 ) ] : base64[64]);
 	out[3] = (len > 2 ? base64[ in[2] & 0x3f ] : base64[64]);
 }
-static void decodeblock( char in[4], uint8_t out[3], size_t len, const char *base64 )
+static void decodeblock( const char in[4], uint8_t out[3], size_t len, const char *base64 )
 {
 	int index[4];
-	int n;
-	for( n = 0; n < 4; n++ )
+	size_t n;
+	for( n = 0; n < len; n++ )
 	{
-		//strchr( base64, in[n] );
-		index[n] = _base64_r[in[n]];
-		//if( ( index[n] - base64 ) == 64 )
-		//	last_byte = 1;
+		// propagate terminator.
+		if( n && ( index[n - 1] == 64 ) ) index[n] = 0;
+		else index[n] = _base64_r[in[n]];
 	}
-	//if(
+	for( ; n < 4; n++ )
+		index[n] = 0;
 	out[0] = (char)(( index[0] ) << 2 | ( index[1] ) >> 4);
 	out[1] = (char)(( index[1] ) << 4 | ( ( ( index[2] ) >> 2 ) & 0x0f ));
 	out[2] = (char)(( index[2] ) << 6 | ( ( index[3] ) & 0x3F ));
 	//out[] = (len > 2 ? base64[ in[2] & 0x3f ] : 0);
 }
-TEXTCHAR *EncodeBase64Ex( uint8_t* buf, size_t length, size_t *outsize, const char *base64 )
+TEXTCHAR *EncodeBase64Ex( const uint8_t* buf, size_t length, size_t *outsize, const char *base64 )
 {
 	size_t fake_outsize;
 	TEXTCHAR * real_output;
@@ -20262,6 +20420,34 @@ TEXTCHAR *EncodeBase64Ex( uint8_t* buf, size_t length, size_t *outsize, const ch
 }
 static void setupDecodeBytes( const char *code ) {
 	int n = 0;
+	// default all of these, allow code to override them.
+	// allow nul terminators (sortof)
+ // = ix 64 (0x40) and mask is & 0x3F dropping the upper bit.
+	_base64_r[0] = 64;
+ // = ix 64 (0x40) and mask is & 0x3F dropping the upper bit.
+	_base64_r['~'] = 64;
+ // = ix 64 (0x40) and mask is & 0x3F dropping the upper bit.
+	_base64_r['='] = 64;
+	// My JS Encoding $_ and = at the end.  allows most to be identifiers too.
+	// 'standard' encoding +/
+	// variants -/
+	//          +,
+	//          ._
+	// variants -_
+ // = ix 64 (0x40) and mask is & 0x3F dropping the upper bit.
+	_base64_r['$'] = 62;
+ // = ix 64 (0x40) and mask is & 0x3F dropping the upper bit.
+	_base64_r['+'] = 62;
+ // = ix 64 (0x40) and mask is & 0x3F dropping the upper bit.
+	_base64_r['-'] = 62;
+ // = ix 64 (0x40) and mask is & 0x3F dropping the upper bit.
+	_base64_r['.'] = 62;
+ // = ix 64 (0x40) and mask is & 0x3F dropping the upper bit.
+	_base64_r['_'] = 63;
+ // = ix 64 (0x40) and mask is & 0x3F dropping the upper bit.
+	_base64_r['/'] = 63;
+ // = ix 64 (0x40) and mask is & 0x3F dropping the upper bit.
+	_base64_r[','] = 63;
 	if( _last_base64_set != code ) {
 		_last_base64_set = code;
 		memset( _base64_r, 0, 256 );
@@ -20271,8 +20457,9 @@ static void setupDecodeBytes( const char *code ) {
 		}
 	}
 }
-uint8_t *DecodeBase64Ex( char* buf, size_t length, size_t *outsize, const char *base64 )
+uint8_t *DecodeBase64Ex( const char* buf, size_t length, size_t *outsize, const char *base64 )
 {
+	static const char *useBase64;
 	size_t fake_outsize;
 	uint8_t * real_output;
 	if( !outsize ) outsize = &fake_outsize;
@@ -20280,7 +20467,10 @@ uint8_t *DecodeBase64Ex( char* buf, size_t length, size_t *outsize, const char *
 		base64 = _base64;
 	else if( ((uintptr_t)base64) == 1 )
 		base64 = _base642;
-	setupDecodeBytes( base64 );
+	if( useBase64 != base64 ) {
+		useBase64 = base64;
+		setupDecodeBytes( base64 );
+	}
 	real_output = NewArray( uint8_t, ( ( ( length + 1 ) * 3 ) / 4 ) + 1 );
 	{
 		size_t n;
@@ -20292,15 +20482,21 @@ uint8_t *DecodeBase64Ex( char* buf, size_t length, size_t *outsize, const char *
 				blocklen = 4;
 			decodeblock( buf + n * 4, real_output + n*3, blocklen, base64 );
 		}
-		if( buf[length - 1] == '=' ) {
+		if( length % 4 == 1 )
+			(*outsize) = (((length + 3) / 4) * 3) - 3;
+		else if( length % 4 == 2 )
+			(*outsize) = (((length + 3) / 4) * 3) - 2;
+		else if( length % 4 == 3 )
+			(*outsize) = (((length + 3) / 4) * 3) - 1;
+		else if( buf[length - 1] == '=' ) {
 			if( buf[length - 2] == '=' ) {
-				(*outsize) = (length * 3 / 4) - 2;
+				(*outsize) = (((length + 3) / 4) * 3) - 2;
 			}
 			else
-				(*outsize) = (length * 3 / 4) - 1;
+				(*outsize) = (((length + 3) / 4) * 3) - 1;
 		}
 		else
-			(*outsize) = (length * 3 / 4) - 2;
+			(*outsize) = (((length + 3) / 4) * 3);
 		real_output[(*outsize)] = 0;
 	}
 	return real_output;
@@ -21292,6 +21488,28 @@ PSSQL_PROC( int, SQLRecordQueryEx )( PODBC odbc
    odbc :     connection to do the query on.
    query :    query to execute.
    queryLength : actual length of the query (allows embedded NUL characters)
+   PDATALIST* :  pointer to datalist pointer which will contain struct jsox_value_container.
+			 for each result in this list until VALUE_UNDEFINED is used.
+		.name is the field name (constant)
+		.string is the text, value_type is the value type (so numbers can stay numbers)
+	pdlParams : parameters to bind to the query.  (struct json_value_container types)
+   Example
+   See SQLRecordQueryf, but omit the database parameter.         */
+PSSQL_PROC( int, SQLRecordQuery_js )( PODBC odbc
+	, CTEXTSTR query
+	, size_t queryLen
+	, PDATALIST *pdlResults
+	, PDATALIST pdlParams
+	DBG_PASS );
+/* Do a SQL query on the default odbc connection. The first
+   record results immediately if there are any records. Returns
+   the results as an array of strings. If you know the select
+   you are using .... "select a,b,c from xyz" then you know that
+   this will have 3 columns resulting.
+   Parameters
+   odbc :     connection to do the query on.
+   query :    query to execute.
+   queryLength : actual length of the query (allows embedded NUL characters)
    columns :  pointer to an int to receive the number of columns
               in the result. (the user will know this based on
               the query issued usually, so it can be NULL to
@@ -21303,20 +21521,27 @@ PSSQL_PROC( int, SQLRecordQueryEx )( PODBC odbc
               field names
    Example
    See SQLRecordQueryf, but omit the database parameter.         */
-PSSQL_PROC( int, SQLRecordQueryExx )( PODBC odbc
+PSSQL_PROC( int, SQLRecordQuery_v4 )( PODBC odbc
                                    , CTEXTSTR query
                                    , size_t queryLength
                                    , int *pnResult
                                    , CTEXTSTR **result
                                    , size_t **resultLengths
                                    , CTEXTSTR **fields
+                                   , PDATALIST pdlParameters
                                    DBG_PASS);
 /* <combine sack::sql::SQLRecordQueryEx@PODBC@CTEXTSTR@int *@CTEXTSTR **@CTEXTSTR **fields>
    \ \                                                                                      */
 #define SQLRecordQuery(o,q,prn,r,f) SQLRecordQueryEx( o,q,prn,r,f DBG_SRC )
 /* <combine sack::sql::SQLRecordQueryExx@PODBC@CTEXTSTR@size_t@int *@CTEXTSTR **@size_t *@CTEXTSTR **fields>
    \ \                                                                                      */
-#define SQLRecordQueryLen(o,q,ql,prn,r,rl,f) SQLRecordQueryExx( o,q,ql,prn,r,rl,f DBG_SRC )
+#if defined _DEBUG || defined _DEBUG_INFO
+#  define SQLRecordQueryLen(o,q,ql,prn,r,rl,f) SQLRecordQueryExx( o,q,ql,prn,r,rl,f, __FILE__,__LINE__ )
+#  define SQLRecordQueryExx(o,q,ql,ppr,res,reslen,fields ,file,line )  SQLRecordQuery_v4(o,q,ql,ppr,res,reslen,fields,NULL ,file,line )
+#else
+#  define SQLRecordQueryLen(o,q,ql,prn,r,rl,f) SQLRecordQueryExx( o,q,ql,prn,r,rl,f  )
+#  define SQLRecordQueryExx(o,q,ql,ppr,res,reslen,fields )  SQLRecordQuery_v4(o,q,ql,ppr,res,reslen,fields,NULL )
+#endif
    /* Gets the next result from a query.
    Parameters
    odbc :     database connection that the query was executed on
@@ -21334,6 +21559,15 @@ PSSQL_PROC( int, FetchSQLResult )( PODBC, CTEXTSTR *result );
    Values received are invalid after the next FetchSQLRecord or
    possibly other query.                                        */
 PSSQL_PROC( int, FetchSQLRecord )( PODBC, CTEXTSTR **result );
+/* Gets the next record result from the connection.
+   Parameters
+   odbc :     connection to get the result from; if NULL, uses
+			  \internal static connection.
+   result\ :  (unchanged; is same list as original)
+   Remarks
+   Values received are invalid after the next FetchSQLRecord or
+   possibly other query.                                        */
+PSSQL_PROC( int, FetchSQLRecordJS )(PODBC odbc, PDATALIST *ppdlRecord);
 /* Gets the last result on the specified ODBC connection.
    Parameters
    odbc :     connection to get the last error of
@@ -22102,6 +22336,8 @@ PGENERICSET GetFromSetPoolEx( GENERICSET **pSetSet, int setsetsizea, int setunit
 	uint32_t maxbias = 0;
 	void *unit = NULL;
 	uintptr_t ofs = ( ( ( maxcnt + 31 ) / 32 ) * 4 );
+	//if( pSet && (*pSet) && ( (*pSet)->nBias > 1000 ))
+	//	_lprintf( DBG_RELAY )("GetFromSet: %p", pSet );
 	if( !pSet )
  // can never return something from nothing.
 		return NULL;
@@ -22359,7 +22595,9 @@ void DeleteFromSetExx( GENERICSET *pSet, void *unit, int unitsize, int max DBG_P
 	uintptr_t nUnit = (uintptr_t)unit;
 	uintptr_t ofs = ( ( max + 31 ) / 32) * 4;
 	uintptr_t base;
-	//if( bLog ) _lprintf(DBG_RELAY)( WIDE("Deleting from  %p of %p "), pSet, unit );
+	//if( bLog )
+	//if( pSet && ((pSet)->nBias > 1000) )
+	//	_lprintf(DBG_RELAY)( WIDE("Deleting from  %p of %p "), pSet, unit );
 	while( pSet )
 	{
 		base = ( (uintptr_t)( pSet->bUsed ) + ofs );
@@ -22445,7 +22683,9 @@ void **GetLinearSetArrayEx( GENERICSET *pSet, int *pCount, int unitsize, int max
 	void  **array;
 	int items, cnt, n, ofs;
 	INDEX nMin, nNewMin;
-	GENERICSET *pCur, *pNewMin;
+	GENERICSET *pCur;
+ // useless initialization.  nNewMin will be set if this is valid; and there was no error generated for using THAT uninitialized.
+	GENERICSET *pNewMin = NULL;
 	//Log2( WIDE("Building Array unit size: %d(%08x)"), unitsize, unitsize );
 	items = CountUsedInSetEx( pSet, max );
 	if( pCount )
@@ -23151,7 +23391,7 @@ static void NativeRemoveBinaryNode( PTREEROOT root, PTREENODE node )
 		RehangBranch( root, node->lesser );
 		if( root->Destroy )
 			root->Destroy( node->userdata, node->key );
-		MemSet( node, 0, sizeof( node ) );
+		MemSet( node, 0, sizeof( *node ) );
 		DeleteFromSet( TREENODE, TreeNodeSet, node );
 		//Release( node );
 		return;
@@ -24637,6 +24877,7 @@ NETWORK_PROC( LOGICAL, DoPingEx )( CTEXTSTR pstrHost,
 //----- WHOIS.C -----
 NETWORK_PROC( LOGICAL, DoWhois )( CTEXTSTR pHost, CTEXTSTR pServer, PVARTEXT pvtResult );
 #ifdef __cplusplus
+#  if defined( INCLUDE_SAMPLE_CPLUSPLUS_WRAPPERS )
 typedef class network *PNETWORK;
 /* <combine sack::network::network>
    \ \                              */
@@ -24768,6 +25009,7 @@ public:
 	      return 0;
 	}
 }NETWORK;
+#  endif
 #endif
 SACK_NETWORK_NAMESPACE_END
 #ifdef __cplusplus
@@ -25178,6 +25420,7 @@ struct HttpState {
 	PLIST fields;
  // list of HttpField *, taken in from the URL or content (get or post)
 	PLIST cgi_fields;
+	int bLine;
 	size_t content_length;
  // content of the message, POST,PUT,PATCH and replies have this.
 	PTEXT content;
@@ -25351,12 +25594,31 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
 	lockHttp( pHttpState );
 	if( pHttpState->final )
 	{
-		GatherHttpData( pHttpState );
-		unlockHttp( pHttpState );
-		if( pHttpState->flags.success && !pHttpState->returned_status ) {
-			pHttpState->returned_status = 1;
-			return pHttpState->numeric_code;
+		if( !pHttpState->method ) {
+			//lprintf( "Reading more, after returning a packet before... %d", pHttpState->response_version );
+			if( pHttpState->response_version ) {
+				GatherHttpData( pHttpState );
+				if( pHttpState->flags.success && !pHttpState->returned_status ) {
+					unlockHttp( pHttpState );
+					pHttpState->returned_status = 1;
+					return pHttpState->numeric_code;
+				}
+			}
+			else {
+				if( pHttpState->content_length ) {
+					GatherHttpData( pHttpState );
+					if( ((GetTextSize( pHttpState->partial ) >= pHttpState->content_length)
+						|| (GetTextSize( pHttpState->content ) >= pHttpState->content_length))
+						) {
+						unlockHttp( pHttpState );
+						// prorbably a POST with a body?
+						// had to gather the body...
+						return HTTP_STATE_RESULT_CONTENT;
+					}
+				}
+			}
 		}
+		unlockHttp( pHttpState );
 		return HTTP_STATE_RESULT_NOTHING;
 	}
 	else
@@ -25366,7 +25628,6 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
 		PTEXT pLine = NULL;
 		TEXTCHAR *c, *line;
 		size_t size, pos, len;
-		size_t bLine;
 		INDEX start = 0;
 		PTEXT pMergedLine;
 		PTEXT pInput = VarTextGet( pHttpState->pvt_collector );
@@ -25376,31 +25637,31 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
 		pHttpState->partial = pMergedLine;
 		pCurrent = pHttpState->partial;
 		//pStart = pCurrent; // at lest is this block....
+		//lprintf( "ND THIS IS WHAT WE PROCESSL:" );
 		//LogBinary( (const uint8_t*)GetText( pInput ), GetTextSize( pInput ) );
 		len = 0;
 		// we always start without having a line yet, because all input is already merged
-		bLine = 0;
 		{
-			//lprintf( "%s", GetText( pCurrent ) );
+			//lprintf( "process HTTP: %s %d", GetText( pCurrent ), pHttpState->bLine );
 			size = GetTextSize( pCurrent );
 			c = GetText( pCurrent );
-			if( bLine < 4 )
+			if( pHttpState->bLine < 4 )
 			{
 				//start = 0; // new packet and still collecting header....
 				for( pos = 0; ( pos < size ) && !pHttpState->final; pos++ )
 				{
-					if( (pos - start - bLine) < 0 )
+					if( ((int)pos - (int)start - (int)pHttpState->bLine) < 0 )
 						continue;
 					if( c[pos] == '\r' )
-						bLine++;
+						pHttpState->bLine++;
 					else if( c[pos] == '\n' )
-						bLine++;
+						pHttpState->bLine++;
  // non end of line character....
 					else
 					{
 	FinalCheck:
  // had an end of line...
-						if( bLine >= 2 )
+						if( pHttpState->bLine >= 2 )
 						{
 							// response status is the data from the fist bit of the packet (on receiving http 1.1/OK ...)
 							if( pHttpState->response_status )
@@ -25411,13 +25672,13 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
 								CTEXTSTR val_start;
 								PTEXT field_name;
 								PTEXT value;
-								pLine = SegCreate( pos - start - bLine );
-								if( (pos-start) < bLine )
+								pLine = SegCreate( pos - start - pHttpState->bLine );
+								if( (pos-start) < pHttpState->bLine )
 								{
 									lprintf( WIDE("Failure.") );
 								}
-								MemCpy( line = GetText( pLine ), c + start, (pos - start - bLine)*sizeof(TEXTCHAR));
-								line[pos-start-bLine] = 0;
+								MemCpy( line = GetText( pLine ), c + start, (pos - start - pHttpState->bLine)*sizeof(TEXTCHAR));
+								line[pos-start- pHttpState->bLine] = 0;
 								field_start = GetText( pLine );
 								// this is a  request field.
 								colon = StrChr( field_start, ':' );
@@ -25459,9 +25720,10 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
 							}
 							else
 							{
-								pLine = SegCreate( pos - start - bLine );
-								MemCpy( line = GetText( pLine ), c + start, (pos - start - bLine)*sizeof(TEXTCHAR));
-								line[pos-start-bLine] = 0;
+                        //lprintf( "Parsing http state content for something.." );
+								pLine = SegCreate( pos - start - pHttpState->bLine );
+								MemCpy( line = GetText( pLine ), c + start, (pos - start - pHttpState->bLine)*sizeof(TEXTCHAR));
+								line[pos-start- pHttpState->bLine] = 0;
 								pHttpState->response_status = pLine;
  // initialize to assume it's incomplete; NOT OK.  (requests should be OK)
 								pHttpState->numeric_code = 0;
@@ -25563,11 +25825,11 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
 							// since the return should be assumed as a continuous
 							// stream of datas....
 							start = pos;
-							if( bLine == 2 )
-								bLine = 0;
+							if( pHttpState->bLine == 2 )
+								pHttpState->bLine = 0;
 						}
 						// may not receive anything other than header information?
-						if( bLine == 4 )
+						if( pHttpState->bLine == 4 )
 						{
 							// end of header
 							// copy the previous line out...
@@ -25577,7 +25839,7 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
 							break;
 						}
 					}
-					if( bLine == 4 )
+					if( pHttpState->bLine == 4 )
 					{
 						pos++;
 						pHttpState->final = 1;
@@ -25585,7 +25847,7 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
 					}
 				}
 				if( pos == size &&
-					bLine == 4 &&
+					pHttpState->bLine == 4 &&
 					start != pos )
 				{
 					pHttpState->final = 1;
@@ -25616,7 +25878,7 @@ SegSplit( &pCurrent, start );
 				{
 					// down convert from int64_t
 					pHttpState->content_length = (int)IntCreateFromSeg( field->value );
-					//lprintf( "content lenght: %d", pHttpState->content_length );
+					//lprintf( "content length: %d", pHttpState->content_length );
 				}
 				else if( TextLike( field->name, WIDE( "upgrade" ) ) )
 				{
@@ -25684,11 +25946,13 @@ SegSplit( &pCurrent, start );
 }
 LOGICAL AddHttpData( struct HttpState *pHttpState, POINTER buffer, size_t size )
 {
+	lockHttp( pHttpState );
 	pHttpState->last_read_tick = GetTickCount();
 	if( pHttpState->read_chunks )
 	{
 		const uint8_t* buf = (const uint8_t*)buffer;
 		size_t ofs = 0;
+      //lprintf( "Add Chunk HTTP Data:%d", size );
 		while( ofs < size )
 		{
 			switch( pHttpState->read_chunk_state )
@@ -25717,6 +25981,7 @@ LOGICAL AddHttpData( struct HttpState *pHttpState, POINTER buffer, size_t size )
 				else
 				{
 					lprintf( "Chunk Processing Error expected \\n, found %d(%c)", buf[0], buf[0] );
+					unlockHttp( pHttpState );
 					RemoveClient( pHttpState->request_socket );
 					return FALSE;
 				}
@@ -25735,6 +26000,7 @@ LOGICAL AddHttpData( struct HttpState *pHttpState, POINTER buffer, size_t size )
 				else
 				{
 					lprintf( "Chunk Processing Error expected \\n, found %d(%c)", buf[0], buf[0] );
+					unlockHttp( pHttpState );
 					RemoveClient( pHttpState->request_socket );
 					return FALSE;
 				}
@@ -25747,6 +26013,7 @@ LOGICAL AddHttpData( struct HttpState *pHttpState, POINTER buffer, size_t size )
 				else
 				{
 					lprintf( "Chunk Processing Error expected \\r, found %d(%c)", buf[0], buf[0] );
+					unlockHttp( pHttpState );
 					RemoveClient( pHttpState->request_socket );
 					return FALSE;
 				}
@@ -25766,12 +26033,14 @@ LOGICAL AddHttpData( struct HttpState *pHttpState, POINTER buffer, size_t size )
 							//lprintf( "Waking waiting to return with result." );
 							WakeThread( pHttpState->waiter );
 						}
+						unlockHttp( pHttpState );
 						return TRUE;
 					}
 				}
 				else
 				{
 					lprintf( "Chunk Processing Error expected \\n, found %d(%c)", buf[0], buf[0] );
+					unlockHttp( pHttpState );
 					RemoveClient( pHttpState->request_socket );
 					return FALSE;
 				}
@@ -25789,11 +26058,16 @@ LOGICAL AddHttpData( struct HttpState *pHttpState, POINTER buffer, size_t size )
 		if( l.flags.bLogReceived ) {
 			lprintf( "chunk read is %zd of %zd", pHttpState->read_chunk_byte, pHttpState->read_chunk_total_length );
 		}
+		unlockHttp( pHttpState );
 		return FALSE;
 	}
 	else
 	{
-		VarTextAddData( pHttpState->pvt_collector, (CTEXTSTR)buffer, size );
+		//lprintf( "Add HTTP Data:%d", size );
+		//LogBinary( (uint8_t*)buffer, 256>size?size:256 );
+		if( size )
+			VarTextAddData( pHttpState->pvt_collector, (CTEXTSTR)buffer, size );
+		unlockHttp( pHttpState );
 		return TRUE;
 	}
 }
@@ -25807,8 +26081,11 @@ struct HttpState *CreateHttpState( void )
 }
 void EndHttp( struct HttpState *pHttpState )
 {
+	//lprintf( "Ending HTTP %p", pHttpState );
 	lockHttp( pHttpState );
+	pHttpState->bLine = 0;
 	pHttpState->final = 0;
+	pHttpState->response_version = 0;
 	pHttpState->content_length = 0;
 	LineRelease( pHttpState->method );
 	pHttpState->method = NULL;
@@ -26042,11 +26319,16 @@ static void CPROC HttpReaderClose( PCLIENT pc )
 	struct HttpState *data = (struct HttpState *)GetNetworkLong( pc, 0 );
 // (PCLIENT*)GetNetworkLong( pc, 0 );
 	PCLIENT *ppc = data->pc;
-	if( ppc )
-		ppc[0] = NULL;
-	if( data->waiter ) {
-		//lprintf( "(on close) Waking waiting to return with result." );
-		WakeThread( data->waiter );
+	if( ppc[0] == pc ) {
+		if( ppc )
+			ppc[0] = NULL;
+		if( data->waiter ) {
+			//lprintf( "(on close) Waking waiting to return with result." );
+			WakeThread( data->waiter );
+		}
+	}
+	else {
+		lprintf( "Close resulting on a socket using the same state, but that state is now already busy." );
 	}
 	//if( !data->flags.success )
 	//	DestroyHttpState( data );
@@ -26143,8 +26425,10 @@ static void httpConnected( PCLIENT pc, int error ) {
 }
 HTTPState GetHttpQuery( PTEXT address, PTEXT url )
 {
+	int retries = 0;
 	if( !address )
 		return NULL;
+	for( retries = 0; retries < 3; retries++ )
 	{
 		PCLIENT pc;
 		SOCKADDR *addr = CreateSockAddress( GetText( address ), 443 );
@@ -26188,8 +26472,10 @@ HTTPState GetHttpQuery( PTEXT address, PTEXT url )
 }
 HTTPState GetHttpsQuery( PTEXT address, PTEXT url, const char *certChain )
 {
+	int retries;
 	if( !address )
 		return NULL;
+	for( retries = 0; retries < 3; retries++ )
 	{
 		struct HttpState *state = CreateHttpState();
 		static PCLIENT pc;
@@ -26197,6 +26483,10 @@ HTTPState GetHttpsQuery( PTEXT address, PTEXT url, const char *certChain )
 		struct pendingConnect *connect = New( struct pendingConnect );
 		connect->state = state;
 		AddLink( &l.pendingConnects, connect );
+		if( retries ) {
+			lprintf( "HTTPS QUery (retry):%s", GetText( url ) );
+			//lprintf( "PC of connect:%p  %d", pc, retries );
+		}
 		//DumpAddr( "Http Address:", addr );
 		pc = OpenTCPClientAddrExxx( addr, HttpReader, HttpReaderClose, NULL, httpConnected, OPEN_TCP_FLAG_DELAY_CONNECT DBG_SRC );
 		connect->pc = pc;
@@ -26224,7 +26514,7 @@ HTTPState GetHttpsQuery( PTEXT address, PTEXT url, const char *certChain )
 					return NULL;
 				}
 				state->waiter = MakeThread();
-				while( pc && ( state->last_read_tick > ( GetTickCount() - 20000 ) ) )
+				while( pc && ( state->last_read_tick > ( GetTickCount() - 3000 ) ) )
 				{
 					WakeableSleep( 1000 );
 				}
@@ -26329,6 +26619,8 @@ static void CPROC HandleRequest( PCLIENT pc, POINTER buffer, size_t length )
 			LogBinary( (uint8_t*)buffer, length );
 		}
 #endif
+		//lprintf( "RECEVED HTTP FROM NETWORK." );
+		//LogBinary( buffer, length );
 		AddHttpData( pHttpState, buffer, length );
 		while( ( result = ProcessHttp( pc, pHttpState ) ) )
 		{
@@ -26521,7 +26813,8 @@ struct url_data * SACK_URLParse( const char *url )
 {
 	const char *_url = url;;
 	struct url_data *data = New( struct url_data );
-	struct url_cgi_data *cgi_data;
+ // another useless initialization.  This WILL be a value whereever the code needs to use it. NOT AN ERROR!
+	struct url_cgi_data *cgi_data = NULL;
 	TEXTRUNE ch;
 	int outchar = 0;
 	char * outbuf = NewArray( TEXTCHAR, StrLen( url ) + 1 );
@@ -26534,9 +26827,9 @@ struct url_data * SACK_URLParse( const char *url )
 			ch *= 16;
 			if( _url[0] >= '0' && _url[0] <= '9' )
 				ch += _url[0] - '0';
-			else if( _url[0] >= 'A' && _url[0] <= 'A' )
+			else if( _url[0] >= 'A' && _url[0] <= 'F' )
 				ch += (_url[0] - 'A') + 10;
-			else if( _url[0] >= '0' && _url[0] <= '9' )
+			else if( _url[0] >= 'a' && _url[0] <= 'f' )
 				ch += (_url[0] - 'a' ) + 10;
 			else {
 				Deallocate( char *, outbuf );
@@ -27855,6 +28148,10 @@ struct file_system_interface {
 	LOGICAL (CPROC *find_is_directory)( struct find_cursor *cursor );
 	LOGICAL (CPROC *is_directory)( uintptr_t psvInstance, const char *cursor );
 	LOGICAL (CPROC *rename )( uintptr_t psvInstance, const char *original_name, const char *new_name );
+	uintptr_t (CPROC *ioctl)( uintptr_t psvInstance, uintptr_t opCode, va_list args );
+	uintptr_t (CPROC *fs_ioctl)(uintptr_t psvInstance, uintptr_t opCode, va_list args);
+	uint64_t( CPROC *find_get_ctime )(struct find_cursor *cursor);
+	uint64_t( CPROC *find_get_wtime )(struct find_cursor *cursor);
 };
 /* \ \
    Parameters
@@ -27888,20 +28185,22 @@ FILESYS_PROC  int FILESYS_API  CompareMask ( CTEXTSTR mask, CTEXTSTR name, int k
 FILESYS_PROC  int FILESYS_API  ScanFilesEx ( CTEXTSTR base
            , CTEXTSTR mask
            , void **pInfo
-           , void CPROC Process( uintptr_t psvUser, CTEXTSTR name, int flags )
-           , int flags
+           , void CPROC Process( uintptr_t psvUser, CTEXTSTR name, enum ScanFileProcessFlags flags )
+           , enum ScanFileFlags flags
 		   , uintptr_t psvUser, LOGICAL begin_sub_path, struct file_system_mounted_interface *mount );
 FILESYS_PROC  int FILESYS_API  ScanFiles ( CTEXTSTR base
            , CTEXTSTR mask
            , void **pInfo
-           , void CPROC Process( uintptr_t psvUser, CTEXTSTR name, int flags )
-           , int flags
+           , void CPROC Process( uintptr_t psvUser, CTEXTSTR name, enum ScanFileProcessFlags flags )
+           , enum ScanFileFlags flags
            , uintptr_t psvUser );
 FILESYS_PROC  void FILESYS_API  ScanDrives ( void (CPROC *Process)(uintptr_t user, CTEXTSTR letter, int flags)
 										  , uintptr_t user );
+// pass the pointer (pInfo) from aobve; get find_cursor.
+FILESYS_PROC struct find_cursor * FILESYS_API GetScanFileCursor( void *pInfo );
 // result is length of name filled into pResult if pResult == NULL && nResult = 0
 // the result will the be length of the name matching the file.
-FILESYS_PROC  int FILESYS_API  GetMatchingFileName ( CTEXTSTR filemask, int flags, TEXTSTR pResult, int nResult );
+FILESYS_PROC  int FILESYS_API  GetMatchingFileName ( CTEXTSTR filemask, enum ScanFileFlags flags, TEXTSTR pResult, int nResult );
 // searches a path for the last '/' or '\'
 FILESYS_PROC  CTEXTSTR FILESYS_API  pathrchr ( CTEXTSTR path );
 #ifdef __cplusplus
@@ -28094,6 +28393,8 @@ FILESYS_PROC  int FILESYS_API  sack_renameEx ( CTEXTSTR file_source, CTEXTSTR ne
 FILESYS_PROC  int FILESYS_API  sack_rename ( CTEXTSTR file_source, CTEXTSTR new_name );
 FILESYS_PROC  void FILESYS_API sack_set_common_data_application( CTEXTSTR name );
 FILESYS_PROC  void FILESYS_API sack_set_common_data_producer( CTEXTSTR name );
+FILESYS_PROC  uintptr_t FILESYS_API  sack_ioctl( FILE *file, uintptr_t opCode, ... );
+FILESYS_PROC  uintptr_t FILESYS_API  sack_fs_ioctl( struct file_system_mounted_interface *mount, uintptr_t opCode, ... );
 #ifndef NO_FILEOP_ALIAS
 #  ifndef NO_OPEN_MACRO
 # define open(a,...) sack_iopen(0,a,##__VA_ARGS__)
@@ -28648,7 +28949,7 @@ uint32_t  LockedExchange( volatile uint32_t* p, uint32_t val )
 #  endif
 #endif
 }
-uint32_t LockedIncrement( uint32_t* p ) {
+uint32_t LockedIncrement( volatile uint32_t* p ) {
 #ifdef _WIN32
 	return InterlockedIncrement( (volatile LONG *)p );
 #endif
@@ -28656,7 +28957,7 @@ uint32_t LockedIncrement( uint32_t* p ) {
 	return __atomic_add_fetch( p, 1, __ATOMIC_RELAXED );
 #endif
 }
-uint32_t LockedDecrement( uint32_t* p ) {
+uint32_t LockedDecrement( volatile uint32_t* p ) {
 #ifdef _WIN32
 	return InterlockedDecrement( (volatile LONG *)p );
 #endif
@@ -28850,7 +29151,8 @@ static void DumpSection( PCRITICALSECTION pcs )
 				else {
 					if( prior && *prior ) {
 						// shouldn't happen, if there's no waiter set, then there shouldn't be a prior.
-						DebugBreak();
+						if( *prior != 1 )
+							DebugBreak();
 					}
 #ifdef LOG_DEBUG_CRITICAL_SECTIONS
 					ll_lprintf( WIDE( "Claimed critical section." ) );
@@ -29448,6 +29750,7 @@ uintptr_t GetFileSize( int fd )
 	static int first = 1;
 #endif
 	int readonly = FALSE;
+	if( !dwSize ) return NULL;
 	if( !g.bInit )
 	{
 		//ODS( WIDE("Doing Init") );
@@ -30238,7 +30541,8 @@ POINTER HeapAllocateAlignedEx( PMEM pHeap, uintptr_t dwSize, uint16_t alignment 
  /*pc->alignemnt = */
 			((uint16_t*)(retval - sizeof(uint32_t)))[0] =alignment;
  /*pc->to_chunk_start = */
-			((uint16_t*)(retval - sizeof(uint32_t)))[1] =(uint16_t)(((((uintptr_t)pc->byData) + (alignment - 1)) & masks[alignment]) - (uintptr_t)pc->byData);
+			((uint16_t*)(retval - sizeof(uint32_t)))[1] =(uint16_t)(((((uintptr_t)pc->byData) + (alignment - 1)) & mask) - (uintptr_t)pc->byData);
+ //-V773
 			return (POINTER)retval;
 		}
 		else {
@@ -37573,6 +37877,8 @@ typedef void (CPROC*GeneralCallback)( uintptr_t psvUser
 typedef void (CPROC*RenderReadCallback)(uintptr_t psvUser, PRENDERER pRenderer, TEXTSTR buffer, INDEX len );
 // called before redraw callback to update the background on the scene...
 typedef void (CPROC*_3DUpdateCallback)( uintptr_t psvUser );
+// callback type for clipborad event reception.
+typedef void (CPROC*ClipboardCallback)(uintptr_t psvUser);
 //----------------------------------------------------------
 //   Mouse Button definitions
 //----------------------------------------------------------
@@ -38642,6 +38948,8 @@ struct render_interface_tag
 	RENDER_PROC_PTR( LOGICAL, IsDisplayRedrawForced )( PRENDERER renderer );
  // only valid during a headless display event....
 	RENDER_PROC_PTR( void, ReplyCloseDisplay )( void );
+		/* Clipboard Callback */
+	RENDER_PROC_PTR( void, SetClipboardEventCallback )(PRENDERER pRenderer, ClipboardCallback callback, uintptr_t psv);
 };
 #ifdef DEFINE_DEFAULT_RENDER_INTERFACE
 #define USE_RENDER_INTERFACE GetDisplayInterface()
@@ -38754,6 +39062,7 @@ typedef int check_this_variable;
 #define SetDisplayNoMouse      REND_PROC_ALIAS(SetDisplayNoMouse )
 #define SetTouchHandler        REND_PROC_ALIAS(SetTouchHandler)
 #define ReplyCloseDisplay      if(USE_RENDER_INTERFACE) if((USE_RENDER_INTERFACE)->_ReplyCloseDisplay) (USE_RENDER_INTERFACE)->_ReplyCloseDisplay
+#define SetClipboardEventCallback   REND_PROC_ALIAS( SetClipboardEventCallback )
 #define SetDisplayFullScreen    REND_PROC_ALIAS_VOID( SetDisplayFullScreen )
 #define SuspendSystemSleep      REND_PROC_ALIAS_VOID( SuspendSystemSleep )
 #define RenderIsInstanced()       ((USE_RENDER_INTERFACE)?((USE_RENDER_INTERFACE)->_RenderIsInstanced)?(USE_RENDER_INTERFACE)->_RenderIsInstanced():0:0)
@@ -39083,11 +39392,11 @@ struct threads_tag
 	uintptr_t (CPROC*simple_proc)( POINTER );
  // might be not a real thread.
 	TEXTSTR thread_event_name;
-	THREAD_ID thread_ident;
+	volatile THREAD_ID thread_ident;
 	PTHREAD_EVENT thread_event;
 #ifdef _WIN32
 	//HANDLE hEvent;
-	HANDLE hThread;
+	volatile HANDLE hThread;
 #else
 #ifdef USE_PIPE_SEMS
  // file handles that are the pipe's ends. 0=read 1=write
@@ -39095,6 +39404,7 @@ struct threads_tag
 #endif
  // use this as a status of pipes if USE_PIPE_SEMS is used...; otherwise it's a ipcsem
 	int semaphore;
+	pthread_mutex_t mutex;
 	pthread_t hThread;
 #endif
 	struct {
@@ -39151,14 +39461,14 @@ static struct {
 	PTHREAD pTimerThread;
 	PTHREADSET threadset;
 	PTHREAD threads;
-	uint32_t lock_timers;
+	volatile uint32_t lock_timers;
 	CRITICALSECTION cs_timer_change;
 	//uint32_t pending_timer_change;
 	uint32_t remove_timer;
 	uint32_t CurrentTimerID;
 	int32_t last_sleep;
 #define globalTimerData (*global_timer_structure)
-	uintptr_t lock_thread_create;
+	volatile uint64_t lock_thread_create;
 	// should be a short list... 10 maybe 15...
 	PLIST thread_events;
 	CRITICALSECTION csGrab;
@@ -39280,11 +39590,7 @@ uintptr_t closesem( POINTER p, uintptr_t psv )
 	thread->pipe_ends[1] = -1;
 	thread->semaphore = -1;
 #else
-	if( semctl( thread->semaphore, 0, IPC_RMID ) == -1 )
-	{
-		lprintf( WIDE( "Error: %08x %s" ), thread->semaphore, strerror( errno ) );
-	}
-	thread->semaphore = -1;
+	pthread_mutex_destroy( &thread->mutex );
 #endif
 	return 0;
 }
@@ -39410,35 +39716,17 @@ static void InitWakeup( PTHREAD thread, CTEXTSTR event_name )
 		while( !success );
 	}
 #else
-	thread->semaphore = semget( IPC_PRIVATE
-	                          , 1, IPC_CREAT | 0600 );
+	thread->semaphore = pthread_mutex_init( &thread->mutex, NULL );
+	pthread_mutex_lock( &thread->mutex );
+	//thread->semaphore = semget( IPC_PRIVATE
+	//                          , 1, IPC_CREAT | 0600 );
 	if( thread->semaphore == -1 )
 	{
 		// basically this can't really happen....
-		if( errno ==  EEXIST )
-		{
-			thread->semaphore = semget( IPC_PRIVATE
-			                          , 1, 0 );
-			if( thread->semaphore == -1 )
-				lprintf( WIDE("FAILED TO CREATE SEMAPHORE! : %d"), errno );
-		}
-		if( errno == ENOSPC )
-		{
-			lprintf( WIDE("Hmm Need to cleanup some semaphore objects!!!") );
-		}
-		else
-			lprintf( WIDE("Failed to get semaphore! %d"), errno );
+		lprintf( WIDE("Failed to get semaphore! %d"), errno );
 	}
 	if( thread->semaphore != -1 )
 	{
-		//union semun ctl;
-		//ctl.val = 0;
-		//lprintf( WIDE("Setting thread semaphore to 0 (locked).") );
-		if( semctl( thread->semaphore, 0, SETVAL, 0 ) < 0 )
-		{
-			lprintf( WIDE("Errro setting semaphre value: %d"), errno );
-		}
-		//lprintf( WIDE("after semctl = %d %08lx"), semctl( thread->semaphore, 0, GETVAL ), thread->semaphore );
 	}
 #endif
 #endif
@@ -39459,9 +39747,12 @@ static PTHREAD FindWakeup( CTEXTSTR name )
 	PTHREAD check;
 	if( global_timer_structure )
 	{
+		uint64_t oldval;
 		// don't need locks if init didn't finish, there's now way to have threads in loader lock.
-		while( LockedExchangePtrSzVal( &globalTimerData.lock_thread_create, 1 ) )
+		while( oldval = LockedExchange64( &globalTimerData.lock_thread_create, 1 ) ) {
+			//globalTimerData.lock_thread_create = oldval;
 			Relinquish();
+		}
 	}
 	else
 	{
@@ -39506,9 +39797,12 @@ static PTHREAD FindThreadWakeup( CTEXTSTR name, THREAD_ID thread )
 	params.thread = thread;
 	if( global_timer_structure )
 	{
+		uint64_t oldval;
 		// don't need locks if init didn't finish, there's now way to have threads in loader lock.
-		while( LockedExchangePtrSzVal( &globalTimerData.lock_thread_create, 1 ) )
+		while( oldval = LockedExchange64( &globalTimerData.lock_thread_create, 1 ) ) {
+			//globalTimerData.lock_thread_create = oldval;
 			Relinquish();
+		}
 	}
 	else
 	{
@@ -39546,9 +39840,12 @@ static PTHREAD FindThread( THREAD_ID thread )
 	PTHREAD check;
 	if( global_timer_structure )
 	{
+		uint64_t oldval;
 		// don't need locks if init didn't finish, there's now way to have threads in loader lock.
-		while( LockedExchangePtrSzVal( &globalTimerData.lock_thread_create, 1 ) )
+		while( oldval = LockedExchange64( &globalTimerData.lock_thread_create, 1 ) ) {
+			//globalTimerData.lock_thread_create = oldval;
 			Relinquish();
+		}
 	}
 	else
 	{
@@ -39658,33 +39955,17 @@ void  WakeThreadEx( PTHREAD thread DBG_PASS )
 #  ifdef DEBUG_PIPE_USAGE
 		_lprintf(DBG_RELAY)( "(wakethread)wil write pipe... %p", thread );
 #  endif
-		write( thread->pipe_ends[1], "G", 1 );
+		if( write( thread->pipe_ends[1], "G", 1 ) != 1 ) {
+			int e = errno;
+			lprintf( "Pipe Error? %d", e );
+		}
 		//lprintf( "did write pipe..." );
 		Relinquish();
 	}
 #else
 	if( thread->semaphore != -1 )
 	{
-		int stat;
-		int val;
-		struct sembuf semdo;
-		semdo.sem_num = 0;
-		semdo.sem_op = 1;
-		semdo.sem_flg = 0;
-		//_xlprintf( 1 DBG_RELAY )( WIDE("Resetting event on %08x %016"_64fx"x"), thread->semaphore, thread->thread_ident );
-		//lprintf( WIDE("Before semval = %d %08lx"), semctl( thread->semaphore, 0, GETVAL ), thread->semaphore );
-		stat = semop( thread->semaphore, &semdo, 1 );
-		if( stat == -1 )
-		{
-			if( errno != ERANGE )
-				lprintf( WIDE("semop error (wake) : %d"), errno );
-		}
-		//lprintf( WIDE("After semval = %d %08lx"), val = semctl( thread->semaphore, 0, GETVAL ), thread->semaphore );
-		if( !val )
-		{
-			//DebugBreak();
-			//lprintf( WIDE("Did we fail the semop?!") );
-		}
+		pthread_mutex_unlock( &thread->mutex );
  // may or may not execute other thread before this...
 		Relinquish();
 	}
@@ -39863,14 +40144,16 @@ static void  InternalWakeableNamedSleepEx( CTEXTSTR name, uint32_t n, LOGICAL th
 						lprintf( "end read" );
 #  endif
 #else
-# ifdef _NO_SEMTIMEDOP_
-						stat = semop( pThread->semaphore, semdo, 1 );
-# else
 						struct timespec timeout;
-						timeout.tv_nsec = ( n % 1000 ) * 1000000L;
-						timeout.tv_sec = n / 1000;
-						stat = semtimedop( pThread->semaphore, semdo, 1, &timeout );
-# endif
+						clock_gettime(CLOCK_REALTIME, &timeout);
+						timeout.tv_nsec += ( n % 1000 ) * 1000000L;
+						timeout.tv_sec += n / 1000;
+						timeout.tv_sec += timeout.tv_nsec / 1000000000L;
+						timeout.tv_nsec %= 1000000000L;
+						//lprintf( "Timed wait:%d %d", timeout.tv_nsec, timeout.tv_sec );
+						stat = pthread_mutex_timedlock( &pThread->mutex, &timeout );
+						//lprintf( "Stat for timed lock:%d", stat );
+						//stat = semtimedop( pThread->semaphore, semdo, 1, &timeout );
 #endif
 					}
 					else
@@ -39885,7 +40168,8 @@ static void  InternalWakeableNamedSleepEx( CTEXTSTR name, uint32_t n, LOGICAL th
 						lprintf( "end read" );
 #  endif
 #else
-						stat = semop( pThread->semaphore, semdo, 1 );
+						stat = pthread_mutex_lock( &pThread->mutex );
+						//stat = semop( pThread->semaphore, semdo, 1 );
 #endif
 					}
 					//lprintf( WIDE("After semval = %d %08lx"), semctl( pThread->semaphore, 0, GETVAL ), pThread->semaphore );
@@ -39934,7 +40218,7 @@ static void  InternalWakeableNamedSleepEx( CTEXTSTR name, uint32_t n, LOGICAL th
 #ifdef USE_PIPE_SEMS
 						// flush? empty the pipe?
 #else
-						semctl( pThread->semaphore, 0, SETVAL, 0 );
+						//semctl( pThread->semaphore, 0, SETVAL, 0 );
 #endif
 						break;
 					}
@@ -40031,6 +40315,8 @@ static void TimerWakeableSleep( uint32_t n )
 #ifdef USE_PIPE_SEMS
 			InternalWakeableNamedSleepEx( NULL, n, FALSE DBG_SRC );
 #else
+			pthread_mutex_lock( &globalTimerData.pTimerThread->mutex );
+#   if asdfasdfasdfasdf
 			struct sembuf semdo;
 			semdo.sem_num = 0;
 			semdo.sem_op = -1;
@@ -40060,6 +40346,7 @@ static void TimerWakeableSleep( uint32_t n )
 					break;
 				}
 			}
+#   endif
 #endif
 			//lprintf( WIDE("After semval = %d %08lx")
 			//	      , semctl( globalTimerData.pTimerThread->semaphore, 0, GETVAL )
@@ -40106,8 +40393,12 @@ void  UnmakeThread( void )
 {
 	PTHREAD pThread;
 	struct my_thread_info* _MyThreadInfo = GetThreadTLS();
-	while( LockedExchangePtrSzVal( &globalTimerData.lock_thread_create, (uintptr_t)_MyThreadInfo->nThread ) )
+	uint64_t oldval;
+ //-V595
+	while( oldval = LockedExchange64( &globalTimerData.lock_thread_create, _MyThreadInfo->nThread ) ) {
+		//globalTimerData.lock_thread_create = oldval;
 		Relinquish();
+	}
 	pThread
 #ifdef HAS_TLS
 		= MyThreadInfo.pThread;
@@ -40127,6 +40418,7 @@ void  UnmakeThread( void )
 			{
 				struct my_thread_info* _MyThreadInfo = GetThreadTLS();
 				Deallocate( struct my_thread_info*, _MyThreadInfo );
+ //-V595
 				TlsSetValue( global_timer_structure->my_thread_info_tls, NULL );
 			}
 #else
@@ -40258,16 +40550,15 @@ PTHREAD  MakeThread( void )
 		if( !(pThread = FindThread( thread_ident ) ) )
 #endif
 		{
-			uintptr_t oldval;
+			THREAD_ID oldval;
 			LOGICAL dontUnlock = FALSE;
-			while( ( oldval = LockedExchangePtrSzVal( &globalTimerData.lock_thread_create, (uintptr_t)thread_ident ) ) && oldval != thread_ident )
+ /*&& ( oldval != thread_ident )*/
+			while( ( oldval = LockedExchange64( &globalTimerData.lock_thread_create, 1 ) ) )
 			{
-				if( oldval != thread_ident )
-					globalTimerData.lock_thread_create = oldval;
+				//globalTimerData.lock_thread_create = oldval;
 				Relinquish();
 			}
-			if( oldval == thread_ident )
-				dontUnlock = TRUE;
+			dontUnlock = TRUE;
  /*Allocate( sizeof( THREAD ) )*/
 			pThread = GetFromSet( THREAD, &globalTimerData.threadset );;
 			//lprintf( WIDE("Get Thread %p"), pThread );
@@ -40282,8 +40573,10 @@ PTHREAD  MakeThread( void )
 			//pThread->me = &globalTimerData.threads;
 			//globalTimerData.threads = pThread;
 			InitWakeup( pThread, NULL );
-			if( !dontUnlock )
-				globalTimerData.lock_thread_create = 0;
+			// something else is in the process of trying to lock this...
+			//while( thread_ident != globalTimerData.lock_thread_create )
+			//	Relinquish();
+			globalTimerData.lock_thread_create = 0;
 #ifdef LOG_THREAD
 			Log3( WIDE("Created thread address: %p %" PRIxFAST64 " at %p")
 			    , pThread->proc, pThread->thread_ident, pThread );
@@ -40325,8 +40618,11 @@ PTHREAD  ThreadToEx( uintptr_t (CPROC*proc)(PTHREAD), uintptr_t param DBG_PASS )
 {
 	int success;
 	PTHREAD pThread;
-	while( LockedExchangePtrSzVal( &globalTimerData.lock_thread_create, 1 ) )
+	uint64_t oldval;
+	while( ( oldval = LockedExchange64( &globalTimerData.lock_thread_create, 1 ) ) ) {
+		//globalTimerData.lock_thread_create = oldval;
 		Relinquish();
+	}
 	do
 	{
 		pThread = GetFromSet( THREAD, &globalTimerData.threadset );
@@ -40394,9 +40690,12 @@ PTHREAD  ThreadToEx( uintptr_t (CPROC*proc)(PTHREAD), uintptr_t param DBG_PASS )
 	}
 	else
 	{
+		uint64_t oldval;
 		// unlink from globalTimerData.threads list.
-		while( LockedExchangePtrSzVal( &globalTimerData.lock_thread_create, 1 ) )
+		while( oldval = LockedExchange64( &globalTimerData.lock_thread_create, 1 ) ) {
+			//globalTimerData.lock_thread_create = oldval;
 			Relinquish();
+		}
  /*Release( pThread )*/
 		DeleteFromSet( THREAD, globalTimerData.threadset, pThread );
 		globalTimerData.lock_thread_create = 0;
@@ -40409,8 +40708,11 @@ PTHREAD  ThreadToSimpleEx( uintptr_t (CPROC*proc)(POINTER), POINTER param DBG_PA
 {
 	int success;
 	PTHREAD pThread;
-	while( LockedExchangePtrSzVal( &globalTimerData.lock_thread_create, 1 ) )
+	uint64_t oldval;
+	while( ( oldval = LockedExchange64( &globalTimerData.lock_thread_create, 1 ) ) ) {
+		//globalTimerData.lock_thread_create = oldval;
 		Relinquish();
+	}
 	pThread = GetFromSet( THREAD, &globalTimerData.threadset );
 	/*AllocateEx( sizeof( THREAD ) DBG_RELAY );*/
 #ifdef LOG_THREAD
@@ -40466,9 +40768,12 @@ PTHREAD  ThreadToSimpleEx( uintptr_t (CPROC*proc)(POINTER), POINTER param DBG_PA
 	}
 	else
 	{
+		uint64_t oldval;
 		// unlink from globalTimerData.threads list.
-		while( LockedExchangePtrSzVal( &globalTimerData.lock_thread_create, 1 ) )
+		while( oldval = LockedExchange64( &globalTimerData.lock_thread_create, 1 ) ) {
+			//globalTimerData.lock_thread_create = oldval;
 			Relinquish();
+		}
  /*Release( pThread )*/
 		DeleteFromSet( THREAD, globalTimerData.threadset, pThread );
 		globalTimerData.lock_thread_create = 0;
@@ -41332,9 +41637,19 @@ LOGICAL  LeaveCriticalSecEx( PCRITICALSECTION pcs DBG_PASS )
 #ifdef _DEBUG
 		//GetTickCount() )
 		if( ( curtick + 2000 ) <= timeGetTime() ) {
+#ifdef DEBUG_CRITICAL_SECTIONS
+			lprintf( "FROM: %s(%d)  %s(%d) %s(%d)"
+					  , pcs->pFile[(pcs->nPrior+(MAX_SECTION_LOG_QUEUE-1))%MAX_SECTION_LOG_QUEUE]
+					  , pcs->nLine[(pcs->nPrior+(MAX_SECTION_LOG_QUEUE-1))%MAX_SECTION_LOG_QUEUE]
+					  , pcs->pFile[(pcs->nPrior+(MAX_SECTION_LOG_QUEUE-2))%MAX_SECTION_LOG_QUEUE]
+					  , pcs->nLine[(pcs->nPrior+(MAX_SECTION_LOG_QUEUE-2))%MAX_SECTION_LOG_QUEUE]
+					  , pcs->pFile[(pcs->nPrior+(MAX_SECTION_LOG_QUEUE-3))%MAX_SECTION_LOG_QUEUE]
+					 , pcs->nLine[(pcs->nPrior+(MAX_SECTION_LOG_QUEUE-3))%MAX_SECTION_LOG_QUEUE]
+					 );
+#endif
 			lprintf( WIDE( "Timeout during critical section wait for lock.  No lock should take more than 1 task cycle" ) );
-			DebugBreak();
-			continue;
+			//DebugBreak();
+			//continue;
 		}
 #endif
 		break;
@@ -41371,23 +41686,22 @@ LOGICAL  LeaveCriticalSecEx( PCRITICALSECTION pcs DBG_PASS )
 #endif
 		if( !( pcs->dwLocks & ~(SECTION_LOGGED_WAIT) ) )
 		{
+			THREAD_ID dwWaiting = pcs->dwThreadWaiting;
 			pcs->dwLocks = 0;
 			pcs->dwThreadID = 0;
+			pcs->dwUpdating = pcs->dwLocks;
 			// wake the prior (if there is one sleeping)
-			if( pcs->dwThreadWaiting )
+			if( dwWaiting )
 			{
-				pcs->dwUpdating = 0;
 #ifdef ENABLE_CRITICALSEC_LOGGING
 				if( global_timer_structure && globalTimerData.flags.bLogCriticalSections )
-					_lprintf( DBG_RELAY )( WIDE("%8")_64fx WIDE(" Waking a thread which is waiting..."), pcs->dwThreadWaiting );
+					_lprintf( DBG_RELAY )( WIDE("%8")_64fx WIDE(" Waking a thread which is waiting..."), dwWaiting );
 #endif
 				// don't clear waiting... so the proper thread can
 				// allow itself to claim section...
-				WakeNamedThreadSleeperEx( WIDE("sack.critsec"), pcs->dwThreadWaiting DBG_RELAY );
+				WakeNamedThreadSleeperEx( WIDE("sack.critsec"), dwWaiting DBG_RELAY );
 				//WakeThreadIDEx( wake DBG_RELAY);
 			}
-			else
-				pcs->dwUpdating = 0;
 			return TRUE;
 		}
 	}
@@ -41664,9 +41978,11 @@ IDLE_PROC( int, IdleFor )( uint32_t dwMilliseconds )
 //  DEBUG FLAGS IN netstruc.h
 //
 #ifndef _DEFAULT_SOURCE
-//#define __USE_MISC
   // for features.h
 #define _DEFAULT_SOURCE
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 #endif
 #define FIX_RELEASE_COM_COLLISION
 #define NO_UNICODE_C
@@ -41819,7 +42135,7 @@ DEFINE_ENUM_FLAG_OPERATORS( NetworkConnectionFlags )
 struct peer_thread_info
 {
 	struct peer_thread_info *parent_peer;
-	struct peer_thread_info *child_peer;
+	struct peer_thread_info * volatile child_peer;
    // list of PCLIENT which are waiting on
 	PLIST monitor_list;
  // list of HANDLE which is waited on
@@ -41827,7 +42143,7 @@ struct peer_thread_info
 	PTHREAD thread;
 #ifdef _WIN32
 	WSAEVENT hThread;
-	int nEvents;
+	volatile int nEvents;
 	LOGICAL counting;
  // updated with count thread is waiting on
 	int nWaitEvents;
@@ -41869,7 +42185,7 @@ struct NetworkClient
 	SOCKET      SocketBroadcast;
 	struct interfaceAddress* interfaceAddress;
  // CF_
-	enum NetworkConnectionFlags  dwFlags;
+	enum NetworkConnectionFlags dwFlags;
 	uintptr_t        *lpUserData;
 	union {
  // new incoming client.
@@ -41929,7 +42245,7 @@ struct NetworkClient
 		BIT_FIELD bAllowDowngrade : 1;
 	} flags;
 	// this is set to what the thread that's waiting for this event is.
-	struct peer_thread_info *this_thread;
+	struct peer_thread_info * volatile this_thread;
 	int tcp_delay_count;
 	struct ssl_session *ssl_session;
 };
@@ -41956,12 +42272,12 @@ LOCATION struct network_global_data{
 	LOGICAL bLog;
 	LOGICAL bQuit;
  // list of all threads - needed because of limit of 64 sockets per multiplewait
-	PLIST   pThreads;
+	volatile PLIST   pThreads;
 	PCLIENT AvailableClients;
 	PCLIENT ActiveClients;
 	PCLIENT ClosedClients;
 	CRITICALSECTION csNetwork;
-	uint32_t uNetworkPauseTimer;
+	volatile uint32_t uNetworkPauseTimer;
 	uint32_t uPendingTimer;
 #ifndef __LINUX__
 	HWND ghWndNetwork;
@@ -41993,6 +42309,7 @@ LOCATION struct network_global_data{
 		BIT_FIELD bNetworkReady : 1;
 		BIT_FIELD bThreadInitOkay : 1;
 		BIT_FIELD bLogProtocols : 1;
+		BIT_FIELD bOptionsRead : 1;
 	} flags;
  // how many peer threads do we have
 	int nPeers;
@@ -42052,6 +42369,7 @@ SACK_NETWORK_NAMESPACE_END
 //*******************8
 #include <sys/ioctl.h>
 #include <net/if_arp.h>
+#include <sys/un.h>
 #ifndef __ANDROID__
 #include <ifaddrs.h>
 #else
@@ -42125,30 +42443,34 @@ __END_DECLS
 SACK_NETWORK_NAMESPACE
 PRELOAD( InitNetworkGlobalOptions )
 {
+	if( !globalNetworkData.flags.bOptionsRead ) {
 #ifdef __LINUX__
-	signal(SIGPIPE, SIG_IGN);
+		signal(SIGPIPE, SIG_IGN);
 #endif
 #ifndef __NO_OPTIONS__
-	globalNetworkData.flags.bLogProtocols = SACK_GetProfileIntEx( WIDE("SACK"), WIDE( "Network/Log Protocols" ), 0, TRUE );
-	globalNetworkData.flags.bShortLogReceivedData = SACK_GetProfileIntEx( WIDE( "SACK" ), WIDE( "Network/Log Network Received Data(64 byte max)" ), 0, TRUE );
-	globalNetworkData.flags.bLogReceivedData = SACK_GetProfileIntEx( WIDE( "SACK" ), WIDE( "Network/Log Network Received Data" ), 0, TRUE );
-	globalNetworkData.flags.bLogSentData = SACK_GetProfileIntEx( WIDE( "SACK" ), WIDE( "Network/Log Network Sent Data" ), globalNetworkData.flags.bLogReceivedData, TRUE );
+		globalNetworkData.flags.bLogProtocols = SACK_GetProfileIntEx( WIDE("SACK"), WIDE( "Network/Log Protocols" ), 0, TRUE );
+		globalNetworkData.flags.bShortLogReceivedData = SACK_GetProfileIntEx( WIDE( "SACK" ), WIDE( "Network/Log Network Received Data(64 byte max)" ), 0, TRUE );
+		globalNetworkData.flags.bLogReceivedData = SACK_GetProfileIntEx( WIDE( "SACK" ), WIDE( "Network/Log Network Received Data" ), 0, TRUE );
+		globalNetworkData.flags.bLogSentData = SACK_GetProfileIntEx( WIDE( "SACK" ), WIDE( "Network/Log Network Sent Data" ), globalNetworkData.flags.bLogReceivedData, TRUE );
 #  ifdef LOG_NOTICES
-	globalNetworkData.flags.bLogNotices = SACK_GetProfileIntEx( WIDE( "SACK" ), WIDE( "Network/Log Network Notifications" ), 0, TRUE );
+		globalNetworkData.flags.bLogNotices = SACK_GetProfileIntEx( WIDE( "SACK" ), WIDE( "Network/Log Network Notifications" ), 0, TRUE );
 #  endif
-	globalNetworkData.dwReadTimeout = SACK_GetProfileIntEx( WIDE( "SACK" ), WIDE( "Network/Read wait timeout" ), 5000, TRUE );
-	globalNetworkData.dwConnectTimeout = SACK_GetProfileIntEx( WIDE( "SACK" ), WIDE( "Network/Connect timeout" ), 10000, TRUE );
+		globalNetworkData.dwReadTimeout = SACK_GetProfileIntEx( WIDE( "SACK" ), WIDE( "Network/Read wait timeout" ), 5000, TRUE );
+		globalNetworkData.dwConnectTimeout = SACK_GetProfileIntEx( WIDE( "SACK" ), WIDE( "Network/Connect timeout" ), 10000, TRUE );
 #else
-	globalNetworkData.flags.bLogNotices = 0;
-	globalNetworkData.dwReadTimeout = 5000;
-	globalNetworkData.dwConnectTimeout = 10000;
+		globalNetworkData.flags.bLogNotices = 0;
+		globalNetworkData.dwReadTimeout = 5000;
+		globalNetworkData.dwConnectTimeout = 10000;
 #endif
+		globalNetworkData.flags.bOptionsRead = 1;
+	}
 }
 static void LowLevelNetworkInit( void )
 {
 	if( !global_network_data ) {
 		SimpleRegisterAndCreateGlobal( global_network_data );
-		InitializeCriticalSec( &globalNetworkData.csNetwork );
+		if( !globalNetworkData.ClientSlabs )
+			InitializeCriticalSec( &globalNetworkData.csNetwork );
 	}
 }
 PRIORITY_PRELOAD( InitNetworkGlobal, CONFIG_SCRIPT_PRELOAD_PRIORITY - 1 )
@@ -42662,6 +42984,7 @@ void TerminateClosedClientEx( PCLIENT pc DBG_PASS )
 #if defined( _WIN32 )
 #undef SHUT_WR
 #endif
+			//lprintf( "Win32:ShutdownWR+closesocket %p", pc );
 			closesocket( pc->Socket );
 			while( pc->lpFirstPending )
 			{
@@ -42970,7 +43293,7 @@ static void HandleEvent( PCLIENT pClient )
 							}
 							if( pClient->dwFlags & CF_TOCLOSE )
 							{
-								lprintf( WIDE( "Pending read failed - and wants to close." ) );
+								//lprintf( WIDE( "Pending read failed - and wants to close." ) );
 								//InternalRemoveClientEx( pc, TRUE, FALSE );
 							}
 						}
@@ -43000,9 +43323,11 @@ static void HandleEvent( PCLIENT pClient )
 							if( pClient->dwFlags & CF_TOCLOSE )
 							{
 								pClient->dwFlags &= ~CF_TOCLOSE;
-								lprintf( WIDE( "Pending read failed - and wants to close." ) );
+								//lprintf( WIDE( "Pending read failed - and wants to close." ) );
+								EnterCriticalSec( &globalNetworkData.csNetwork );
 								InternalRemoveClientEx( pClient, FALSE, TRUE );
 								TerminateClosedClient( pClient );
+								LeaveCriticalSec( &globalNetworkData.csNetwork );
 							}
 						}
 						NetworkUnlock( pClient, 0 );
@@ -43010,15 +43335,17 @@ static void HandleEvent( PCLIENT pClient )
 				}
 				if( networkEvents.lNetworkEvents & FD_CLOSE )
 				{
+					//lprintf( "FD_CLOSE %p", pClient );
 					if( !pClient->bDraining )
 					{
 						size_t bytes_read;
 						// act of reading can result in a close...
 						// there are things like IE which close and send
 						// adn we might get the close notice at application level indicating there might still be data...
+						//lprintf( "closed, try pending read %p", pClient );
 						while( ( bytes_read = FinishPendingRead( pClient DBG_SRC) ) > 0
  // try and read...
-							&& bytes_read != (size_t)-1 );
+							&& bytes_read != (size_t)-1 )
 						//if( pClient->dwFlags & CF_TOCLOSE )
 						{
 							//lprintf( "Pending read failed - reset connection. (well this is FD_CLOSE so yeah...??]" );
@@ -43032,8 +43359,10 @@ static void HandleEvent( PCLIENT pClient )
 					if( pClient->dwFlags & CF_ACTIVE )
 					{
 						// might already be cleared and gone..
+						EnterCriticalSec( &globalNetworkData.csNetwork );
 						InternalRemoveClientEx( pClient, FALSE, TRUE );
 						TerminateClosedClient( pClient );
+						LeaveCriticalSec( &globalNetworkData.csNetwork );
 					}
 					// section will be blank after termination...(correction, we keep the section state now)
  // it's no longer closing.  (was set during the course of closure)
@@ -43254,7 +43583,7 @@ void AddThreadEvent( PCLIENT pc, int broadcsat )
 		if( globalNetworkData.flags.bLogNotices )
 			lprintf( "Creating a new thread...." );
 #endif
-		AddLink( &globalNetworkData.pThreads, ThreadTo( NetworkThreadProc, (uintptr_t)peer ) );
+		AddLink( (PLIST*)&globalNetworkData.pThreads, ThreadTo( NetworkThreadProc, (uintptr_t)peer ) );
 		globalNetworkData.nPeers++;
 		while( !peer->child_peer )
 			Relinquish();
@@ -43597,7 +43926,7 @@ void AddThreadEvent( PCLIENT pc, int broadcast )
 			if( globalNetworkData.flags.bLogNotices )
 				lprintf( "Creating a new thread...." );
 #endif
-			AddLink( &globalNetworkData.pThreads, ThreadTo( NetworkThreadProc, (uintptr_t)peer ) );
+			AddLink( (PLIST*)&globalNetworkData.pThreads, ThreadTo( NetworkThreadProc, (uintptr_t)peer ) );
 			globalNetworkData.nPeers++;
 			while( !peer->child_peer )
 				Relinquish();
@@ -43745,11 +44074,11 @@ int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t unu
 #  endif
 				if( event_data == (struct event_data*)1 ) {
 					//char buf;
-               //int stat;
+					//int stat;
 					//stat = read( GetThreadSleeper( thread->thread ), &buf, 1 );
 					//call wakeable sleep to just clear the sleep; because this is an event on the sleep pipe.
-					WakeableSleep( 1 );
-               //lprintf( "This should sleep forever..." );
+					//WakeableSleep( 1 );
+					//lprintf( "This should sleep forever..." );
 					return 1;
 				}
 #  ifdef __MAC__
@@ -43867,10 +44196,12 @@ int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t unu
 						{
 #ifdef LOG_NOTICES
 							//if( globalNetworkData.flags.bLogNotices )
-								lprintf( WIDE( "Pending read failed - reset connection." ) );
+							lprintf( WIDE( "Pending read failed - reset connection." ) );
 #endif
+							EnterCriticalSec( &globalNetworkData.csNetwork );
 							InternalRemoveClientEx( event_data->pc, FALSE, FALSE );
 							TerminateClosedClient( event_data->pc );
+							LeaveCriticalSec( &globalNetworkData.csNetwork );
 							closed = 1;
 						}
 						else if( !event_data->pc->RecvPending.s.bStream )
@@ -44083,19 +44414,23 @@ uintptr_t CPROC NetworkThreadProc( PTHREAD thread )
 #    ifdef __64__
 		struct kevent64_s ev;
 		this_thread.kevents = CreateDataList( sizeof( ev ) );
+#      ifdef USE_PIPE_SEMS
 		EV_SET64( &ev, GetThreadSleeper( thread ), EVFILT_READ, EV_ADD, 0, 0, (uint64_t)1, NULL, NULL );
+#      endif
 		kevent64( this_thread.kqueue, &ev, 1, 0, 0, 0, 0 );
 #    else
 		struct kevent ev;
 		this_thread.kevents = CreateDataList( sizeof( ev ) );
+#      ifdef USE_PIPE_SEMS
 		EV_SET( &ev, GetThreadSleeper( thread ), EVFILT_READ, EV_ADD, 0, 0, (uintptr_t)1 );
+#      endif
 		kevent( this_thread.kqueue, &ev, 1, 0, 0, 0 );
 #    endif
 #  else
-		struct epoll_event ev;
-		ev.data.ptr = (void*)1;
-		ev.events = EPOLLIN;
-		epoll_ctl( this_thread.epoll_fd, EPOLL_CTL_ADD, GetThreadSleeper( thread ), &ev );
+		//struct epoll_event ev;
+		//ev.data.ptr = (void*)1;
+		//ev.events = EPOLLIN;
+		//epoll_ctl( this_thread.epoll_fd, EPOLL_CTL_ADD, GetThreadSleeper( thread ), &ev );
 #  endif
 	}
 #endif
@@ -44136,7 +44471,7 @@ uintptr_t CPROC NetworkThreadProc( PTHREAD thread )
 			this_thread.child_peer->parent_peer = this_thread.parent_peer;
 	}
 	// this used to be done in the WM_DESTROY
-	DeleteLink( &globalNetworkData.pThreads, thread );
+	DeleteLink( (PLIST*)&globalNetworkData.pThreads, thread );
 	globalNetworkData.flags.bThreadExit = TRUE;
 	xlprintf( 2100 )(WIDE( "Shut down network thread." ));
 	globalNetworkData.flags.bThreadInitComplete = FALSE;
@@ -44348,7 +44683,7 @@ NETWORK_PROC( LOGICAL, NetworkWait )(HWND hWndNotify,uint32_t wClients,int wUser
 		return TRUE;
 	}
 /*peer_thread==*/
-	AddLink( &globalNetworkData.pThreads, ThreadTo( NetworkThreadProc, (uintptr_t)NULL ) );
+	AddLink( (PLIST*)&globalNetworkData.pThreads, ThreadTo( NetworkThreadProc, (uintptr_t)NULL ) );
 	globalNetworkData.nPeers++;
 	AddIdleProc( IdleProcessNetworkMessages, 1 );
 	//lprintf( WIDE("Network Initialize..."));
@@ -44396,29 +44731,25 @@ get_client:
 		// an opening condition has global lock (above)
 		// and a closing socket will want the global lock before it's done.
 		pClient = GrabClient( pClient );
-		do {
 #ifdef USE_NATIVE_CRITICAL_SECTION
-			d = EnterCriticalSecNoWait( &pClient->csLockRead, NULL );
+		d = EnterCriticalSecNoWait( &pClient->csLockRead, NULL );
 #else
-			d = EnterCriticalSecNoWaitEx( &pClient->csLockRead, NULL DBG_RELAY );
+		d = EnterCriticalSecNoWaitEx( &pClient->csLockRead, NULL DBG_RELAY );
 #endif
-			if( d < 1 ) {
-				LeaveCriticalSec( &globalNetworkData.csNetwork );
-				goto get_client;
-			}
-		} while( d < 1 );
-		do {
+		if( d < 1 ) {
+			LeaveCriticalSec( &globalNetworkData.csNetwork );
+			goto get_client;
+		}
 #ifdef USE_NATIVE_CRITICAL_SECTION
-			d = EnterCriticalSecNoWait( &pClient->csLockWrite, NULL );
+		d = EnterCriticalSecNoWait( &pClient->csLockWrite, NULL );
 #else
-			d = EnterCriticalSecNoWaitEx( &pClient->csLockWrite, NULL DBG_RELAY );
+		d = EnterCriticalSecNoWaitEx( &pClient->csLockWrite, NULL DBG_RELAY );
 #endif
-			if( d < 1 ) {
-				LeaveCriticalSec( &pClient->csLockRead );
-				LeaveCriticalSec( &globalNetworkData.csNetwork );
-				goto get_client;
-			}
-		} while( d < 1 );
+		if( d < 1 ) {
+			LeaveCriticalSec( &pClient->csLockRead );
+			LeaveCriticalSec( &globalNetworkData.csNetwork );
+			goto get_client;
+		}
 		if( pClient->dwFlags & ( CF_STATEFLAGS & (~CF_AVAILABLE)) )
 			DebugBreak();
  // clear client is redundant here... but saves the critical section now
@@ -44467,6 +44798,7 @@ int GetAddressParts( SOCKADDR *sa, uint32_t *pdwIP, uint16_t *pdwPort )
 		}
 		else if( sa->sa_family == AF_INET6 ) {
 			if( pdwIP )
+ //-V512
 				memcpy( pdwIP, &(((SOCKADDR_IN*)sa)->sin_addr.S_un.S_addr), 16 );
 		}
 		else
@@ -44556,14 +44888,16 @@ NETWORK_PROC( SOCKADDR *,CreateAddress_hton)( uint32_t dwIP,uint16_t nHisPort)
 }
 //---------------------------------------------------------------------------
 #if defined( __LINUX__ ) && !defined( __CYGWIN__ )
- #define UNIX_PATH_MAX	 108
+#  ifndef __LINUX__
+#    define UNIX_PATH_MAX	 108
 struct sockaddr_un {
-#ifdef __MAC__
+#    ifdef __MAC__
 	u_char   sa_len;
-#endif
+#    endif
 	sa_family_t  sun_family;
 	char	       sun_path[UNIX_PATH_MAX];
 };
+#  endif
 NETWORK_PROC( SOCKADDR *,CreateUnixAddress)( CTEXTSTR path )
 {
 	struct sockaddr_un *lpsaAddr;
@@ -44582,7 +44916,7 @@ NETWORK_PROC( SOCKADDR *,CreateUnixAddress)( CTEXTSTR path )
 	strncpy( lpsaAddr->sun_path, path, 107 );
 #endif
 #ifdef __MAC__
-	lpsaAddr->sa_len = 2+strlen( lpsaAddr->sun_path );
+	lpsaAddr->sun_len = 2+strlen( lpsaAddr->sun_path );
 #endif
 	return((SOCKADDR*)lpsaAddr);
 }
@@ -44872,6 +45206,7 @@ NETWORK_PROC( SOCKADDR *,CreateSockAddress)(CTEXTSTR name, uint16_t nDefaultPort
 	char *_name = CStrDup( name );
 #  define name _name
 #endif
+ //-V595
 	if( name[0] == '[' ) {
 		while( portName[0] && portName[0] != ']' )
 			portName++;
@@ -44891,6 +45226,7 @@ NETWORK_PROC( SOCKADDR *,CreateSockAddress)(CTEXTSTR name, uint16_t nDefaultPort
 		{
 			if( isdigit( *port ) )
 			{
+ //-V595
 				wPort = (short)atoi( port );
 			}
 			else
@@ -45398,7 +45734,9 @@ void InternalRemoveClientExx(PCLIENT lpClient, LOGICAL bBlockNotify, LOGICAL bLi
 					Relinquish();
 					continue;
 				}
+				LeaveCriticalSec( &globalNetworkData.csNetwork );
 				notLocked = FALSE;
+				EnterCriticalSec( &globalNetworkData.csNetwork );
 			} while( notLocked );
 		}
 		// allow application a chance to clean it's references
@@ -45428,10 +45766,11 @@ void InternalRemoveClientExx(PCLIENT lpClient, LOGICAL bBlockNotify, LOGICAL bLi
 						lpClient->close.CPPCloseCallback( lpClient->psvClose );
 					else
 						lpClient->close.CloseCallback( lpClient );
+					lpClient->close.CloseCallback = NULL;
 				}
 #ifdef LOG_DEBUG_CLOSING
 				else
-					lprintf( WIDE( "no close callback!?" ) );
+					lprintf( WIDE( "no close callback!? (or duplicate close?)" ) );
 #endif
 				// leave the flag closing set... we'll use that later
 				// to avoid the double-lock;
@@ -45474,16 +45813,16 @@ void RemoveClientExx(PCLIENT lpClient, LOGICAL bBlockNotify, LOGICAL bLinger DBG
 #  define SHUT_WR SD_SEND
 #endif
 	if( !lpClient ) return;
-#if 0
-	if( !( lpClient->dwFlags & CF_UDP ) ) {
-		lprintf( "TRIGGER SHUTDOWN WRITES" );
+	if( !( lpClient->dwFlags & CF_UDP )
+		&& ( lpClient->dwFlags & ( CF_CONNECTED ) ) ) {
 		shutdown( lpClient->Socket, SHUT_WR );
 	} else
-#endif
 	{
 		int n = 0;
 		// UDP still needs to be done this way...
-		//
+				//
+		//lprintf( "This will end up resetting the socket?" );
+		EnterCriticalSec( &globalNetworkData.csNetwork );
 		InternalRemoveClientExx( lpClient, bBlockNotify, bLinger DBG_RELAY );
 		if( NetworkLock( lpClient, 0 ) && ((n=1),NetworkLock( lpClient, 1 )) ) {
 			TerminateClosedClient( lpClient );
@@ -45493,6 +45832,7 @@ void RemoveClientExx(PCLIENT lpClient, LOGICAL bBlockNotify, LOGICAL bLinger DBG
 		else if( n ) {
 			NetworkUnlock( lpClient, 0 );
 		}
+		LeaveCriticalSec( &globalNetworkData.csNetwork );
 	}
 }
 CTEXTSTR GetSystemName( void )
@@ -45700,6 +46040,7 @@ void LoadNetworkAddresses( void ) {
 	pAdapterInfo = New(IP_ADAPTER_INFO);
 	if (pAdapterInfo == NULL) {
 		lprintf("Error allocating memory needed to call GetAdaptersinfo\n");
+		free( pInfo );
 		return;
 	}
 	// Make an initial call to GetAdaptersInfo to get
@@ -45709,6 +46050,7 @@ void LoadNetworkAddresses( void ) {
 		pAdapterInfo = (IP_ADAPTER_INFO *) NewArray(uint8_t, ulOutBufLen);
 		if (pAdapterInfo == NULL) {
 			lprintf("Error allocating memory needed to call GetAdaptersinfo\n");
+			free( pInfo );
 			return;
 		}
 	}
@@ -45817,18 +46159,18 @@ return 0;
 #endif
 #ifdef __LINUX__
 #ifdef __LINUX__
-#undef s_addr
+#  undef s_addr
  // IPPROTO_TCP
 //#include <linux/in.h>  // IPPROTO_TCP
  // TCP_NODELAY
-#include <netinet/tcp.h>
+#  include <netinet/tcp.h>
 //#include <linux/tcp.h> // TCP_NODELAY
-#else
-#endif
+#  else
+#  endif
  // SIGHUP defined
-#define NetWakeSignal SIGHUP
+#  define NetWakeSignal SIGHUP
 #else
-#define ioctl ioctlsocket
+#  define ioctl ioctlsocket
 #endif
 //#define NO_LOGGING // force neverlog....
 SACK_NETWORK_NAMESPACE
@@ -45869,7 +46211,7 @@ void AcceptClient(PCLIENT pListen)
 										, pNewClient->saClient
 										,&nTemp
 										);
-	//lprintf( "Accept new client....%d", pNewClient->Socket );
+	//lprintf( "Accept new client...%p %d", pNewClient, pNewClient->Socket );
 #if WIN32
 	SetHandleInformation( (HANDLE)pNewClient->Socket, HANDLE_FLAG_INHERIT, 0 );
 #endif
@@ -45922,7 +46264,9 @@ void AcceptClient(PCLIENT pListen)
  // if there was a select error...
 		{
 			lprintf(WIDE( " Accept select Error" ));
+			EnterCriticalSec( &globalNetworkData.csNetwork );
 			InternalRemoveClientEx( pNewClient, TRUE, FALSE );
+			LeaveCriticalSec( &globalNetworkData.csNetwork );
 			NetworkUnlockEx( pNewClient, 0 DBG_SRC );
 			NetworkUnlockEx( pNewClient, 1 DBG_SRC );
 			pNewClient = NULL;
@@ -45986,7 +46330,9 @@ void AcceptClient(PCLIENT pListen)
  // accept failed...
 	else
 	{
+		EnterCriticalSec( &globalNetworkData.csNetwork );
 		InternalRemoveClientEx( pNewClient, TRUE, FALSE );
+		LeaveCriticalSec( &globalNetworkData.csNetwork );
 		NetworkUnlockEx( pNewClient, 0 DBG_SRC );
 		NetworkUnlockEx( pNewClient, 1 DBG_SRC );
 		pNewClient = NULL;
@@ -46038,7 +46384,9 @@ PCLIENT CPPOpenTCPListenerAddrExx( SOCKADDR *pAddr
 	{
 		lprintf( WIDE(" Open Listen Socket Fail... %d"), errno);
 		DumpAddr( "passed address to select:", pAddr );
+		EnterCriticalSec( &globalNetworkData.csNetwork );
 		InternalRemoveClientEx( pListen, TRUE, FALSE );
+		LeaveCriticalSec( &globalNetworkData.csNetwork );
 		NetworkUnlockEx( pListen, 0 DBG_SRC );
 		NetworkUnlockEx( pListen, 1 DBG_SRC );
 		pListen = NULL;
@@ -46053,7 +46401,9 @@ PCLIENT CPPOpenTCPListenerAddrExx( SOCKADDR *pAddr
                        SOCKMSG_TCP, FD_ACCEPT|FD_CLOSE ) )
 	{
 		lprintf( WIDE("Windows AsynchSelect failed: %d"), WSAGetLastError() );
+		EnterCriticalSec( &globalNetworkData.csNetwork );
 		InternalRemoveClientEx( pListen, TRUE, FALSE );
+		LeaveCriticalSec( &globalNetworkData.csNetwork );
 		NetworkUnlockEx( pListen, 0 DBG_SRC );
 		NetworkUnlockEx( pListen, 1 DBG_SRC );
 		return NULL;
@@ -46067,9 +46417,14 @@ PCLIENT CPPOpenTCPListenerAddrExx( SOCKADDR *pAddr
 	{
 		int t = TRUE;
 		setsockopt( pListen->Socket, SOL_SOCKET, SO_REUSEADDR, &t, 4 );
-		t = TRUE;
 		fcntl( pListen->Socket, F_SETFL, O_NONBLOCK );
 	}
+#  ifdef SO_REUSEPORT
+	{
+		int t = TRUE;
+		setsockopt( pListen->Socket, SOL_SOCKET, SO_REUSEPORT, &t, 4 );
+	}
+#  endif
 #endif
 #ifndef _WIN32
 	if( pAddr->sa_family==AF_UNIX )
@@ -46080,7 +46435,9 @@ PCLIENT CPPOpenTCPListenerAddrExx( SOCKADDR *pAddr
 	{
 		_lprintf(DBG_RELAY)( WIDE("Cannot bind to address..:%d"), WSAGetLastError() );
 		DumpAddr( "Bind address:", pAddr );
+		EnterCriticalSec( &globalNetworkData.csNetwork );
 		InternalRemoveClientEx( pListen, TRUE, FALSE );
+		LeaveCriticalSec( &globalNetworkData.csNetwork );
 		NetworkUnlockEx( pListen, 0 DBG_SRC );
 		NetworkUnlockEx( pListen, 1 DBG_SRC );
 		return NULL;
@@ -46089,7 +46446,9 @@ PCLIENT CPPOpenTCPListenerAddrExx( SOCKADDR *pAddr
 	if(listen(pListen->Socket, SOMAXCONN ) == SOCKET_ERROR )
 	{
 		lprintf( WIDE("listen(5) failed: %d"), WSAGetLastError() );
+		EnterCriticalSec( &globalNetworkData.csNetwork );
 		InternalRemoveClientEx( pListen, TRUE, FALSE );
+		LeaveCriticalSec( &globalNetworkData.csNetwork );
 		NetworkUnlockEx( pListen, 0 DBG_SRC );
 		NetworkUnlockEx( pListen, 1 DBG_SRC );
 		return NULL;
@@ -46177,7 +46536,9 @@ int NetworkConnectTCPEx( PCLIENT pc DBG_PASS ) {
 			)
 		{
 			_lprintf( DBG_RELAY )(WIDE( "Connect FAIL: %d %d %" ) _32f, pc->Socket, err, dwError);
+			EnterCriticalSec( &globalNetworkData.csNetwork );
 			InternalRemoveClientEx( pc, TRUE, FALSE );
+			LeaveCriticalSec( &globalNetworkData.csNetwork );
 			NetworkUnlockEx( pc, 0 DBG_SRC );
 			pc = NULL;
 			return -1;
@@ -46234,12 +46595,14 @@ static PCLIENT InternalTCPClientAddrFromAddrExxx( SOCKADDR *lpAddr, SOCKADDR *pF
 			                      , (((*(uint16_t*)lpAddr) == AF_INET)||((*(uint16_t*)lpAddr) == AF_INET6))?IPPROTO_TCP:0 );
 #endif
 #ifdef LOG_SOCKET_CREATION
-		lprintf( WIDE( "Created new socket %d" ), pResult->Socket );
+		lprintf( WIDE( "Created new socket %p %d" ), pResult, pResult->Socket );
 #endif
 		if (pResult->Socket==INVALID_SOCKET)
 		{
 			lprintf( WIDE("Create socket failed. %d"), WSAGetLastError() );
+			EnterCriticalSec( &globalNetworkData.csNetwork );
 			InternalRemoveClientEx( pResult, TRUE, FALSE );
+			LeaveCriticalSec( &globalNetworkData.csNetwork );
 			NetworkUnlockEx( pResult, 1 DBG_SRC );
 			NetworkUnlockEx( pResult, 0 DBG_SRC );
 			return NULL;
@@ -46266,7 +46629,9 @@ static PCLIENT InternalTCPClientAddrFromAddrExxx( SOCKADDR *lpAddr, SOCKADDR *pF
 			                  , FD_READ|FD_WRITE|FD_CLOSE|FD_CONNECT) )
 			{
 				lprintf( WIDE(" Select NewClient Fail! %d"), WSAGetLastError() );
+				EnterCriticalSec( &globalNetworkData.csNetwork );
 				InternalRemoveClientEx( pResult, TRUE, FALSE );
+				LeaveCriticalSec( &globalNetworkData.csNetwork );
 				NetworkUnlockEx( pResult, 1 DBG_SRC );
 				NetworkUnlockEx( pResult, 0 DBG_SRC );
 				pResult = NULL;
@@ -46394,7 +46759,9 @@ static PCLIENT InternalTCPClientAddrFromAddrExxx( SOCKADDR *lpAddr, SOCKADDR *pF
 					}
 					else
 						lprintf( WIDE("Connect FAIL: Timeout") );
+					EnterCriticalSec( &globalNetworkData.csNetwork );
 					InternalRemoveClientEx( pResult, TRUE, FALSE );
+					LeaveCriticalSec( &globalNetworkData.csNetwork );
 					pResult->dwFlags &= ~CF_CONNECT_WAITING;
 					pResult = NULL;
 					goto LeaveNow;
@@ -47002,7 +47369,7 @@ int TCPWriteEx(PCLIENT pc DBG_PASS)
 							 (int)pc->lpFirstPending->dwAvail );
 			}
 #ifdef DEBUG_SOCK_IO
-			_lprintf(DBG_RELAY)( "Try to send... %d  %d", pc->lpFirstPending->dwUsed, pc->lpFirstPending->dwAvail );
+			_lprintf(DBG_RELAY)( "Try to send... %p  %d  %d", pc, pc->lpFirstPending->dwUsed, pc->lpFirstPending->dwAvail );
 #endif
 			nSent = send(pc->Socket,
 							 (char*)pc->lpFirstPending->buffer.c +
@@ -47355,6 +47722,9 @@ void SetClientKeepAlive( PCLIENT pClient, int bEnable )
 		// log some sort of error... and ignore...
 	}
 }
+#ifndef __LINUX__
+#  undef ioctl
+#endif
 SACK_NETWORK_TCP_NAMESPACE_END
 #define LIBRARY_DEF
 #ifdef __LINUX__
@@ -47905,6 +48275,9 @@ int SetSocketReusePort( PCLIENT lpClient, int32_t enable )
 #endif
 	return 1;
 }
+#ifndef __LINUX__
+#  undef ioctl
+#endif
 _UDP_NAMESPACE_END
 SACK_NETWORK_NAMESPACE_END
 //
@@ -47989,8 +48362,8 @@ void ReportError(PVARTEXT pInto, CTEXTSTR pstrFrom);
 int  WaitForEchoReply(SOCKET s, uint32_t dwTime);
 uint16_t in_cksum(uint16_t *addr, int len);
 // ICMP Echo Request/Reply functions
-int		SendEchoRequest(PVARTEXT, SOCKET, SOCKADDR_IN*);
-int	   RecvEchoReply( PVARTEXT, SOCKET, SOCKADDR_IN*, uint8_t *);
+int		SendEchoRequest(PVARTEXT, SOCKET, struct sockaddr_in*);
+int	   RecvEchoReply( PVARTEXT, SOCKET, struct sockaddr_in*, uint8_t *);
 #define MAX_HOPS     128
 #define MAX_NAME_LEN 255
 typedef struct HopEntry_tag{
@@ -48006,7 +48379,7 @@ typedef struct HopEntry_tag{
                     // returned TTL from destination...
    int TTL;
 } HOPENT, *PHOPENT;
-uint32_t dwThreadsActive;
+volatile uint32_t dwThreadsActive;
 uintptr_t CPROC RDNSThread( PTHREAD pThread )
 {
    PHOPENT pHopEnt = (PHOPENT)GetThreadParam( pThread );
@@ -48042,8 +48415,13 @@ static LOGICAL DoPingExx( CTEXTSTR pstrHost
 {
 	SOCKET	  rawSocket;
 	struct hostent *lpHost;
-	SOCKADDR_IN saDest;
-	SOCKADDR_IN saSrc;
+#ifdef __LINUX__
+	struct win_sockaddr_in saDest;
+	struct win_sockaddr_in saSrc;
+#else
+	struct sockaddr_in saDest;
+	struct sockaddr_in saSrc;
+#endif
 	uint64_t	     dwTimeSent;
 	uint8_t     cTTL;
 	int        nLoop;
@@ -48139,6 +48517,7 @@ static LOGICAL DoPingExx( CTEXTSTR pstrHost
 #ifdef WIN32
 //OpenSocket(TRUE,FALSE, TRUE, 0);
 	rawSocket = INVALID_SOCKET;
+ //-V547
 	if( rawSocket == INVALID_SOCKET )
 	{
       //lprintf( "Bad 'smart' open.. fallback..." );
@@ -48224,7 +48603,7 @@ static LOGICAL DoPingExx( CTEXTSTR pstrHost
       {
          // Send ICMP echo request
          dwTimeSent = GetCPUTick();
-         if( SendEchoRequest(pvtResult, rawSocket, &saDest) <= 0)
+         if( SendEchoRequest(pvtResult, rawSocket, (struct sockaddr_in*)&saDest) <= 0)
          {
             closesocket( rawSocket );
 				LeaveCriticalSec( &cs );
@@ -48253,7 +48632,7 @@ static LOGICAL DoPingExx( CTEXTSTR pstrHost
                MaxTime = dwTimeNow;
             if( dwTimeNow < MinTime )
                MinTime = dwTimeNow;
-            if( !RecvEchoReply( pvtResult, rawSocket, &saSrc, &cTTL) )
+            if( !RecvEchoReply( pvtResult, rawSocket, (struct sockaddr_in*)&saSrc, &cTTL) )
             {
                 if( pvtResult )
                     ReportError( pvtResult, WIDE("recv()") );
@@ -48443,7 +48822,7 @@ NETWORK_PROC( LOGICAL, DoPingEx )( CTEXTSTR pstrHost,
 // SendEchoRequest()
 // Fill in echo request header
 // and send to destination
-int SendEchoRequest(PVARTEXT pvtResult, SOCKET s,SOCKADDR_IN *lpstToAddr)
+int SendEchoRequest(PVARTEXT pvtResult, SOCKET s,struct sockaddr_in *lpstToAddr)
 {
 	static ECHOREQUEST echoReq;
 	static int nId = 1;
@@ -48477,7 +48856,7 @@ int SendEchoRequest(PVARTEXT pvtResult, SOCKET s,SOCKADDR_IN *lpstToAddr)
 // RecvEchoReply()
 // Receive incoming data
 // and parse out fields
-int RecvEchoReply(PVARTEXT pvtResult, SOCKET s, SOCKADDR_IN *lpsaFrom, uint8_t *pTTL)
+int RecvEchoReply(PVARTEXT pvtResult, SOCKET s, struct sockaddr_in *lpsaFrom, uint8_t *pTTL)
 {
 	ECHOREPLY echoReply;
 	int nRet;
@@ -48725,7 +49104,7 @@ SACK_NETWORK_NAMESPACE_END
 #  include <cryptuiapi.h>
 #endif
 //#define DEBUG_SSL_IO
-#if NO_SSL
+#if defined ( NO_SSL )
 SACK_NETWORK_NAMESPACE
 LOGICAL ssl_Send( PCLIENT pc, CPOINTER buffer, size_t length ) {
 	return FALSE;
@@ -48863,6 +49242,30 @@ static int handshake( PCLIENT pc ) {
 #endif
 			return -1;
 		}
+		{
+			size_t pending;
+			while( ( pending = BIO_ctrl_pending( ses->wbio) ) > 0 ) {
+				if (pending > 0) {
+					int read;
+					if( pending > ses->obuflen ) {
+						if( ses->obuffer )
+							Deallocate( uint8_t *, ses->obuffer );
+						ses->obuffer = NewArray( uint8_t, ses->obuflen = pending*2 );
+						//lprintf( "making obuffer bigger %d %d", pending, pending * 2 );
+					}
+					read = BIO_read(ses->wbio, ses->obuffer, (int)pending);
+#ifdef DEBUG_SSL_IO
+					  lprintf( "send %d %d for handshake", pending, read );
+#endif
+					  if( read > 0 ) {
+#ifdef DEBUG_SSL_IO
+						  lprintf( "handshake send %d", read );
+#endif
+						  SendTCP( pc, ses->obuffer, read );
+					  }
+				  }
+			  }
+		  }
 		if (r < 0) {
 			r = SSL_get_error(ses->ssl, r);
 			if( SSL_ERROR_SSL == r ) {
@@ -48874,28 +49277,6 @@ static int handshake( PCLIENT pc ) {
 			}
 			if (SSL_ERROR_WANT_READ == r)
 			{
-				size_t pending;
-				while( ( pending = BIO_ctrl_pending( ses->wbio) ) > 0 ) {
-					if (pending > 0) {
-						int read;
-						if( pending > ses->obuflen ) {
-							if( ses->obuffer )
-								Deallocate( uint8_t *, ses->obuffer );
-							ses->obuffer = NewArray( uint8_t, ses->obuflen = pending*2 );
-							//lprintf( "making obuffer bigger %d %d", pending, pending * 2 );
-						}
-						read = BIO_read(ses->wbio, ses->obuffer, (int)pending);
-#ifdef DEBUG_SSL_IO
-						lprintf( "send %d %d for handshake", pending, read );
-#endif
-						if( read > 0 ) {
-#ifdef DEBUG_SSL_IO
-							lprintf( "handshake send %d", read );
-#endif
-							SendTCP( pc, ses->obuffer, read );
-						}
-					}
-				}
 			}
 			else {
 				ERR_print_errors_cb( logerr, (void*)__LINE__ );
@@ -48935,7 +49316,11 @@ static void ssl_ReadComplete( PCLIENT pc, POINTER buffer, size_t length )
 				return;
 			}
 			if( !( hs_rc = handshake( pc ) ) ) {
-				if( !pc->ssl_session ) return;
+				if( !pc->ssl_session ) {
+ //-V522
+					LeaveCriticalSec( &pc->ssl_session->csReadWrite );
+					return;
+				}
 #ifdef DEBUG_SSL_IO
 				// normal condition...
 				lprintf( "Receive handshake not complete iBuffer" );
@@ -48944,11 +49329,14 @@ static void ssl_ReadComplete( PCLIENT pc, POINTER buffer, size_t length )
 				ReadTCP( pc, pc->ssl_session->ibuffer, pc->ssl_session->ibuflen );
 				return;
 			}
-			if( !pc->ssl_session ) return;
+			if( !pc->ssl_session ) {
+				LeaveCriticalSec( &pc->ssl_session->csReadWrite );
+				return;
+			}
 			// == 1 if is already done, and not newly done
 			if( hs_rc == 2 ) {
 				// newly completed handshake.
-				if( !(pc->dwFlags & CF_READPENDING) ) {
+				{
 					if( !pc->ssl_session->ignoreVerification && SSL_get_peer_certificate( pc->ssl_session->ssl ) ) {
 						int r;
 						if( ( r = SSL_get_verify_result( pc->ssl_session->ssl ) ) != X509_V_OK ) {
@@ -48969,9 +49357,12 @@ static void ssl_ReadComplete( PCLIENT pc, POINTER buffer, size_t length )
 				}
 				len = 0;
 			}
-			else if( hs_rc == 1 )
+			if( hs_rc >= 1 )
 			{
 			read_more:
+				// if read isn't done before pending, pending doesn't get set
+				// but this read doens't return a useful length.
+ //-V575
 				len = SSL_read( pc->ssl_session->ssl, NULL, 0 );
 				//lprintf( "return of 0 read: %d", len );
 				//if( len < 0 )
@@ -49034,7 +49425,10 @@ static void ssl_ReadComplete( PCLIENT pc, POINTER buffer, size_t length )
 						lprintf( "Send pending control %p %d", pc->ssl_session->obuffer, read );
 #endif
 						SendTCP( pc, pc->ssl_session->obuffer, read );
-						if( !pc->ssl_session ) return;
+						if( !pc->ssl_session ) {
+							LeaveCriticalSec( &pc->ssl_session->csReadWrite );
+							return;
+						}
 					}
 				}
 			}
@@ -49043,7 +49437,7 @@ static void ssl_ReadComplete( PCLIENT pc, POINTER buffer, size_t length )
 			if( len > 0 ) {
 #ifdef DEBUG_SSL_IO
 				lprintf( "READ BUFFER:" );
-				LogBinary( pc->ssl_session->dbuffer, len );
+				LogBinary( pc->ssl_session->dbuffer, 256 > len ? len : 256 );
 #endif
 				if( pc->ssl_session->dwOriginalFlags & CF_CPPREAD )
 					pc->ssl_session->cpp_user_read( pc->psvRead, pc->ssl_session->dbuffer, len );
@@ -49114,11 +49508,11 @@ LOGICAL ssl_Send( PCLIENT pc, CPOINTER buffer, size_t length )
 	struct ssl_session *ses = pc->ssl_session;
 	if( !ses )
 		return FALSE;
-	while( length ) {
 #ifdef DEBUG_SSL_IO
-		lprintf( "SSL SEND...." );
-		LogBinary( (uint8_t*)buffer, length );
+	lprintf( "SSL SEND...." );
+	LogBinary( (((uint8_t*)buffer) + offset), 256 > length ? length : 256 );
 #endif
+	while( length ) {
 		if( pending_out > 4327 )
 			pending_out = 4327;
 #ifdef DEBUG_SSL_IO
@@ -49128,7 +49522,8 @@ LOGICAL ssl_Send( PCLIENT pc, CPOINTER buffer, size_t length )
 		len = SSL_write( pc->ssl_session->ssl, (((uint8_t*)buffer) + offset), (int)pending_out );
 		if (len < 0) {
 			ERR_print_errors_cb(logerr, (void*)__LINE__);
-			LeaveCriticalSec( &pc->ssl_session->csReadWrite );
+			if( pc->ssl_session )
+				LeaveCriticalSec( &pc->ssl_session->csReadWrite );
 			return FALSE;
 		}
 		offset += len;
@@ -49884,7 +50279,11 @@ WEBSOCKET_EXPORT void SetWebSocketMasking( PCLIENT pc, int enable );
 // Set callback to get completed fragment size (total packet size collected so far)
 WEBSOCKET_EXPORT void SetWebSocketDataCompletion( PCLIENT pc, web_socket_completion callback );
 #endif
-#include <zlib.h>
+#ifdef HAVE_ZLIB
+#  include <zlib.h>
+#else
+#  define __NO_WEBSOCK_COMPRESSION__
+#endif
 #ifndef WEBSOCKET_COMMON_SOURCE
 #define EXTERN extern
 #else
@@ -49910,6 +50309,7 @@ struct web_socket_input_state
 	} flags;
  // (last message tick) for automatic ping/keep alive/idle death
 	uint32_t last_reception;
+#ifndef __NO_WEBSOCK_COMPRESSION__
   // max bits used on (deflater if server, inflater if client)
 	int client_max_bits;
   // max bits used on (inflater if server, deflater if client)
@@ -49921,6 +50321,7 @@ struct web_socket_input_state
 	POINTER inflateBuf;
 	size_t inflateBufLen;
 	size_t inflateBufUsed;
+#endif
 	// expandable buffer for collecting input messages from client.
 	size_t fragment_collection_avail;
 	size_t fragment_collection_length;
@@ -50425,10 +50826,10 @@ void ProcessWebSockProtocol( WebSocketInputState websock, PCLIENT pc, const uint
 						if( websock->frame_length > 2 ) {
 							StrCpyEx( buf, (char*)(websock->fragment_collection + 2), websock->frame_length - 2 );
 							buf[websock->frame_length - 2] = 0;
-							code = ((int)buf[0] << 8) + buf[1];
+							code = ((int)websock->fragment_collection[0] << 8) + websock->fragment_collection[1];
 						}
 						else if( websock->frame_length ) {
-							code = ((int)buf[0] << 8) + buf[1];
+							code = ((int)websock->fragment_collection[0] << 8) + websock->fragment_collection[1];
 							buf[0] = 0;
 						}
 						else {
@@ -50745,6 +51146,10 @@ MD5_PROC( void, MD5Final )(unsigned char [16], MD5_CTX *);
 #endif
 #ifndef SACK_HTML5_WEBSOCKET_COMMON_DEFINED
 #define SACK_HTML5_WEBSOCKET_COMMON_DEFINED
+#ifdef HAVE_ZLIB
+#else
+#  define __NO_WEBSOCK_COMPRESSION__
+#endif
 #ifndef WEBSOCKET_COMMON_SOURCE
 #define EXTERN extern
 #else
@@ -50770,6 +51175,7 @@ struct web_socket_input_state
 	} flags;
  // (last message tick) for automatic ping/keep alive/idle death
 	uint32_t last_reception;
+#ifndef __NO_WEBSOCK_COMPRESSION__
   // max bits used on (deflater if server, inflater if client)
 	int client_max_bits;
   // max bits used on (inflater if server, deflater if client)
@@ -50781,6 +51187,7 @@ struct web_socket_input_state
 	POINTER inflateBuf;
 	size_t inflateBufLen;
 	size_t inflateBufUsed;
+#endif
 	// expandable buffer for collecting input messages from client.
 	size_t fragment_collection_avail;
 	size_t fragment_collection_length;
@@ -51213,7 +51620,6 @@ static void CPROC read_complete( PCLIENT pc, POINTER buffer, size_t length )
 								}
 							}
 							else
-#endif
 							if( TextLike( opt, "client_max_window_bits" ) ) {
 								opt = NEXTLINE( opt );
 								if( opt ) {
@@ -51245,6 +51651,7 @@ static void CPROC read_complete( PCLIENT pc, POINTER buffer, size_t length )
 							else if( TextLike( opt, "server_no_context_takeover" ) ) {
 								//socket->flags.max_window_bits = 1;
 							}
+#endif
 							opt = NEXTLINE( opt );
 						}
 						LineRelease( options );
@@ -51359,9 +51766,11 @@ static void CPROC read_complete( PCLIENT pc, POINTER buffer, size_t length )
 								Deallocate( char *, resultval );
 							}
 						}
+#ifndef __NO_WEBSOCK_COMPRESSION__
 						if( socket->input_state.flags.deflate ) {
 							vtprintf( pvt_output, WIDE( "Sec-WebSocket-Extensions: permessage-deflate; client_no_context_takeover; server_max_window_bits=%d\r\n" ), socket->input_state.server_max_bits );
 						}
+#endif
 						if( socket->protocols )
 							vtprintf( pvt_output, WIDE( "Sec-WebSocket-Protocol: %s\r\n" ), socket->protocols );
 						vtprintf( pvt_output, WIDE( "WebSocket-Server: sack\r\n" ) );
@@ -51528,9 +51937,13 @@ SRG_EXPORT struct random_context *SRG_CreateEntropy2( void (*getsalt)( uintptr_t
 //  uses a sha2-256
 SRG_EXPORT struct random_context *SRG_CreateEntropy2_256( void (*getsalt)( uintptr_t, POINTER *salt, size_t *salt_size ), uintptr_t psv_user );
 //
-// struct random_context *entropy = CreateEntropy2( void (*getsalt)( uintptr_t, POINTER *salt, size_t *salt_size ), uintptr_t psv_user );
-//  uses a sha3-512
+// struct random_context *entropy = CreateEntropy3( void (*getsalt)( uintptr_t, POINTER *salt, size_t *salt_size ), uintptr_t psv_user );
+//  uses a sha3-512 (keccak)
 SRG_EXPORT struct random_context *SRG_CreateEntropy3( void (*getsalt)( uintptr_t, POINTER *salt, size_t *salt_size ), uintptr_t psv_user );
+//
+// struct random_context *entropy = CreateEntropy4( void (*getsalt)( uintptr_t, POINTER *salt, size_t *salt_size ), uintptr_t psv_user );
+//  uses a K12-32768
+SRG_EXPORT struct random_context *SRG_CreateEntropy4( void( *getsalt )(uintptr_t, POINTER *salt, size_t *salt_size), uintptr_t psv_user );
 // Destroya  context.  Pass the address of your 'struct random_context *entropy;   ... SRG_DestroyEntropy( &entropy );
 SRG_EXPORT void SRG_DestroyEntropy( struct random_context **ppEntropy );
 // get a large number of bits of entropy from the random_context
@@ -51540,16 +51953,29 @@ SRG_EXPORT void SRG_GetEntropyBuffer( struct random_context *ctx, uint32_t *buff
 // if get_signed is not 0, the result will be sign extended if the last bit is set
 //  (coded on little endian; tests for if ( result & ( 1 << bits - 1 ) ) then sign extend
 SRG_EXPORT int32_t SRG_GetEntropy( struct random_context *ctx, int bits, int get_signed );
+// get a single bit.
+SRG_EXPORT uint32_t SRG_GetBit( struct random_context *ctx );
 // opportunity to reset an entropy generator back to initial condition
 // next call to getentropy will be the same as the first call after create.
 SRG_EXPORT void SRG_ResetEntropy( struct random_context *ctx );
+// After SRG_ResetEntropy(), this takes the existing entropy
+// already in the random_context and seeds the entropy generator
+// with this existing digest;  GetEntropy/GetEntropyBuffer do this
+// internally; but for user control, this is separated from just
+// ResetEntropy().
+//   SRG_ResetEntropy(ctx);   // reset entropy generator to empty.
+//   SRG_StreamEntropy(ctx);  // continue from last ending
+//   SRG_FeedEntropy(ctx, /*buffer*/ ); // mix in some more entropy
+//
+SRG_EXPORT void SRG_StreamEntropy( struct random_context *ctx );
 // Manually load some salt into the next enropy buffer to e retreived.
 // sets up to add the next salt into the buffer.
 SRG_EXPORT void SRG_FeedEntropy( struct random_context *ctx, const uint8_t *salt, size_t salt_size );
 // restore the random contxt from the external holder specified
 // {
 //    POINTER save_context;
-//    SRG_RestoreState( ctx, save_context );
+//    SRG_SaveState( ctx, &save_context );  // will allocate space for the context
+//    SRG_RestoreState( ctx, save_context ); // context should previously be saved
 // }
 SRG_EXPORT void SRG_RestoreState( struct random_context *ctx, POINTER external_buffer_holder );
 // save the random context in an external buffer holder.
@@ -51558,7 +51984,23 @@ SRG_EXPORT void SRG_RestoreState( struct random_context *ctx, POINTER external_b
 //    POINTER save_context = NULL;
 //    SRG_SaveState( ctx, &save_context );
 // }
-SRG_EXPORT void SRG_SaveState( struct random_context *ctx, POINTER *external_buffer_holder );
+SRG_EXPORT void SRG_SaveState( struct random_context *ctx, POINTER *external_buffer_holder, size_t *dataSize );
+//
+// Randeom Hash generators.  Returns a 256 bit hash in a base 64 string.
+// internally seeded by clocks
+// Are thread safe; current thread pool is 32 before having to wait
+//
+// return a unique ID using SHA2_512
+SRG_EXPORT char * SRG_ID_Generator( void );
+// return a unique ID using SHA2_256
+SRG_EXPORT char *SRG_ID_Generator_256( void );
+// return a unique ID using SHA3-keccak-512
+SRG_EXPORT char *SRG_ID_Generator3( void );
+// return a unique ID using SHA3-K12-512
+SRG_EXPORT char *SRG_ID_Generator4( void );
+//------------------------------------------------------------------------
+//   crypt_util.c extra simple routines - kinda like 'passwd'
+//
 // usage
 /// { uint8_t* buf; size_t buflen; SRG_DecryptData( <resultfrom encrypt>, &buf, &buflen ); }
 //  buffer result must be released by user
@@ -51573,12 +52015,107 @@ SRG_EXPORT TEXTCHAR * SRG_EncryptData( CPOINTER buffer, size_t buflen );
 // text result must release by user
 // calls EncrytpData with buffer and string length + 1 to include the null for decryption.
 SRG_EXPORT TEXTCHAR * SRG_EncryptString( CTEXTSTR buffer );
-// return a unique ID using SRG2
-SRG_EXPORT char * SRG_ID_Generator( void );
-// return a unique ID using SRG2_256
-SRG_EXPORT char *SRG_ID_Generator_256( void );
-// return a unique ID using SRG3
-SRG_EXPORT char *SRG_ID_Generator3( void );
+// Simplified encyprtion wrapper around OpenSSL/LibreSSL EVP AES-256-CBC, uses key as IV also.
+// result is length; address of pointer to cyphertext is filled in with an Allocated buffer.
+// Limitation of 4G-byte encryption.
+// automaically adds padding as required.
+SRG_EXPORT int SRG_AES_decrypt( uint8_t *ciphertext, int ciphertext_len, uint8_t *key, uint8_t **plaintext );
+// Simplified encyprtion wrapper around OpenSSL/LibreSSL EVP AES-256-CBC, uses key as IV also.
+// result is length; address of pointer to cyphertext is filled in with an Allocated buffer.
+// Limitation of 4G-byte encryption.
+// automaically adds padding as required.
+SRG_EXPORT size_t SRG_AES_encrypt( uint8_t *plaintext, size_t plaintext_len, uint8_t *key, uint8_t **ciphertext );
+// xor-sub-wipe-sub encryption.
+// encrypts objBuf of objBufLen using (keyBuf+tick)
+// pointers refrenced passed to outBuf and outBufLen are filled in with the result
+// Will automatically add 4 bytes and pad up to 8
+SRG_EXPORT void SRG_XSWS_encryptData( uint8_t *objBuf, size_t objBufLen
+	, uint64_t tick, const uint8_t *keyBuf, size_t keyBufLen
+	, uint8_t **outBuf, size_t *outBufLen
+);
+// xor-sub-wipe-sub decryption.
+// decrypts objBuf of objBufLen using (keyBuf+tick)
+// pointers refrenced passed to outBuf and outBufLen are filled in with the result
+//
+SRG_EXPORT void SRG_XSWS_decryptData( uint8_t *objBuf, size_t objBufLen
+	, uint64_t tick, const uint8_t *keyBuf, size_t keyBufLen
+	, uint8_t **outBuf, size_t *outBufLen
+);
+//--------------------------------------------------------------
+// block_shuffle.c
+//
+// Utilities to shuffle 2D data.
+//
+//  This can use a small swap block to tile over a larger 2D area
+//
+//  shuffles a matrix of bytes
+//  1D operation is available by setting either height to 1
+//  (arrays are 'wide' before they are 'high')
+/*
+{
+	struct block_shuffle_key *key = BlockShuffle_CreateKey( SRG_CreateEntropy( NULL, 0 ), 8, 8 );
+	uint8_t input_bytes[8][18];
+	uint8_t encoded_bytes[8][8];
+	uint8_t output_bytes[8][36];
+	BlockShuffle_SetDataBlock( key, input, 2, 2, 15, 3, sizeof( input_bytes[0] )
+		encoded, 0, 0, sizeof( encoded_bytes[0] ) );
+	BlockShuffle_GetDataBlock( key, encoded, 2, 2, 15, 3, sizeof( encoded_bytes[0] )
+		output_bytes, 0, 0, sizeof( input_bytes[0] ) );
+}
+{
+	struct block_shuffle_key *BlockShuffle_CreateKey( SRG_CreateEntropy( NULL, 0 ), 8, 8 );
+	uint8_t input_bytes[8][18];
+	uint8_t encoded_bytes[8][8];
+	uint8_t output_bytes[8][36];
+}
+*/
+// API subjet to CHANGE!
+// creates a swap-matrix of width by height matrix.  Could be a linear
+// swap width (or height) is 1
+SRG_EXPORT struct block_shuffle_key *BlockShuffle_CreateKey( struct random_context *ctx, size_t width, size_t height );
+// do substitution within a range of data
+SRG_EXPORT void BlockShuffle_SetDataBlock( struct block_shuffle_key *key
+	, uint8_t* encrypted, int x, int y, size_t w, size_t h, size_t output_stride
+	, uint8_t* input, int ofs_x, int ofs_y, size_t input_stride );
+// do linear substitution over a range
+SRG_EXPORT void BlockShuffle_SetData( struct block_shuffle_key *key
+	, uint8_t* encrypted, int x, size_t w
+	, uint8_t* input, int ofs_x );
+// reverse subsittuion within a range of data
+SRG_EXPORT void BlockShuffle_GetDataBlock( struct block_shuffle_key *key
+	, uint8_t* encrypted, int x, int y, size_t w, size_t h, size_t encrypted_stride
+	, uint8_t* output, int ofs_x, int ofs_y, size_t stride );
+// reverse linear substituion over a range.
+SRG_EXPORT void BlockShuffle_GetData( struct block_shuffle_key *key
+	, uint8_t* encrypted, size_t x, size_t w
+	, uint8_t* output, size_t ofs_x );
+// Allocate a byte shuffler.
+// This transformation creates a unique mapping of byteA to byteB.
+// The SubByte and BusByte operations may be performed in either order
+// but the complimentary function is required to decode the buffer.
+//  (A->B) mapping with SubByte is different from (A->B) mapping with BusByte
+// Bus(A) != Sub(A)  but  Bus(Sub(A)) == Sub(Bus(A)) == A
+SRG_EXPORT struct byte_shuffle_key *BlockShuffle_ByteShuffler( struct random_context *ctx );
+// Releases any resource sassociated with_byte shuffler_key.
+void BlockShuffle_DropByteShuffler( struct byte_shuffle_key *key );
+// BlockSHuffle_SubBytes and BLockShuffle_BusBytes are reflective routines.
+//  They read bytes from 'bytes' and otuput to 'out_bytes'
+//  in-place operation (bytes == out_bytes) is posssible.
+// SubBytes swaps A->B
+SRG_EXPORT void BlockShuffle_SubBytes( struct byte_shuffle_key *key
+	, uint8_t *bytes, uint8_t *out_bytes, size_t byteCount );
+// swap a single byte; can be in-place.
+SRG_EXPORT void BlockShuffle_SubByte( struct byte_shuffle_key *key
+	, uint8_t *bytes, uint8_t *out_bytes );
+// BlockSHuffle_SubBytes and BlockShuffle_BusBytes are reflective routines.
+//  They read bytes from 'bytes' and otuput to 'out_bytes'
+//  in-place operation (bytes == out_bytes) is posssible.
+// BusBytes swaps B->A
+SRG_EXPORT void BlockShuffle_BusBytes( struct byte_shuffle_key *key, uint8_t *bytes
+	, uint8_t *out_bytes, size_t byteCount );
+// swap a single byte; can be in-place.
+SRG_EXPORT void BlockShuffle_BusByte( struct byte_shuffle_key *key
+	, uint8_t *bytes, uint8_t *out_bytes );
 typedef struct web_socket_client *WebSocketClient;
 struct web_socket_client_local
 {
@@ -52087,6 +52624,8 @@ JSON_EMITTER_PROC( int, json_parse_add_data )( struct json_parse_state *context
                                              );
 // these are common functions that work for json or json6 stream parsers
 JSON_EMITTER_PROC( PDATALIST, json_parse_get_data )( struct json_parse_state *context );
+// get actual allocated root for a value... allows holding that.
+JSON_EMITTER_PROC( const char *, json_get_parse_buffer )(struct json_parse_state *pState, const char *buf);
 JSON_EMITTER_PROC( void, json_parse_dispose_state )( struct json_parse_state **context );
 JSON_EMITTER_PROC( void, json_parse_clear_state )(struct json_parse_state *context);
 JSON_EMITTER_PROC( PTEXT, json_parse_get_error )(struct json_parse_state *context);
@@ -52111,6 +52650,8 @@ JSON_EMITTER_PROC( LOGICAL, _json6_parse_message )( char * msg
                                                   , size_t msglen
                                                   , PDATALIST *msg_data_out
                                                   );
+JSON_EMITTER_PROC( struct json_parse_state *, json6_get_message_parser )( void );
+JSON_EMITTER_PROC( struct json_parse_state *, json_get_message_parser )( void );
 // Add some data to parse for json stream (which may consist of multiple values)
 // return 1 when a completed value/object is available.
 // after returning 1, call json_parse_get_data.  It is possible that there is
@@ -52423,6 +52964,10 @@ struct json_parser_shared_data {
 	PPLINKSTACKSET linkStacks;
 	PPLINKQUEUESET linkQueues;
 	PPDATALISTSET dataLists;
+ // used by simple parse_message interface.
+	struct json_parse_state *json_state;
+ // used by simple parse_message interface.
+	struct json_parse_state *json6_state;
 };
 #ifndef JSON_PARSER_MAIN_SOURCE
 extern
@@ -52776,7 +53321,9 @@ int json_parse_add_data( struct json_parse_state *state
 			//lprintf( "output from before is %p", output );
 			offset = (output->pos - output->buf);
 			offset2 = state->val.string - output->buf;
-			AddLink( state->outValBuffers, output->buf );
+			struct json_output_buffer *tmpout = (struct json_output_buffer*)GetFromSet( PARSE_BUFFER, &jpsd.parseBuffers );
+			tmpout[0] = output[0];
+			AddLink( state->outValBuffers, tmpout );
 			output->buf = NewArray( char, output->size + msglen + 1 );
 			MemCpy( output->buf + offset2, state->val.string, offset-offset2 );
 			output->size += msglen;
@@ -53312,19 +53859,23 @@ LOGICAL json_parse_message( const char * msg
 	, size_t msglen
 	, PDATALIST *_msg_output ) {
 	struct json_parse_state *state = json_begin_parse();
-	static struct json_parse_state *_state;
+	//static struct json_parse_state *_state;
 	state->complete_at_end = TRUE;
 	int result = json_parse_add_data( state, msg, msglen );
-	if( _state ) json_parse_dispose_state( &_state );
+	if( jpsd.json_state ) json_parse_dispose_state( &jpsd.json_state );
 	if( result > 0 ) {
 		(*_msg_output) = json_parse_get_data( state );
-		_state = state;
+		jpsd.json_state = state;
 		//json6_parse_dispose_state( &state );
 		return TRUE;
 	}
 	(*_msg_output) = NULL;
 	json_parse_dispose_state( &state );
 	return FALSE;
+}
+struct json_parse_state *json_get_message_parser( void ) {
+	//lprintf( "Return simple json parser:%p", jpsd.json_state );
+	return jpsd.json_state;
 }
 void json_dispose_decoded_message( struct json_context_object *format
                                  , POINTER msg_data )
@@ -54717,7 +55268,9 @@ int json6_parse_add_data( struct json_parse_state *state
 			//lprintf( "output from before is %p", output );
 			offset = (output->pos - output->buf);
 			offset2 = state->val.string ? (state->val.string - output->buf) : 0;
-			AddLink( state->outValBuffers, output->buf );
+			struct json_output_buffer *saveout = (struct json_output_buffer*)GetFromSet( PARSE_BUFFER, &jpsd.parseBuffers );
+			saveout[0] = output[0];
+			AddLink( state->outValBuffers, saveout );
 			output->buf = NewArray( char, output->size + msglen + 1 );
 			if( state->val.string ) {
 				MemCpy( output->buf + offset2, state->val.string, offset - offset2 );
@@ -55681,6 +56234,23 @@ PTEXT json_parse_get_error( struct json_parse_state *state ) {
 	}
 	return NULL;
 }
+const char *json_get_parse_buffer( struct json_parse_state *pState, const char *buf ) {
+	int idx;
+	PPARSE_BUFFER buffer;
+	//lprintf( "Getting buffer from %p", pState );
+	for( idx = 0; buffer = (PPARSE_BUFFER)PeekLinkEx( pState->outBuffers, idx ); idx++ )
+		if( ((uintptr_t)buf) >= ((uintptr_t)buffer->buf) && ((uintptr_t)buf) < ((uintptr_t)buffer->pos) )
+			return buffer->buf;
+	for( idx = 0; buffer = (PPARSE_BUFFER)PeekQueueEx( *pState->outQueue, idx ); idx++ )
+		if( ((uintptr_t)buf) >= ((uintptr_t)buffer->buf) && ((uintptr_t)buf) < ((uintptr_t)buffer->pos) )
+			return buffer->buf;
+	LIST_FORALL( pState->outValBuffers[0], idx, PPARSE_BUFFER, buffer ) {
+		if( ((uintptr_t)buf) >= ((uintptr_t)buffer->buf) && ((uintptr_t)buf) < ((uintptr_t)buffer->pos) )
+			return buffer->buf;
+	}
+	lprintf( "FAILED TO FIND BUFFER TO RETURN" );
+	return NULL;
+}
 void json_parse_dispose_state( struct json_parse_state **ppState ) {
 	struct json_parse_state *state = (*ppState);
 	struct json_parse_context *old_context;
@@ -55692,10 +56262,12 @@ void json_parse_dispose_state( struct json_parse_state **ppState ) {
 		DeleteFromSet( PARSE_BUFFER, jpsd.parseBuffers, buffer );
 	}
 	{
-		char *buf;
+		PPARSE_BUFFER buf;
 		INDEX idx;
-		LIST_FORALL( state->outValBuffers[0], idx, char*, buf ) {
-			Deallocate( char*, buf );
+		LIST_FORALL( state->outValBuffers[0], idx, PPARSE_BUFFER, buf ) {
+			Deallocate( const char *, buf->buf );
+			DeleteFromSet( PARSE_BUFFER, jpsd.parseBuffers, buf );
+			Deallocate( PPARSE_BUFFER, buf );
 		}
 		DeleteFromSet( PLIST, jpsd.listSet, state->outValBuffers );
 		//DeleteList( &state->outValBuffers );
@@ -55728,20 +56300,24 @@ LOGICAL json6_parse_message( const char * msg
 	, size_t msglen
 	, PDATALIST *_msg_output ) {
 	struct json_parse_state *state = json_begin_parse();
-	static struct json_parse_state *_state;
+	//static struct json_parse_state *_state;
 	state->complete_at_end = TRUE;
 	int result = json6_parse_add_data( state, msg, msglen );
-	if( _state ) json_parse_dispose_state( &_state );
+	if( jpsd.json6_state ) json_parse_dispose_state( &jpsd.json6_state );
 	if( result > 0 ) {
 		(*_msg_output) = json_parse_get_data( state );
-		_state = state;
+		jpsd.json6_state = state;
 		//json6_parse_dispose_state( &state );
 		return TRUE;
 	}
 	(*_msg_output) = NULL;
 	jpsd.last_parse_state = state;
-	_state = state;
+	jpsd.json6_state = state;
 	return FALSE;
+}
+struct json_parse_state *json6_get_message_parser( void ) {
+	//lprintf( "Return simple json6 parser:%p", jpsd.json6_state );
+	return jpsd.json6_state;
 }
 void json6_dispose_message( PDATALIST *msg_data )
 {
@@ -55987,9 +56563,9 @@ parse_message
 		  int index;
         struct jsox_value_container *value;
 		  DATALIST_FORALL( pdlMessage, index, struct jsox_value_container *. value ) {
-           /* for each value in the result.... the first layer will
-           always be just one element, either a simple type, or a VALUE_ARRAY or VALUE_OBJECT, which
-           then for each value->contains (as a datalist like above), process each of those values.
+           // for each value in the result.... the first layer will
+           // always be just one element, either a simple type, or a VALUE_ARRAY or VALUE_OBJECT, which
+           // then for each value->contains (as a datalist like above), process each of those values.
 		  }
         jsox_dispose_mesage( &pdlMessage );
     }
@@ -56012,9 +56588,9 @@ parse_message
         int index;
         struct jsox_value_container *value;
         DATALIST_FORALL( pdlMessage, index, struct jsox_value_container *. value ) {
-           /* for each value in the result.... the first layer will
-           always be just one element, either a simple type, or a VALUE_ARRAY or VALUE_OBJECT, which
-           then for each value->contains (as a datalist like above), process each of those values.
+           // for each value in the result.... the first layer will
+           // always be just one element, either a simple type, or a VALUE_ARRAY or VALUE_OBJECT, which
+           // then for each value->contains (as a datalist like above), process each of those values.
         }
         jsox_dispose_mesage( &pdlMessage );
 		  jsox_parse_add_data( parser, NULL, 0 ); // trigger parsing next message.
@@ -56099,6 +56675,8 @@ struct jsox_value_container {
 JSOX_PARSER_PROC( struct jsox_parse_state *, jsox_begin_parse )(void);
 // clear state; after an error state, this can allow reusing a state.
 JSOX_PARSER_PROC( void, jsox_parse_clear_state )( struct jsox_parse_state *state );
+// get actual allocated root for a value... allows holding that.
+JSOX_PARSER_PROC( const char *, jsox_get_parse_buffer )(struct jsox_parse_state *pState, const char *buf);
 // destroy current parse state.
 JSOX_PARSER_PROC( void, jsox_parse_dispose_state )(struct jsox_parse_state **ppState);
 // return >0 when a completed value/object is available.
@@ -56120,8 +56698,42 @@ JSOX_PARSER_PROC( LOGICAL, jsox_parse_message )(const char * msg
 	);
 // release all resources of a message from jsox_parse_message or jsox_parse_get_data
 JSOX_PARSER_PROC( void, jsox_dispose_message )(PDATALIST *msg_data);
+JSOX_PARSER_PROC( struct jsox_parse_state *, jsox_get_messge_parser )(void);
 JSOX_PARSER_PROC( char *, jsox_escape_string_length )(const char *string, size_t len, size_t *outlen);
 JSOX_PARSER_PROC( char *, jsox_escape_string )(const char *string);
+/*
+	jsox_get_pared_value()
+	takes a parsed message data list as a parameer, and a path.
+	A message may have been parsed into multiple parts.  This
+	early version will return just the first value in the datalist.
+	If there is an optional `path` specified, then that is used to
+	step through the JSOX parsed structure to get deeper values.
+	Path is specified as a list of fieldnames and array index numbers.
+	optional separator characters may be used between members '.', ' ', '/' and '\'.
+	Separator characters may be repeated or mixed with other seaprators and are all
+	considered a single separation.
+	optional bracket characters around an array index may be used     [0]    is often as good as 0.
+	Some example paths
+		messages[0]from
+		messages.0.from
+		messages [0] from
+		messages [0] lines[0]
+	{ messages : [ // array of messages
+	    { from : "someone", lines: [ "lines","of","message"] }
+	  ]
+	}
+	jsox_get_parsed_value() returns a value from a PDATALIST
+	jsox_get_parsed_object_value() and jsox_get_parsed_array_value() :  returns a value from a value member.
+*/
+JSOX_PARSER_PROC( struct jsox_value_container *, jsox_get_parsed_value )(PDATALIST pdlMessage, const char *path
+	, void( *callback )(uintptr_t psv, struct jsox_value_container *val), uintptr_t psv
+	);
+JSOX_PARSER_PROC( struct jsox_value_container *, jsox_get_parsed_object_value )(struct jsox_value_container *pdlMessage, const char *path
+	, void( *callback )(uintptr_t psv, struct jsox_value_container *val), uintptr_t psv
+	);
+JSOX_PARSER_PROC( struct jsox_value_container *, jsox_get_parsed_array_value )(struct jsox_value_container * pdlMessage, const char *path
+	, void( *callback )(uintptr_t psv, struct jsox_value_container *val), uintptr_t psv
+	);
 #ifdef __cplusplus
 } } SACK_NAMESPACE_END
 using namespace sack::network::jsox;
@@ -56238,6 +56850,8 @@ enum jsox_parse_context_modes {
 	JSOX_CONTEXT_OBJECT_FIELD_VALUE = 4,
 	JSOX_CONTEXT_CLASS_FIELD = 5,
 	JSOX_CONTEXT_CLASS_VALUE = 6,
+ // same as OBJECT_FIELD_VALUE; but within a CLASS_VALUE state
+	JSOX_CONTEXT_CLASS_FIELD_VALUE = 7,
 };
 #define JSOX_RESET_VAL()  {	  val.value_type = JSOX_VALUE_UNSET;	 val.contains = NULL;	              val._contains = NULL;	             val.name = NULL;	                  val.string = NULL;	                val.className = NULL;	             negative = FALSE; }
 #define JSOX_RESET_STATE_VAL()  {	  state->val.value_type = JSOX_VALUE_UNSET;	 state->val.contains = NULL;	              state->val._contains = NULL;	             state->val.name = NULL;	                  state->val.string = NULL;	                state->val.className = NULL;	             state->negative = FALSE; }
@@ -56379,6 +56993,8 @@ struct jsox_parser_shared_data {
 	PPDATALISTSET dataLists;
 	PJSOX_CLASSSET  classes;
 	PJSOX_CLASS_FIELDSET  class_fields;
+ // static parsing state for simple message interface.
+	struct jsox_parse_state *_state;
 };
 #ifndef JSOX_PARSER_MAIN_SOURCE
 extern
@@ -56824,6 +57440,7 @@ static int openObject( struct jsox_parse_state *state, struct jsox_output_buffer
 	return TRUE;
 }
 static LOGICAL openArray( struct jsox_parse_state *state, struct jsox_output_buffer* output, int c ) {
+	PJSOX_CLASS cls = NULL;
 	if( state->word > JSOX_WORD_POS_RESET && state->word < JSOX_WORD_POS_FIELD )
 		recoverIdent(state,output,c);
 	if( state->word == JSOX_WORD_POS_FIELD ) {
@@ -56848,11 +57465,19 @@ static LOGICAL openArray( struct jsox_parse_state *state, struct jsox_output_buf
 			state->val.string = output->pos;
 		}
 		else {
+			cls = GetFromSet( JSOX_CLASS, &jxpsd.classes );
+			cls->name = state->val.string;
+			cls->nameLen = output->pos - state->val.string;
+			cls->fields = NULL;
+			AddLink( &state->classes, cls );
+#if 0
+			// might be an external type
 			if( !state->pvtError ) state->pvtError = VarTextCreate();
 			vtprintf( state->pvtError, WIDE( "Unknown type specified for array:; %s at '%c' unexpected at %" ) _size_f WIDE( "  %" ) _size_f WIDE( ":%" ) _size_f
 				, state->val.string, c, state->n, state->line, state->col );
 			state->status = FALSE;
 			return FALSE;
+#endif
 		}
 	} else if( state->parse_context == JSOX_CONTEXT_OBJECT_FIELD ) {
 		if( !state->pvtError ) state->pvtError = VarTextCreate();
@@ -56872,7 +57497,7 @@ static LOGICAL openArray( struct jsox_parse_state *state, struct jsox_output_buf
 		old_context->current_class = state->current_class;
 		old_context->current_class_item = state->current_class_item;
 		old_context->arrayType = state->arrayType;
-		state->current_class = NULL;
+		state->current_class = cls;
 		state->current_class_item = 0;
 		state->arrayType = -1;
 // CreateDataList( sizeof( state->val ) );
@@ -57171,11 +57796,13 @@ static void pushValue( struct jsox_parse_state *state, PDATALIST *pdl, struct js
 #endif
 	if( val->value_type == JSOX_VALUE_ARRAY ) {
 		if( state->arrayType >= 0 ) {
+			struct jsox_value_container *innerVal = (struct jsox_value_container *)GetDataItem( &val->contains, 0 );
 			//size_t size;
 			val->className = (char*)GetLink( &knownArrayTypeNames, state->arrayType );
 			val->value_type = (enum jsox_value_types)(JSOX_VALUE_TYPED_ARRAY + state->arrayType);
 			//lprintf( "INPUT:%d %s", val->stringLen, val->string );
-			val->string = (char*)DecodeBase64Ex( val->string, val->stringLen, &val->stringLen, NULL );
+			if( state->arrayType < 12 )
+				val->string = (char*)DecodeBase64Ex( innerVal->string, innerVal->stringLen, &val->stringLen, NULL );
 			//lprintf( "base:%s", EncodeBase64Ex( "HELLO, World!", 13, NULL, NULL ) );
 			//lprintf( "Resolve base64 string:%s", val->string );
 		}
@@ -57349,7 +57976,10 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 				openArray( state, output, c );
 				break;
 			case ':':
-				if( state->parse_context == JSOX_CONTEXT_OBJECT_FIELD )
+				if( state->parse_context == JSOX_CONTEXT_OBJECT_FIELD
+					|| state->parse_context == JSOX_CONTEXT_CLASS_VALUE
+					|| state->parse_context == JSOX_CONTEXT_CLASS_FIELD
+					)
 				{
 					if( state->word != JSOX_WORD_POS_RESET
 						&& state->word != JSOX_WORD_POS_FIELD
@@ -57360,7 +57990,7 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 						vtprintf( state->pvtError, WIDE( "unquoted keyword used as object field name:parsing fault; unexpected %c at %" ) _size_f WIDE( "  %" ) _size_f WIDE( ":%" ) _size_f, c, state->n, state->line, state->col );
 						break;
 					}
-					else if( state->word == JSOX_WORD_POS_FIELD ) {
+					else if( state->word == JSOX_WORD_POS_FIELD || state->word == JSOX_WORD_POS_AFTER_FIELD && !state->completedString ) {
 						state->val.stringLen = ( output->pos - state->val.string );
 						(*output->pos++) = 0;
 					}
@@ -57368,7 +57998,6 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 						state->val.stringLen = ( output->pos - state->val.string );
 						(*output->pos++) = 0;
 					}
-					state->word = JSOX_WORD_POS_RESET;
 					if( state->val.name ) {
 						if( !state->pvtError ) state->pvtError = VarTextCreate();
 						vtprintf( state->pvtError, "two names single value?" );
@@ -57378,7 +58007,12 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 					state->val.nameLen = state->val.stringLen;
 					state->val.string = NULL;
 					state->val.stringLen = 0;
-					state->parse_context = JSOX_CONTEXT_OBJECT_FIELD_VALUE;
+					// classname will later indicate this was a class...
+					// this can no longer be a prototype definition (class_field)
+					// but if it's a value, we want to stay that we're collecting class values.
+					state->parse_context = (state->parse_context == JSOX_CONTEXT_OBJECT_FIELD || state->parse_context == JSOX_CONTEXT_CLASS_FIELD)
+						? JSOX_CONTEXT_OBJECT_FIELD_VALUE
+						: JSOX_CONTEXT_CLASS_FIELD_VALUE;
 					state->val.value_type = JSOX_VALUE_UNSET;
 				}
 				else
@@ -57411,6 +58045,13 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 						}
 						JSOX_RESET_STATE_VAL();
 						state->word = JSOX_WORD_POS_RESET;
+						/*
+						state->val.value_type = JSOX_VALUE_OBJECT;
+						state->val.contains = state->elements[0];
+						state->val._contains = state->elements;
+						if( state->current_class )
+							state->val.className = state->current_class->name;
+						*/
 #ifdef DEBUG_PARSING_STCK
 						lprintf( "object pop stack (close obj) %d %p", context_stack.length, old_context );
 #endif
@@ -57426,12 +58067,25 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 					} else {
 						vtprintf( state->pvtError, WIDE( "State error; gathering class fields, and lost the class; '%c' unexpected at %" ) _size_f WIDE( "  %" ) _size_f WIDE( ":%" ) _size_f
 							, c, state->n, state->line, state->col );
+						state->status = FALSE;
 					}
 				} else if( ( state->parse_context == JSOX_CONTEXT_OBJECT_FIELD ) || state->parse_context == JSOX_CONTEXT_CLASS_VALUE ) {
 					if( state->val.value_type != JSOX_VALUE_UNSET ) {
-						struct jsox_class_field *field = (struct jsox_class_field *)GetLink( &state->current_class->fields, state->current_class_item++ );
-						state->val.name = field->name;
-						state->val.nameLen = field->nameLen;
+						if( state->current_class ) {
+							if( state->current_class->fields ) {
+								struct jsox_class_field *field = (struct jsox_class_field *)GetLink( &state->current_class->fields, state->current_class_item++ );
+								state->val.name = field->name;
+								state->val.nameLen = field->nameLen;
+							}
+							else {
+								if( !state->val.name ) {
+									vtprintf( state->pvtError, "State error; class fields, class has no fields, and one was needed; '%c' unexpected at %" _size_f WIDE( "  %" ) _size_f WIDE( ":%" ) _size_f
+										, c, state->n, state->line, state->col );
+									state->status = FALSE;
+									break;
+								}
+							}
+						}
 #ifdef DEBUG_PARSING
 						lprintf( "Push value closing class value %d %p", state->current_class_item, state->current_class );
 #endif
@@ -57442,7 +58096,8 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 					state->val.value_type = JSOX_VALUE_OBJECT;
 					state->val.contains = state->elements[0];
 					state->val._contains = state->elements;
-					state->val.className = state->current_class->name;
+					if( state->current_class )
+						state->val.className = state->current_class->name;
 					state->val.string = NULL;
 					{
 						struct jsox_parse_context *old_context = (struct jsox_parse_context *)PopLink( state->context_stack );
@@ -57484,6 +58139,8 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 					state->val.string = NULL;
 					state->val.contains = state->elements[0];
 					state->val._contains = state->elements;
+					if( state->current_class )
+						state->val.className = state->current_class->name;
 					{
 						struct jsox_parse_context *old_context = (struct jsox_parse_context *)PopLink( state->context_stack );
 						//struct jsox_value_container *oldVal = (struct jsox_value_container *)GetDataItem( &old_context->elements, old_context->elements->Cnt - 1 );
@@ -57533,6 +58190,8 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 					//state->val.string = NULL;
 					state->val.contains = state->elements[0];
 					state->val._contains = state->elements;
+					if( state->current_class )
+						state->val.className = state->current_class->name;
 					{
 						struct jsox_parse_context *old_context = (struct jsox_parse_context *)PopLink( state->context_stack );
 						//struct jsox_value_container *oldVal = (struct jsox_value_container *)GetDataItem( &old_context->elements, old_context->elements->Cnt - 1 );
@@ -57582,11 +58241,21 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 				}
 				else if( state->parse_context == JSOX_CONTEXT_CLASS_VALUE ) {
 					if( state->val.value_type != JSOX_VALUE_UNSET ) {
-						struct jsox_class_field *field = (struct jsox_class_field *)GetLink( &state->current_class->fields, state->current_class_item++ );
-						state->val.name = field->name;
-						state->val.nameLen = field->nameLen;
+						if( state->current_class->fields ) {
+							struct jsox_class_field *field = (struct jsox_class_field *)GetLink( &state->current_class->fields, state->current_class_item++ );
+							state->val.name = field->name;
+							state->val.nameLen = field->nameLen;
+						}
+						else if( !state->val.name ) {
+							if( !state->pvtError ) state->pvtError = VarTextCreate();
+// fault
+							vtprintf( state->pvtError, WIDE( "class field has no matching field definitions; fault while parsing; '%c' unexpected at %" ) _size_f WIDE( "  %" ) _size_f WIDE( ":%" ) _size_f, state->parse_context, c, state->n, state->line, state->col );
+							state->status = FALSE;
+							break;
+						}
 						pushValue( state, state->elements, &state->val );
 						JSOX_RESET_STATE_VAL();
+						//state->parse_context = JSOX_CONTEXT_CLASS_FIELD;
 						state->word = JSOX_WORD_POS_RESET;
 					}
 				}
@@ -57606,6 +58275,17 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 				}
 				else if( state->parse_context == JSOX_CONTEXT_OBJECT_FIELD_VALUE )
 				{
+					// after an array value, it will have returned to OBJECT_FIELD anyway
+#ifdef DEBUG_PARSING
+					lprintf( "comma after field value, push field to object: %s", state->val.name );
+#endif
+					state->parse_context = JSOX_CONTEXT_OBJECT_FIELD;
+					state->word = JSOX_WORD_POS_RESET;
+					if( state->val.value_type != JSOX_VALUE_UNSET )
+						pushValue( state, state->elements, &state->val );
+					JSOX_RESET_STATE_VAL();
+				}
+				else if( state->parse_context == JSOX_CONTEXT_CLASS_VALUE ) {
 					// after an array value, it will have returned to OBJECT_FIELD anyway
 #ifdef DEBUG_PARSING
 					lprintf( "comma after field value, push field to object: %s", state->val.name );
@@ -57708,8 +58388,8 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 							if( state->val.string ) {
 								state->val.value_type = JSOX_VALUE_STRING;
 								state->word = JSOX_WORD_POS_AFTER_FIELD;
-								if( state->parse_context == JSOX_CONTEXT_UNKNOWN )
-									state->completed = TRUE;
+								//if( state->parse_context == JSOX_CONTEXT_UNKNOWN )
+								//	state->completed = TRUE;
 							}
 						}
 						else {
@@ -58191,6 +58871,18 @@ PDATALIST jsox_parse_get_data( struct jsox_parse_state *state ) {
 	else state->elements[0]->Cnt = 0;
 	return result[0];
 }
+const char *jsox_get_parse_buffer( struct jsox_parse_state *pState, const char *buf ) {
+	int idx;
+	PJSOX_PARSE_BUFFER buffer;
+	for( idx = 0; ; idx-- )
+		while( buffer = (PJSOX_PARSE_BUFFER)PeekLinkEx( pState->outBuffers, idx ) ) {
+			if( !buffer ) break;
+			if( ((uintptr_t)buf) >= ((uintptr_t)buffer->buf) && ((uintptr_t)buf) < ((uintptr_t)buffer->pos) )
+				return buffer->buf;
+		}
+	lprintf( "FAILED TO FIND BUFFER TO RETURN" );
+	return NULL;
+}
 void _jsox_dispose_message( PDATALIST *msg_data )
 {
 	struct jsox_value_container *val;
@@ -58324,27 +59016,125 @@ LOGICAL jsox_parse_message( const char * msg
 	, size_t msglen
 	, PDATALIST *_msg_output ) {
 	struct jsox_parse_state *state = jsox_begin_parse();
-	static struct jsox_parse_state *_state;
+	//static struct jsox_parse_state *_state;
 	state->complete_at_end = TRUE;
 	int result = jsox_parse_add_data( state, msg, msglen );
-	if( _state ) jsox_parse_dispose_state( &_state );
+	if( jxpsd._state ) jsox_parse_dispose_state( &jxpsd._state );
 	if( result > 0 ) {
 		(*_msg_output) = jsox_parse_get_data( state );
-		_state = state;
+		jxpsd._state = state;
 		//jsox_parse_dispose_state( &state );
 		return TRUE;
 	}
 	(*_msg_output) = NULL;
 	jxpsd.last_parse_state = state;
-	_state = state;
+	jxpsd._state = state;
 	return FALSE;
+}
+struct jsox_parse_state *jsox_get_message_parser( void ) {
+	return jxpsd._state;
+}
+static void stepPath( const char **path ) {
+	int skipped;
+	do {
+		skipped = 0;
+		switch( path[0][0] ) {
+		case '.':
+		case '/':
+		case '\\':
+		case ' ':
+			path[0]++;
+			skipped = 1;
+			break;
+		}
+	} while( skipped );
+}
+struct jsox_value_container *jsox_get_parsed_array_value( struct jsox_value_container *val, const char *path
+	, void( *callback )(uintptr_t psv, struct jsox_value_container *val), uintptr_t psv
+) {
+	INDEX idx;
+	if( path[0] == '[' )
+		path++;
+	int64_t index = IntCreateFromTextRef( &path );
+	if( path[0] == ']' )
+		path++;
+	struct jsox_value_container * member = (struct jsox_value_container*)GetDataItem( &val->contains, index );
+	stepPath( &path );
+	if( !path[0] ) {
+		callback( psv, member );
+		return member;
+	}
+	else {
+		if( member->value_type == JSOX_VALUE_ARRAY ) {
+			return jsox_get_parsed_array_value( member, path, callback, psv );
+		}
+		else if( member->value_type == JSOX_VALUE_OBJECT ) {
+			return jsox_get_parsed_object_value( member, path, callback, psv );
+		}
+		else {
+			lprintf( "Path across pimitive value...." );
+		}
+	}
+	return NULL;
+}
+struct jsox_value_container *jsox_get_parsed_object_value( struct jsox_value_container *val, const char *path
+	, void( *callback )(uintptr_t psv, struct jsox_value_container *val), uintptr_t psv
+) {
+	INDEX idx;
+	struct jsox_value_container * member;
+	DATA_FORALL( val->contains, idx, struct jsox_value_container *, member ) {
+		if( StrCmpEx( member->name, path, member->nameLen ) == 0 ) {
+			const char *subpath = path + member->nameLen;
+			stepPath( &subpath );
+			if( !subpath[0] ) {
+				callback( psv, member );
+				return member;
+			}
+			else {
+				if( member->value_type == JSOX_VALUE_ARRAY ) {
+					return jsox_get_parsed_array_value( member, subpath, callback, psv );
+				}
+				else if( member->value_type == JSOX_VALUE_OBJECT ) {
+					return jsox_get_parsed_object_value( member, subpath, callback, psv );
+				}
+				else {
+					lprintf( "Path across pimitive value...." );
+				}
+			}
+		}
+	}
+	return NULL;
+}
+struct jsox_value_container *jsox_get_parsed_value( PDATALIST pdlMessage, const char *path
+	, void( *callback )(uintptr_t psv, struct jsox_value_container *val), uintptr_t psv
+) {
+	INDEX idx;
+	struct jsox_value_container * val;
+	DATA_FORALL( pdlMessage, idx, struct jsox_value_container *, val ) {
+		if( !path || !path[0] ) {
+			callback( psv, val );
+			return val;
+		}
+		if( val->value_type == JSOX_VALUE_OBJECT ) {
+			return jsox_get_parsed_object_value( val, path, callback, psv );
+		}
+		else if( val->value_type == JSOX_VALUE_ARRAY ) {
+			return jsox_get_parsed_array_value( val, path, callback, psv );
+		}
+		else {
+			if( path && path[0] ) {
+				lprintf( "Error; path across a primitive value" );
+			}
+		}
+	}
+	return NULL;
 }
 #undef GetUtfChar
 #ifdef __cplusplus
 } } SACK_NAMESPACE_END
 #endif
-#ifdef __LINUX__
 #include <time.h>
+#ifdef __LINUX__
 //#include <linux/time.h> // struct tz
 #endif
 //-----------------------------------------------------------------------
@@ -59136,6 +59926,7 @@ TEXTSTR ExpandPathEx( CTEXTSTR path, struct file_system_interface *fsi )
 	if( (*winfile_local).flags.bLogOpenClose )
 		lprintf( WIDE( "input path is [%s]" ), path );
 #endif
+	LocalInit();
 	if( path )
 	{
 		if( !fsi && !IsAbsolutePath( path ) )
@@ -59570,6 +60361,7 @@ HANDLE sack_open( INDEX group, CTEXTSTR filename, int opts, ... )
 	switch( opts & 3 )
 	{
 	case 0:
+	default:
 	handle = CreateFile( file->fullname
 							, GENERIC_READ
 							, FILE_SHARE_READ
@@ -60976,6 +61768,46 @@ static	size_t CPROC sack_filesys_find_get_size( struct find_cursor *_cursor ) {
 #endif
 	return 0;
 }
+static	uint64_t CPROC sack_filesys_find_get_ctime( struct find_cursor *_cursor ) {
+	struct find_cursor_data *cursor = (struct find_cursor_data *)_cursor;
+#ifdef WIN32
+	if( cursor )
+		return cursor->fileinfo.time_create;
+	return 0;
+#else
+	if( cursor ) {
+		struct stat s;
+		char filename[280];
+		snprintf( filename, 280, "%s/%s", cursor->root, cursor->de->d_name );
+		if( stat( filename, &s ) ) {
+			lprintf( "getsize stat error:%d", errno );
+			return -2;
+		}
+		return s.st_ctime;
+	}
+#endif
+	return 0;
+}
+static	uint64_t CPROC sack_filesys_find_get_wtime( struct find_cursor *_cursor ) {
+	struct find_cursor_data *cursor = (struct find_cursor_data *)_cursor;
+#ifdef WIN32
+	if( cursor )
+		return cursor->fileinfo.time_write;
+	return 0;
+#else
+	if( cursor ) {
+		struct stat s;
+		char filename[280];
+		snprintf( filename, 280, "%s/%s", cursor->root, cursor->de->d_name );
+		if( stat( filename, &s ) ) {
+			lprintf( "getsize stat error:%d", errno );
+			return -2;
+		}
+		return s.st_mtime;
+	}
+#endif
+	return 0;
+}
 static	LOGICAL CPROC sack_filesys_find_is_directory( struct find_cursor *_cursor ){
 	struct find_cursor_data *cursor = (struct find_cursor_data *)_cursor;
 #ifdef WIN32
@@ -61013,10 +61845,16 @@ static struct file_system_interface native_fsi = {
 		, sack_filesys_find_next
 		, sack_filesys_find_get_name
 		, sack_filesys_find_get_size
-																 , sack_filesys_find_is_directory
-																 , sack_filesys_is_directory
+		, sack_filesys_find_is_directory
+		, sack_filesys_is_directory
  // rename
-                                                 , sack_filesys_rename
+		, sack_filesys_rename
+   // file ioctl
+		, NULL
+   // file-system ioctl
+		, NULL
+		, sack_filesys_find_get_ctime
+		, sack_filesys_find_get_wtime
 } ;
 PRIORITY_PRELOAD( InitWinFileSysEarly, OSALOT_PRELOAD_PRIORITY - 1 )
 {
@@ -61114,6 +61952,7 @@ struct file_system_mounted_interface *sack_mount_filesystem( const char *name, s
 	{
 		if( root->priority >= priority )
 		{
+ //-V595
 			LinkThingBefore( root, mount );
 			break;
 		}
@@ -61165,6 +62004,30 @@ int sack_fputs( const char *format,FILE *file )
 	{
 		size_t len = strlen( format );
 		return (int)( sack_fwrite( format, 1, (int)len, file ) & 0x7FFFFFFF );
+	}
+	return 0;
+}
+uintptr_t sack_ioctl( FILE *file_handle, uintptr_t opCode, ... ) {
+	struct file *file;
+	va_list args;
+	va_start( args, opCode );
+	file = FindFileByFILE( file_handle );
+	if( file && file->mount && file->mount->fsi && file->mount->fsi->ioctl ) {
+		return file->mount->fsi->ioctl( (uintptr_t)file_handle, opCode, args );
+	}
+	else {
+		 // unknown file handle; ignore unknown ioctl.
+	}
+	return 0;
+}
+uintptr_t sack_fs_ioctl( struct file_system_mounted_interface *mount, uintptr_t opCode, ... ) {
+	va_list args;
+	va_start( args, opCode );
+	if( mount && mount->fsi && mount->fsi->fs_ioctl ) {
+		return mount->fsi->fs_ioctl( mount->psvInstance, opCode, args );
+	}
+	else {
+		// unknown file handle; ignore unknown ioctl.
 	}
 	return 0;
 }
@@ -61366,12 +62229,12 @@ typedef struct result_buffer
 	int len;
 	int result_len;
 } RESULT_BUFFER, *PRESULT_BUFFER;
-static void CPROC MatchFile( uintptr_t psvUser, CTEXTSTR name, int flags )
+static void CPROC MatchFile( uintptr_t psvUser, CTEXTSTR name, enum ScanFileProcessFlags flags )
 {
 	PRESULT_BUFFER buffer = (PRESULT_BUFFER)psvUser;
 	buffer->result_len = tnprintf( buffer->buffer, buffer->len*sizeof(TEXTCHAR), WIDE("%s"), name );
 }
-int  GetMatchingFileName ( CTEXTSTR filemask, int flags, TEXTSTR pResult, int nResult )
+int  GetMatchingFileName ( CTEXTSTR filemask, enum ScanFileFlags  flags, TEXTSTR pResult, int nResult )
 {
 	void *info = NULL;
 	RESULT_BUFFER result_buf;
@@ -61450,11 +62313,15 @@ typedef struct myfinddata {
 #define findmask(pInfo)     ( ((PMFD)(*pInfo))->findmask)
 #define findinfo(pInfo)     (((PMFD)(*pInfo)))
 #define findcursor(pInfo)     ( ((PMFD)(*pInfo))->cursor)
+struct find_cursor *GetScanFileCursor( void *pInfo ) {
+	PMFD mfd = (PMFD)pInfo;
+	return mfd->cursor;
+}
  int  ScanFilesEx ( CTEXTSTR base
            , CTEXTSTR mask
            , void **pInfo
-           , void CPROC Process( uintptr_t psvUser, CTEXTSTR name, int flags )
-           , int flags
+           , void CPROC Process( uintptr_t psvUser, CTEXTSTR name, enum ScanFileProcessFlags flags )
+           , enum ScanFileFlags flags
            , uintptr_t psvUser
 		   , LOGICAL begin_sub_path
 		   , struct file_system_mounted_interface *mount
@@ -61463,7 +62330,7 @@ typedef struct myfinddata {
 	PMFD pDataCurrent = (PMFD)(pInfo);
 	PMFD pData = (PMFD)(*pInfo);
 	TEXTSTR tmp_base = NULL;
-	int sendflags;
+	enum ScanFileProcessFlags sendflags;
 	int processed = 0;
 #ifndef WIN32
 	struct dirent *de;
@@ -61900,7 +62767,7 @@ tnprintf( tmpbuf, sizeof( tmpbuf ), WIDE( "%s/%s" ), findbasename( pInfo ), de->
 #else
 												 && ( IsPath( pData->buffer ) )
 #endif
-												) ) || ( sendflags = 0, CompareMask( findmask( pInfo )
+												) ) || ( (sendflags = (enum ScanFileProcessFlags)0), CompareMask( findmask( pInfo )
 #ifdef WIN32
 #  ifdef UNDER_CE
 																							  , finddata(pInfo)->cFileName
@@ -61924,11 +62791,11 @@ tnprintf( tmpbuf, sizeof( tmpbuf ), WIDE( "%s/%s" ), findbasename( pInfo ), de->
 		Release( tmp_base );
 	return (*pInfo)?1:0;
 }
- int  ScanFiles ( CTEXTSTR base
+int  ScanFiles ( CTEXTSTR base
                 , CTEXTSTR mask
                 , void **pInfo
-                , void CPROC Process( uintptr_t psvUser, CTEXTSTR name, int flags )
-                , int flags
+                , void CPROC Process( uintptr_t psvUser, CTEXTSTR name, enum ScanFileProcessFlags flags )
+                , enum ScanFileFlags flags
                 , uintptr_t psvUser )
  {
 	 return ScanFilesEx( base, mask, pInfo, Process, flags, psvUser, FALSE, NULL );
@@ -61975,7 +62842,7 @@ FILESYS_NAMESPACE_END
  *
  */
 //#define SUPPORT_LOG_ALLOCATE
-#define DEFAULT_OUTPUT_STDERR
+//#define DEFAULT_OUTPUT_STDERR
 #define COMPUTE_CPU_FREQUENCY
 #define NO_UNICODE_C
 //#undef UNICODE
@@ -61984,7 +62851,6 @@ FILESYS_NAMESPACE_END
 #endif
 #ifdef __LINUX__
  // struct sockaddr_un
-#include <sys/un.h>
 #endif
 #ifdef __ANDROID__
 #include <android/log.h>
@@ -62178,11 +63044,6 @@ uint64_t GetCPUTick(void )
 		return _rdtsc();
 #elif defined( __WATCOMC__ )
 		uint64_t tick = rdtsc();
-#ifndef __WATCOMC__
-		// haha a nasty compiler trick to get the variable used
-		// but it's also a 'meaningless expression' so watcom pukes.
-		(1)?(0):(tick = 0);
-#endif
 		if( !(*syslog_local).lasttick )
 			(*syslog_local).lasttick = tick;
 		else if( tick < (*syslog_local).lasttick )
@@ -62197,10 +63058,10 @@ uint64_t GetCPUTick(void )
 		(*syslog_local).lasttick = tick;
 		return tick;
 #elif defined( _MSC_VER )
-#ifdef _M_CEE_PURE
+#  ifdef _M_CEE_PURE
 		//return System::DateTime::now;
 		return 0;
-#else
+#  else
 #   if defined( _WIN64 )
 		uint64_t tick = __rdtsc();
 #   else
@@ -62226,21 +63087,8 @@ uint64_t GetCPUTick(void )
 		}
 		(*syslog_local).lasttick = tick;
 		return tick;
-		if( !(*syslog_local).lasttick )
-			(*syslog_local).lasttick = tick;
-		else if( tick < (*syslog_local).lasttick )
-		{
-			bCPUTickWorks = 0;
-			cpu_tick_freq = 1;
-/*GetTickCount()*/
-			(*syslog_local).tick_bias = (*syslog_local).lasttick - ( timeGetTime() * 1000 );
- // more than prior, but no longer valid.
-			tick = (*syslog_local).lasttick + 1;
-		}
-		(*syslog_local).lasttick = tick;
-		return tick;
-#endif
-#elif defined( __GNUC__ ) && !defined( __arm__ ) && !defined( __aarch64__ )
+#  endif
+#elif defined( __GNUC__ ) && !defined( __arm__ ) && !defined( __aarch64__ ) && !defined( __asmjs__ )
 		union {
 			uint64_t tick;
 			PREFIX_PACKED struct { uint32_t low, high; } PACKED parts;
@@ -62591,6 +63439,188 @@ CTEXTSTR GetPackedTime( void )
 	        , timething );
 #endif
 	return timebuffer;
+}
+int GetTimeZone( void ){
+    time_t gmt, rawtime = time(NULL);
+    struct tm *ptm;
+#if !defined(WIN32)
+    struct tm gbuf;
+    ptm = gmtime_r(&rawtime, &gbuf);
+#else
+    ptm = gmtime(&rawtime);
+#endif
+    // Request that mktime() looksup dst in timezone database
+    ptm->tm_isdst = -1;
+    gmt = mktime(ptm);
+	{
+		int seconds = (int)difftime( rawtime, gmt );
+		int sign = 1;
+		if( seconds < 0 ) {
+			sign = -1;
+			seconds = -seconds;
+		}
+		return sign * (((seconds / 60 / 60) * 100) + ((seconds / 60) % 60));
+	}
+}
+#if 0
+#ifdef _WIN32
+	{
+		static int isSet;
+		static int tz;
+		if( isSet ) return tz;
+		// Get the local system time.
+		{
+			DWORD dwType;
+			DWORD dwValue;
+			DWORD dwSize = sizeof( dwValue );
+			HKEY hTemp;
+			DWORD dwStatus;
+			dwStatus = RegOpenKeyEx( HKEY_LOCAL_MACHINE
+			                       , "SYSTEM\\CurrentControlSet\\Control\\TimeZoneInformation", 0
+			                       , KEY_READ, &hTemp );
+			if( (dwStatus == ERROR_SUCCESS) && hTemp )
+			{
+				dwSize = sizeof( dwValue );
+				dwStatus = RegQueryValueEx(hTemp, "ActiveTimeBias", 0
+				                          , &dwType
+				                          , (PBYTE)&dwValue
+				                          , &dwSize );
+				RegCloseKey( hTemp );
+			}
+			else
+				dwValue = 0;
+			//HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\TimeZoneInformation
+			// Get the timezone info.
+			//TIME_ZONE_INFORMATION TimeZoneInfo;
+			//GetTimeZoneInformation( &TimeZoneInfo );
+			// Convert local time to UTC.
+			//TzSpecificLocalTimeToSystemTime( &TimeZoneInfo,
+			//								 &LocalTime,
+			//								 &GmtTime );
+			// Local time expressed in terms of GMT bias.
+			{
+				timebuf->zhr = (int8_t)( -( (int)dwValue/60 ) ) ;
+				timebuf->zmn = (dwValue>0)?( dwValue % 60 ):((-dwValue)%60);
+			}
+			tz = (int)dwValue;
+			isSet = TRUE;
+			return tz;
+		}
+	}
+#else
+#endif
+}
+#endif
+void ConvertTickToTime( int64_t tick, PSACK_TIME st ) {
+	int8_t tz = (int8_t)tick;
+	int sign = (tz < 0) ? -1 : 1;
+	if( tz < 0 ) tz = -tz;
+#ifdef _WIN32
+	static const uint64_t EPOCH = ((uint64_t)116444736000000000ULL);
+	tick >>= 8;
+	tick *= 10000LL;
+	tick += EPOCH;
+	// Note: some broken versions only have 8 trailing zero's, the correct epoch has 9 trailing zero's
+	// This magic number is the number of 100 nanosecond intervals since January 1, 1601 (UTC)
+	// until 00:00:00 January 1, 1970
+	SYSTEMTIME  system_time;
+	FILETIME    file_time;
+	file_time.dwLowDateTime = tick & 0xFFFFFFFF;
+	file_time.dwHighDateTime = ( tick >> 32 ) & 0xFFFFFFFF;
+	FileTimeToSystemTime( &file_time, &system_time );
+	st->yr = system_time.wYear;
+	st->mo = (uint8_t)system_time.wMonth;
+	st->dy = (uint8_t)system_time.wDay;
+	st->hr = (uint8_t)system_time.wHour;
+	st->mn = (uint8_t)system_time.wMinute;
+	st->sc = (uint8_t)system_time.wSecond;
+	st->ms = system_time.wMilliseconds;
+	st->zhr = sign* (( tz * 15 ) / 60);
+	st->zmn = (tz*15) % 60;
+#else
+	struct timeval tv;
+	struct tm tm;
+	tv.tv_sec = ( tick >> 8 ) / 1000;
+	tv.tv_usec =  ( ( tick >> 8 ) % 1000 ) * 1000;
+	gmtime_r( &tv.tv_sec, &tm );
+	st->yr = tm.tm_year + 1900;
+	st->mo = tm.tm_mon+1;
+	st->dy = tm.tm_mday;
+	st->hr = tm.tm_hour;
+	st->mn = tm.tm_min;
+	st->sc = tm.tm_sec;
+	st->ms = tv.tv_usec / 1000;
+	st->zhr = sign* (( tz * 15 ) / 60);
+	st->zmn = (tz*15) % 60;
+#endif
+}
+int64_t GetTimeOfDay( void )
+{
+	//struct timezone tzp;
+	int tz = GetTimeZone();
+	if( tz < 0 )
+ // -840/15 = -56
+		tz = -(((-tz / 100) * 60) + (-tz % 100)) / 15;
+	else
+ // -840/15 = -56  720/15 = 48
+		tz = (((tz / 100) * 60) + (tz % 100)) / 15;
+#ifdef _WIN32
+	// Note: some broken versions only have 8 trailing zero's, the correct epoch has 9 trailing zero's
+	// This magic number is the number of 100 nanosecond intervals since January 1, 1601 (UTC)
+	// until 00:00:00 January 1, 1970
+	static const uint64_t EPOCH = ((uint64_t)116444736000000000ULL);
+	SYSTEMTIME  system_time;
+	FILETIME    file_time;
+	uint64_t    time;
+	GetSystemTime( &system_time );
+	SystemTimeToFileTime( &system_time, &file_time );
+	time = ((uint64_t)file_time.dwLowDateTime);
+	time += ((uint64_t)file_time.dwHighDateTime) << 32;
+	return (((uint64_t)((time - EPOCH) / 10000L)) << 8) | (tz & 0xFF);
+#else
+	{
+		struct timeval tp;
+		gettimeofday( &tp, NULL );
+		return  (((uint64_t)(tp.tv_sec * 1000L) + (uint64_t)(tp.tv_usec)) << 8) | (tz & 0xFF);
+	}
+#endif
+}
+int64_t ConvertTimeToTick( PSACK_TIME st ) {
+	int tz;
+	int sign = st->zhr < 0 ? -1 : 1;
+	tz = sign * (((sign*st->zhr * 60) + st->zmn) / 15);
+#ifdef _WIN32
+	SYSTEMTIME  system_time;
+	FILETIME    file_time;
+	uint64_t    time;
+	system_time.wYear = st->yr;
+	system_time.wMonth = st->mo;
+	system_time.wDay = st->dy;
+	system_time.wHour = st->hr;
+	system_time.wMinute = st->mn;
+	system_time.wSecond = st->sc;
+	system_time.wMilliseconds = st->ms;
+	SystemTimeToFileTime( &system_time, &file_time );
+	static const uint64_t EPOCH = ((uint64_t)116444736000000000ULL);
+	time = ((uint64_t)file_time.dwLowDateTime);
+	time += ((uint64_t)file_time.dwHighDateTime) << 32;
+	return (((uint64_t)((time - EPOCH) / 10000L)) << 8) | (tz & 0xFF);
+#else
+	struct tm t;
+	time_t t_of_day;
+	t.tm_year = st->yr - 1900;
+           // Month, 0 - jan
+	t.tm_mon = st->mo-1;
+          // Day of the month
+	t.tm_mday = st->dy;
+	t.tm_hour = st->hr;
+	t.tm_min = st->mn;
+	t.tm_sec = st->sc;
+        // Is DST on? 1 = yes, 0 = no, -1 = unknown
+	t.tm_isdst = 0;
+	t_of_day = timegm( &t );
+	return ((((int64_t)t_of_day) * 1000ULL + st->ms) << 8) | (tz&0xFF);
+#endif
 }
 //----------------------------------------------------------------------------
  // no gettime of day - no milliseconds
@@ -63598,7 +64628,7 @@ void SetSystemLoggingLevel( uint32_t nLevel )
 void SetSyslogOptions( FLAGSETTYPE *options )
 {
 	// the mat operations don't turn into valid bitfield operators. (watcom)
- // open for append, else open for write
+ // open for append, else open for write //-V616
 	(*syslog_local).flags.bLogOpenAppend = TESTFLAG( options, SYSLOG_OPT_OPENAPPEND )?1:0;
  // open for append, else open for write
 	(*syslog_local).flags.bLogOpenBackup = TESTFLAG( options, SYSLOG_OPT_OPEN_BACKUP )?1:0;
@@ -66337,6 +67367,7 @@ PCONFIG_ELEMENT _AddConfigurationEx( PCONFIG_HANDLER pch, CTEXTSTR format, USER_
 					{
 						INDEX idx;
 						struct config_element_tag *pEnd;
+ //-V522
 						LIST_FORALL( pcePrior->data[0].multiword.pEnds, idx, struct config_element_tag *, pEnd ){
 							if( pceNew->type == pEnd->type ) {
 								break;
@@ -66455,10 +67486,8 @@ PCONFIG_ELEMENT _AddConfigurationEx( PCONFIG_HANDLER pch, CTEXTSTR format, USER_
 						struct config_element_tag *pEnd;
 						LIST_FORALL( pcePrior->data[0].multiword.pEnds, idx, struct config_element_tag *, pEnd ){
 							if( pceNew->type == pEnd->type ) {
-								if( pceNew->type == CONFIG_TEXT ) {
-									if( SameText( pceNew->data[0].pText, pEnd->data[0].pText ) == 0 )
-										break;
-								}
+								if( SameText( pceNew->data[0].pText, pEnd->data[0].pText ) == 0 )
+									break;
 							}
 						}
 						if( !pEnd ){
@@ -67009,7 +68038,9 @@ SACK_SYSTEM_NAMESPACE_END
 #  define NO_FILEOP_ALIAS
 #endif
 // setenv()
-#define _POSIX_C_SOURCE 2
+#ifndef _POSIX_C_SOURCE
+#  define _POSIX_C_SOURCE 2
+#endif
 #ifdef WIN32
 //#undef StrDup
 //#undef StrRChr
@@ -67653,7 +68684,7 @@ static void CPROC SetupSystemServices( POINTER mem, uintptr_t size )
 						library = library->next;
 					}
 				}
-				//if( library )
+				if( library )
 				{
 					char *dupname;
 					char *path;
@@ -67663,6 +68694,8 @@ static void CPROC SetupSystemServices( POINTER mem, uintptr_t size )
 						path[0] = 0;
 					(*init_l).library_path = dupname;
 				}
+            else
+					(*init_l).library_path = ".";
 			}
 			setenv( WIDE("MY_LOAD_PATH"), (*init_l).load_path, TRUE );
 			//strcpy( pMyPath, buf );
@@ -67816,6 +68849,7 @@ LOGICAL CPROC StopProgram( PTASK_INFO task )
 			if( WriteProcessMemory( task->pi.hProcess, mem,
 				(LPCVOID)SendCtrlCThreadProc, 1024, &written ) ) {
 				DWORD dwThread;
+ //-V575
 				HANDLE hThread = CreateRemoteThread( task->pi.hProcess, NULL, 0
 					, (LPTHREAD_START_ROUTINE)mem, NULL, 0, &dwThread );
 				err = GetLastError();
@@ -68220,6 +69254,7 @@ HANDLE GetImpersonationToken( void )
 }
 void EndImpersonation( void )
 {
+ //-V530
 	RevertToSelf();
 }
 #endif
@@ -68581,6 +69616,7 @@ SYSTEM_PROC( generic_function, LoadFunctionExx )( CTEXTSTR libname, CTEXTSTR fun
 			+ StrLen( l.library_path ) + 1 + StrLen( libname ) + 1
 			;
 		library = NewPlus( LIBRARY, sizeof(TEXTCHAR)*((maxlen<0xFFFFFF)?(uint32_t)maxlen:0) );
+		library->loading = NULL;
 		library->alt_full_name = library->full_name + fullnameLen;
 		//lprintf( "New library %s", libname );
 		if( !IsAbsolutePath( libname ) )
@@ -68661,6 +69697,7 @@ SYSTEM_PROC( generic_function, LoadFunctionExx )( CTEXTSTR libname, CTEXTSTR fun
 	}
 	SuspendDeadstart();
 	if( !library->library ) {
+ //-V595
 		library->library = LoadLibrary( library->cur_full_name );
 	}
 	if( !library->library ) {
@@ -68674,6 +69711,7 @@ SYSTEM_PROC( generic_function, LoadFunctionExx )( CTEXTSTR libname, CTEXTSTR fun
 	}
 	if( !library->library ) {
 		library->library = LoadLibrary( library->orig_name );
+		//if( !library->library ) lprintf( "Failed load basic:%s %d", library->orig_name, GetLastError() );
 	}
 	if( !library->library ) {
 #  ifdef DEBUG_LIBRARY_LOADING
@@ -68684,6 +69722,7 @@ SYSTEM_PROC( generic_function, LoadFunctionExx )( CTEXTSTR libname, CTEXTSTR fun
 	if( !library->library ) {
 		if( !library->loading ) {
 			if( l.flags.bLog )
+ //-V595
 				_xlprintf( 2 DBG_RELAY )(WIDE( "Attempt to load %s[%s](%s) failed: %d." ), libname, library->full_name, funcname ? funcname : WIDE( "all" ), GetLastError());
 			UnlinkThing( library );
 			ReleaseEx( library DBG_SRC );
@@ -69044,6 +70083,7 @@ SYSTEM_PROC( int, UnloadFunctionEx )( generic_function *f DBG_PASS )
 			if( !library->functions )
 			{
 #ifdef _WIN32
+ //-V595
 				FreeLibrary( library->library );
 #else
 				dlclose( library->library );
@@ -69362,7 +70402,7 @@ static int FixHandles( PTASK_INFO task )
 	if( task->pi.hProcess )
 		CloseHandle( task->pi.hProcess );
 	task->pi.hProcess = 0;
-	if( task->pi.hProcess )
+	if( task->pi.hThread )
 		CloseHandle( task->pi.hThread );
 	task->pi.hThread = 0;
 #endif
@@ -70417,7 +71457,7 @@ static CTEXTSTR DoSaveNameEx( CTEXTSTR stripped, size_t len DBG_PASS )
 #define DoSaveName(a,b) DoSaveNameEx(a,b DBG_SRC )
 {
 	PNAMESPACE space = l.NameSpace;
-	TEXTCHAR *p;
+	TEXTCHAR *p = NULL;
 	// cannot save 0 length strings.
 	if( !stripped || !stripped[0] || !len )
 	{
@@ -70695,7 +71735,7 @@ int GetClassPath( TEXTSTR out, size_t len, PCLASSROOT root )
 	PLINKSTACK pls = CreateLinkStack();
 	PTREEDEF current;
 	PNAME name;
-	for( current = (PTREEDEF)root; current->self && current; current = current->self->parent )
+	for( current = (PTREEDEF)root; current && current->self; current = current->self->parent )
 	{
 		PushLink( &pls, current->self );
 	}
@@ -72297,7 +73337,10 @@ void ReadConfiguration( void )
 }
 #endif
 //-----------------------------------------------------------------------
-POINTER GetInterfaceExx( CTEXTSTR pServiceName, LOGICAL ReadConfig DBG_PASS )
+POINTER GetInterfaceExx( CTEXTSTR pServiceName, LOGICAL ReadConfig DBG_PASS ) {
+	return GetInterface_v4( pServiceName, ReadConfig, FALSE DBG_RELAY );
+}
+POINTER GetInterface_v4( CTEXTSTR pServiceName, LOGICAL ReadConfig, int quietFail DBG_PASS )
 {
 	TEXTCHAR interface_name[256];
 	POINTER (CPROC *load)( void );
@@ -72332,7 +73375,7 @@ POINTER GetInterfaceExx( CTEXTSTR pServiceName, LOGICAL ReadConfig DBG_PASS )
 			return p;
 		}
 #ifdef _DEBUG
-		else
+		else if( !quietFail )
 		{
 			if( l.flags.bInterfacesLoaded )
 			{
@@ -73931,6 +74974,7 @@ P_POINT EXTERNAL_NAME(GetRotation)( PTRANSFORM pt, P_POINT r )
 //----------------------------------------------------------------
  void EXTERNAL_NAME(SetAxis)( PTRANSFORM pt, RCOORD a, RCOORD b, RCOORD c, int n )
 {
+ //-V557
    SetPoint( pt->m[n], &a );
 }
 //----------------------------------------------------------------
@@ -76169,6 +77213,1371 @@ void shake_out(sha3_ctx_t *c, void *out, size_t len)
     }
     c->pt = j;
 }
+/*
+Implementation by Ronny Van Keer, hereby denoted as "the implementer".
+For more information, feedback or questions, please refer to our website:
+https://keccak.team/
+To the extent possible under law, the implementer has waived all copyright
+and related or neighboring rights to the source code in this file.
+http://creativecommons.org/publicdomain/zero/1.0/
+*/
+#ifdef __64__
+/*
+Implementation by the Keccak Team, namely, Guido Bertoni, Joan Daemen,
+Michaël Peeters, Gilles Van Assche and Ronny Van Keer,
+hereby denoted as "the implementer".
+For more information, feedback or questions, please refer to our website:
+https://keccak.team/
+To the extent possible under law, the implementer has waived all copyright
+and related or neighboring rights to the source code in this file.
+http://creativecommons.org/publicdomain/zero/1.0/
+---
+Please refer to the XKCP for more details.
+*/
+#ifndef _KeccakP_1600_SnP_h_
+#define _KeccakP_1600_SnP_h_
+/*
+ ---------------------------------------------------------------------------
+ Copyright (c) 1998-2008, Brian Gladman, Worcester, UK. All rights reserved.
+ LICENSE TERMS
+ The redistribution and use of this software (with or without changes)
+ is allowed without the payment of fees or royalties provided that:
+  1. source code distributions include the above copyright notice, this
+     list of conditions and the following disclaimer;
+  2. binary distributions include the above copyright notice, this list
+     of conditions and the following disclaimer in their documentation;
+  3. the name of the copyright holder is not used to endorse products
+     built using this software without specific written permission.
+ DISCLAIMER
+ This software is provided 'as is' with no explicit or implied warranties
+ in respect of its properties, including, but not limited to, correctness
+ and/or fitness for purpose.
+ ---------------------------------------------------------------------------
+ Issue Date: 20/12/2007
+ Changes for ARM 9/9/2010
+*/
+#ifndef _BRG_ENDIAN_H
+#define _BRG_ENDIAN_H
+#define IS_BIG_ENDIAN      4321
+#define IS_LITTLE_ENDIAN   1234
+#if 0
+/* Include files where endian defines and byteswap functions may reside */
+#if defined( __sun )
+#  include <sys/isa_defs.h>
+#elif defined( __FreeBSD__ ) || defined( __OpenBSD__ ) || defined( __NetBSD__ )
+#  include <sys/endian.h>
+#elif defined( BSD ) && ( BSD >= 199103 ) || defined( __APPLE__ ) ||       defined( __CYGWIN32__ ) || defined( __DJGPP__ ) || defined( __osf__ )
+#  include <machine/endian.h>
+#elif defined( __linux__ ) || defined( __GNUC__ ) || defined( __GNU_LIBRARY__ )
+#  if !defined( __MINGW32__ ) && !defined( _AIX )
+#    include <endian.h>
+#    if !defined( __BEOS__ )
+#      include <byteswap.h>
+#    endif
+#  endif
+#endif
+#endif
+/* Now attempt to set the define for platform byte order using any  */
+/* of the four forms SYMBOL, _SYMBOL, __SYMBOL & __SYMBOL__, which  */
+/* seem to encompass most endian symbol definitions                 */
+#if defined( BIG_ENDIAN ) && defined( LITTLE_ENDIAN )
+#  if defined( BYTE_ORDER ) && BYTE_ORDER == BIG_ENDIAN
+#    define PLATFORM_BYTE_ORDER IS_BIG_ENDIAN
+#  elif defined( BYTE_ORDER ) && BYTE_ORDER == LITTLE_ENDIAN
+#    define PLATFORM_BYTE_ORDER IS_LITTLE_ENDIAN
+#  endif
+#elif defined( BIG_ENDIAN )
+#  define PLATFORM_BYTE_ORDER IS_BIG_ENDIAN
+#elif defined( LITTLE_ENDIAN )
+#  define PLATFORM_BYTE_ORDER IS_LITTLE_ENDIAN
+#endif
+#if defined( _BIG_ENDIAN ) && defined( _LITTLE_ENDIAN )
+#  if defined( _BYTE_ORDER ) && _BYTE_ORDER == _BIG_ENDIAN
+#    define PLATFORM_BYTE_ORDER IS_BIG_ENDIAN
+#  elif defined( _BYTE_ORDER ) && _BYTE_ORDER == _LITTLE_ENDIAN
+#    define PLATFORM_BYTE_ORDER IS_LITTLE_ENDIAN
+#  endif
+#elif defined( _BIG_ENDIAN )
+#  define PLATFORM_BYTE_ORDER IS_BIG_ENDIAN
+#elif defined( _LITTLE_ENDIAN )
+#  define PLATFORM_BYTE_ORDER IS_LITTLE_ENDIAN
+#endif
+#if defined( __BIG_ENDIAN ) && defined( __LITTLE_ENDIAN )
+#  if defined( __BYTE_ORDER ) && __BYTE_ORDER == __BIG_ENDIAN
+#    define PLATFORM_BYTE_ORDER IS_BIG_ENDIAN
+#  elif defined( __BYTE_ORDER ) && __BYTE_ORDER == __LITTLE_ENDIAN
+#    define PLATFORM_BYTE_ORDER IS_LITTLE_ENDIAN
+#  endif
+#elif defined( __BIG_ENDIAN )
+#  define PLATFORM_BYTE_ORDER IS_BIG_ENDIAN
+#elif defined( __LITTLE_ENDIAN )
+#  define PLATFORM_BYTE_ORDER IS_LITTLE_ENDIAN
+#endif
+#if defined( __BIG_ENDIAN__ ) && defined( __LITTLE_ENDIAN__ )
+#  if defined( __BYTE_ORDER__ ) && __BYTE_ORDER__ == __BIG_ENDIAN__
+#    define PLATFORM_BYTE_ORDER IS_BIG_ENDIAN
+#  elif defined( __BYTE_ORDER__ ) && __BYTE_ORDER__ == __LITTLE_ENDIAN__
+#    define PLATFORM_BYTE_ORDER IS_LITTLE_ENDIAN
+#  endif
+#elif defined( __BIG_ENDIAN__ )
+#  define PLATFORM_BYTE_ORDER IS_BIG_ENDIAN
+#elif defined( __LITTLE_ENDIAN__ )
+#  define PLATFORM_BYTE_ORDER IS_LITTLE_ENDIAN
+#endif
+/*  if the platform byte order could not be determined, then try to */
+/*  set this define using common machine defines                    */
+#if !defined(PLATFORM_BYTE_ORDER)
+#if   defined( __alpha__ ) || defined( __alpha ) || defined( i386 )       ||       defined( __i386__ )  || defined( _M_I86 )  || defined( _M_IX86 )    ||       defined( __OS2__ )   || defined( sun386 )  || defined( __TURBOC__ ) ||       defined( vax )       || defined( vms )     || defined( VMS )        ||       defined( __VMS )     || defined( _M_X64 )
+#  define PLATFORM_BYTE_ORDER IS_LITTLE_ENDIAN
+#elif defined( AMIGA )    || defined( applec )    || defined( __AS400__ )  ||       defined( _CRAY )    || defined( __hppa )    || defined( __hp9000 )   ||       defined( ibm370 )   || defined( mc68000 )   || defined( m68k )       ||       defined( __MRC__ )  || defined( __MVS__ )   || defined( __MWERKS__ ) ||       defined( sparc )    || defined( __sparc)    || defined( SYMANTEC_C ) ||       defined( __VOS__ )  || defined( __TIGCC__ ) || defined( __TANDEM )   ||       defined( THINK_C )  || defined( __VMCMS__ ) || defined( _AIX )       ||       defined( __s390__ ) || defined( __s390x__ ) || defined( __zarch__ )
+#  define PLATFORM_BYTE_ORDER IS_BIG_ENDIAN
+#elif defined(__arm__)
+# ifdef __BIG_ENDIAN
+#  define PLATFORM_BYTE_ORDER IS_BIG_ENDIAN
+# else
+#  define PLATFORM_BYTE_ORDER IS_LITTLE_ENDIAN
+# endif
+#elif 1
+#  define PLATFORM_BYTE_ORDER IS_LITTLE_ENDIAN
+#elif 0
+#  define PLATFORM_BYTE_ORDER IS_BIG_ENDIAN
+#else
+#  error Please edit lines 132 or 134 in brg_endian.h to set the platform byte order
+#endif
+#endif
+#endif
+#define KeccakP1600_implementation_config "all rounds unrolled"
+#define KeccakP1600_fullUnrolling
+/* Or */
+/*
+#define KeccakP1600_implementation_config "6 rounds unrolled"
+#define KeccakP1600_unrolling 6
+*/
+/* Or */
+/*
+#define KeccakP1600_implementation_config "lane complementing, 6 rounds unrolled"
+#define KeccakP1600_unrolling 6
+#define KeccakP1600_useLaneComplementing
+*/
+/* Or */
+/*
+#define KeccakP1600_implementation_config "lane complementing, all rounds unrolled"
+#define KeccakP1600_fullUnrolling
+#define KeccakP1600_useLaneComplementing
+*/
+/* Or */
+/*
+#define KeccakP1600_implementation_config "lane complementing, all rounds unrolled, using SHLD for rotations"
+#define KeccakP1600_fullUnrolling
+#define KeccakP1600_useLaneComplementing
+#define KeccakP1600_useSHLD
+*/
+#define KeccakP1600_implementation      "generic 64-bit optimized implementation (" KeccakP1600_implementation_config ")"
+#define KeccakP1600_stateSizeInBytes    200
+#define KeccakP1600_stateAlignment      8
+#define KeccakF1600_FastLoop_supported
+#define KeccakP1600_12rounds_FastLoop_supported
+#define KeccakP1600_StaticInitialize()
+void KeccakP1600_Initialize(void *state);
+#if (PLATFORM_BYTE_ORDER == IS_LITTLE_ENDIAN)
+#define KeccakP1600_AddByte(state, byte, offset)     ((unsigned char*)(state))[(offset)] ^= (byte)
+#else
+void KeccakP1600_AddByte(void *state, unsigned char data, unsigned int offset);
+#endif
+void KeccakP1600_AddBytes(void *state, const unsigned char *data, unsigned int offset, unsigned int length);
+void KeccakP1600_Permute_12rounds(void *state);
+void KeccakP1600_ExtractBytes(const void *state, unsigned char *data, unsigned int offset, unsigned int length);
+size_t KeccakP1600_12rounds_FastLoop_Absorb(void *state, unsigned int laneCount, const unsigned char *data, size_t dataByteLen);
+#endif
+#define KeccakP1600_implementation_config "all rounds unrolled"
+#define KeccakP1600_fullUnrolling
+/* Or */
+/*
+#define KeccakP1600_implementation_config "6 rounds unrolled"
+#define KeccakP1600_unrolling 6
+*/
+/* Or */
+/*
+#define KeccakP1600_implementation_config "lane complementing, 6 rounds unrolled"
+#define KeccakP1600_unrolling 6
+#define KeccakP1600_useLaneComplementing
+*/
+/* Or */
+/*
+#define KeccakP1600_implementation_config "lane complementing, all rounds unrolled"
+#define KeccakP1600_fullUnrolling
+#define KeccakP1600_useLaneComplementing
+*/
+/* Or */
+/*
+#define KeccakP1600_implementation_config "lane complementing, all rounds unrolled, using SHLD for rotations"
+#define KeccakP1600_fullUnrolling
+#define KeccakP1600_useLaneComplementing
+#define KeccakP1600_useSHLD
+*/
+/*
+Implementation by the Keccak Team, namely, Guido Bertoni, Joan Daemen,
+Michaël Peeters, Gilles Van Assche and Ronny Van Keer,
+hereby denoted as "the implementer".
+For more information, feedback or questions, please refer to our website:
+https://keccak.team/
+To the extent possible under law, the implementer has waived all copyright
+and related or neighboring rights to the source code in this file.
+http://creativecommons.org/publicdomain/zero/1.0/
+---
+Please refer to the XKCP for more details.
+*/
+typedef unsigned char UINT8;
+typedef unsigned long long int UINT64;
+#if defined(KeccakP1600_useLaneComplementing)
+#define UseBebigokimisa
+#endif
+#if defined(_MSC_VER )
+#define ROL64(a, offset) ((((UINT64)a) << offset) | (((UINT64)a) >> (64-offset)))
+//#define ROL64(a, offset) ( ( offset == 1 ) ? ( ( (a) & 0x8000000000000000ULL ) ? ((a) = (((a) << 1)|1)) : ( (a)<<1)  ) : ( _rotl64(a, offset) ) )
+//#define ROL64(a, offset)  _rotl64(a, offset)
+#elif defined(KeccakP1600_useSHLD)
+    #define ROL64(x,N) ({     register UINT64 __out;     register UINT64 __in = x;     __asm__ ("shld %2,%0,%0" : "=r"(__out) : "0"(__in), "i"(N));     __out;     })
+#else
+#define ROL64(a, offset) ((((UINT64)a) << offset) | (((UINT64)a) >> (64-offset)))
+#endif
+#ifdef KeccakP1600_fullUnrolling
+#define FullUnrolling
+#else
+#define Unrolling KeccakP1600_unrolling
+#endif
+static const UINT64 KeccakF1600RoundConstants[24] = {
+    0x0000000000000001ULL,
+    0x0000000000008082ULL,
+    0x800000000000808aULL,
+    0x8000000080008000ULL,
+    0x000000000000808bULL,
+    0x0000000080000001ULL,
+    0x8000000080008081ULL,
+    0x8000000000008009ULL,
+    0x000000000000008aULL,
+    0x0000000000000088ULL,
+    0x0000000080008009ULL,
+    0x000000008000000aULL,
+    0x000000008000808bULL,
+    0x800000000000008bULL,
+    0x8000000000008089ULL,
+    0x8000000000008003ULL,
+    0x8000000000008002ULL,
+    0x8000000000000080ULL,
+    0x000000000000800aULL,
+    0x800000008000000aULL,
+    0x8000000080008081ULL,
+    0x8000000000008080ULL,
+    0x0000000080000001ULL,
+    0x8000000080008008ULL };
+/* ---------------------------------------------------------------- */
+void KeccakP1600_Initialize(void *state)
+{
+    memset(state, 0, 200);
+#ifdef KeccakP1600_useLaneComplementing
+    ((UINT64*)state)[ 1] = ~(UINT64)0;
+    ((UINT64*)state)[ 2] = ~(UINT64)0;
+    ((UINT64*)state)[ 8] = ~(UINT64)0;
+    ((UINT64*)state)[12] = ~(UINT64)0;
+    ((UINT64*)state)[17] = ~(UINT64)0;
+    ((UINT64*)state)[20] = ~(UINT64)0;
+#endif
+}
+/* ---------------------------------------------------------------- */
+void KeccakP1600_AddBytesInLane(void *state, unsigned int lanePosition, const unsigned char *data, unsigned int offset, unsigned int length)
+{
+#if (PLATFORM_BYTE_ORDER == IS_LITTLE_ENDIAN)
+    UINT64 lane;
+    if (length == 0)
+        return;
+    if (length == 1)
+        lane = data[0];
+    else {
+        lane = 0;
+        memcpy(&lane, data, length);
+    }
+    lane <<= offset*8;
+#else
+    UINT64 lane = 0;
+    unsigned int i;
+    for(i=0; i<length; i++)
+        lane |= ((UINT64)data[i]) << ((i+offset)*8);
+#endif
+    ((UINT64*)state)[lanePosition] ^= lane;
+}
+/* ---------------------------------------------------------------- */
+void KeccakP1600_AddLanes(void *state, const unsigned char *data, unsigned int laneCount)
+{
+#if (PLATFORM_BYTE_ORDER == IS_LITTLE_ENDIAN)
+    unsigned int i = 0;
+#ifdef NO_MISALIGNED_ACCESSES
+    /* If either pointer is misaligned, fall back to byte-wise xor. */
+    if (((((uintptr_t)state) & 7) != 0) || ((((uintptr_t)data) & 7) != 0)) {
+      for (i = 0; i < laneCount * 8; i++) {
+        ((unsigned char*)state)[i] ^= data[i];
+      }
+    }
+    else
+#endif
+    {
+      /* Otherwise... */
+      for( ; (i+8)<=laneCount; i+=8) {
+          ((UINT64*)state)[i+0] ^= ((UINT64*)data)[i+0];
+          ((UINT64*)state)[i+1] ^= ((UINT64*)data)[i+1];
+          ((UINT64*)state)[i+2] ^= ((UINT64*)data)[i+2];
+          ((UINT64*)state)[i+3] ^= ((UINT64*)data)[i+3];
+          ((UINT64*)state)[i+4] ^= ((UINT64*)data)[i+4];
+          ((UINT64*)state)[i+5] ^= ((UINT64*)data)[i+5];
+          ((UINT64*)state)[i+6] ^= ((UINT64*)data)[i+6];
+          ((UINT64*)state)[i+7] ^= ((UINT64*)data)[i+7];
+      }
+      for( ; (i+4)<=laneCount; i+=4) {
+          ((UINT64*)state)[i+0] ^= ((UINT64*)data)[i+0];
+          ((UINT64*)state)[i+1] ^= ((UINT64*)data)[i+1];
+          ((UINT64*)state)[i+2] ^= ((UINT64*)data)[i+2];
+          ((UINT64*)state)[i+3] ^= ((UINT64*)data)[i+3];
+      }
+      for( ; (i+2)<=laneCount; i+=2) {
+          ((UINT64*)state)[i+0] ^= ((UINT64*)data)[i+0];
+          ((UINT64*)state)[i+1] ^= ((UINT64*)data)[i+1];
+      }
+      if (i<laneCount) {
+          ((UINT64*)state)[i+0] ^= ((UINT64*)data)[i+0];
+      }
+    }
+#else
+    unsigned int i;
+    const UINT8 *curData = data;
+    for(i=0; i<laneCount; i++, curData+=8) {
+        UINT64 lane = (UINT64)curData[0]
+            | ((UINT64)curData[1] <<  8)
+            | ((UINT64)curData[2] << 16)
+            | ((UINT64)curData[3] << 24)
+            | ((UINT64)curData[4] << 32)
+            | ((UINT64)curData[5] << 40)
+            | ((UINT64)curData[6] << 48)
+            | ((UINT64)curData[7] << 56);
+        ((UINT64*)state)[i] ^= lane;
+    }
+#endif
+}
+/* ---------------------------------------------------------------- */
+#if (PLATFORM_BYTE_ORDER != IS_LITTLE_ENDIAN)
+void KeccakP1600_AddByte(void *state, unsigned char byte, unsigned int offset)
+{
+    UINT64 lane = byte;
+    lane <<= (offset%8)*8;
+    ((UINT64*)state)[offset/8] ^= lane;
+}
+#endif
+/* ---------------------------------------------------------------- */
+#define SnP_AddBytes(state, data, offset, length, SnP_AddLanes, SnP_AddBytesInLane, SnP_laneLengthInBytes)     {         if ((offset) == 0) {             SnP_AddLanes(state, data, (length)/SnP_laneLengthInBytes);             SnP_AddBytesInLane(state,                 (length)/SnP_laneLengthInBytes,                 (data)+((length)/SnP_laneLengthInBytes)*SnP_laneLengthInBytes,                 0,                 (length)%SnP_laneLengthInBytes);         }         else {             unsigned int _sizeLeft = (length);             unsigned int _lanePosition = (offset)/SnP_laneLengthInBytes;             unsigned int _offsetInLane = (offset)%SnP_laneLengthInBytes;             const unsigned char *_curData = (data);             while(_sizeLeft > 0) {                 unsigned int _bytesInLane = SnP_laneLengthInBytes - _offsetInLane;                 if (_bytesInLane > _sizeLeft)                     _bytesInLane = _sizeLeft;                 SnP_AddBytesInLane(state, _lanePosition, _curData, _offsetInLane, _bytesInLane);                 _sizeLeft -= _bytesInLane;                 _lanePosition++;                 _offsetInLane = 0;                 _curData += _bytesInLane;             }         }     }
+void KeccakP1600_AddBytes(void *state, const unsigned char *data, unsigned int offset, unsigned int length)
+{
+    SnP_AddBytes(state, data, offset, length, KeccakP1600_AddLanes, KeccakP1600_AddBytesInLane, 8);
+}
+/* ---------------------------------------------------------------- */
+#define declareABCDE     UINT64 Aba, Abe, Abi, Abo, Abu;     UINT64 Aga, Age, Agi, Ago, Agu;     UINT64 Aka, Ake, Aki, Ako, Aku;     UINT64 Ama, Ame, Ami, Amo, Amu;     UINT64 Asa, Ase, Asi, Aso, Asu;     UINT64 Bba, Bbe, Bbi, Bbo, Bbu;     UINT64 Bga, Bge, Bgi, Bgo, Bgu;     UINT64 Bka, Bke, Bki, Bko, Bku;     UINT64 Bma, Bme, Bmi, Bmo, Bmu;     UINT64 Bsa, Bse, Bsi, Bso, Bsu;     UINT64 Ca, Ce, Ci, Co, Cu;     UINT64 Da, De, Di, Do, Du;     UINT64 Eba, Ebe, Ebi, Ebo, Ebu;     UINT64 Ega, Ege, Egi, Ego, Egu;     UINT64 Eka, Eke, Eki, Eko, Eku;     UINT64 Ema, Eme, Emi, Emo, Emu;     UINT64 Esa, Ese, Esi, Eso, Esu;
+#define prepareTheta     Ca = Aba^Aga^Aka^Ama^Asa;     Ce = Abe^Age^Ake^Ame^Ase;     Ci = Abi^Agi^Aki^Ami^Asi;     Co = Abo^Ago^Ako^Amo^Aso;     Cu = Abu^Agu^Aku^Amu^Asu;
+#ifdef UseBebigokimisa
+/* --- Code for round, with prepare-theta (lane complementing pattern 'bebigokimisa') */
+/* --- 64-bit lanes mapped to 64-bit words */
+#define thetaRhoPiChiIotaPrepareTheta(i, A, E)     Da = Cu^ROL64(Ce, 1);     De = Ca^ROL64(Ci, 1);     Di = Ce^ROL64(Co, 1);     Do = Ci^ROL64(Cu, 1);     Du = Co^ROL64(Ca, 1);     A##ba ^= Da;     Bba = A##ba;     A##ge ^= De;     Bbe = ROL64(A##ge, 44);     A##ki ^= Di;     Bbi = ROL64(A##ki, 43);     A##mo ^= Do;     Bbo = ROL64(A##mo, 21);     A##su ^= Du;     Bbu = ROL64(A##su, 14);     E##ba =   Bba ^(  Bbe |  Bbi );     E##ba ^= KeccakF1600RoundConstants[i];     Ca = E##ba;     E##be =   Bbe ^((~Bbi)|  Bbo );     Ce = E##be;     E##bi =   Bbi ^(  Bbo &  Bbu );     Ci = E##bi;     E##bo =   Bbo ^(  Bbu |  Bba );     Co = E##bo;     E##bu =   Bbu ^(  Bba &  Bbe );     Cu = E##bu;     A##bo ^= Do;     Bga = ROL64(A##bo, 28);     A##gu ^= Du;     Bge = ROL64(A##gu, 20);     A##ka ^= Da;     Bgi = ROL64(A##ka, 3);     A##me ^= De;     Bgo = ROL64(A##me, 45);     A##si ^= Di;     Bgu = ROL64(A##si, 61);     E##ga =   Bga ^(  Bge |  Bgi );     Ca ^= E##ga;     E##ge =   Bge ^(  Bgi &  Bgo );     Ce ^= E##ge;     E##gi =   Bgi ^(  Bgo |(~Bgu));     Ci ^= E##gi;     E##go =   Bgo ^(  Bgu |  Bga );     Co ^= E##go;     E##gu =   Bgu ^(  Bga &  Bge );     Cu ^= E##gu;     A##be ^= De;     Bka = ROL64(A##be, 1);     A##gi ^= Di;     Bke = ROL64(A##gi, 6);     A##ko ^= Do;     Bki = ROL64(A##ko, 25);     A##mu ^= Du;     Bko = ROL64(A##mu, 8);     A##sa ^= Da;     Bku = ROL64(A##sa, 18);     E##ka =   Bka ^(  Bke |  Bki );     Ca ^= E##ka;     E##ke =   Bke ^(  Bki &  Bko );     Ce ^= E##ke;     E##ki =   Bki ^((~Bko)&  Bku );     Ci ^= E##ki;     E##ko = (~Bko)^(  Bku |  Bka );     Co ^= E##ko;     E##ku =   Bku ^(  Bka &  Bke );     Cu ^= E##ku;     A##bu ^= Du;     Bma = ROL64(A##bu, 27);     A##ga ^= Da;     Bme = ROL64(A##ga, 36);     A##ke ^= De;     Bmi = ROL64(A##ke, 10);     A##mi ^= Di;     Bmo = ROL64(A##mi, 15);     A##so ^= Do;     Bmu = ROL64(A##so, 56);     E##ma =   Bma ^(  Bme &  Bmi );     Ca ^= E##ma;     E##me =   Bme ^(  Bmi |  Bmo );     Ce ^= E##me;     E##mi =   Bmi ^((~Bmo)|  Bmu );     Ci ^= E##mi;     E##mo = (~Bmo)^(  Bmu &  Bma );     Co ^= E##mo;     E##mu =   Bmu ^(  Bma |  Bme );     Cu ^= E##mu;     A##bi ^= Di;     Bsa = ROL64(A##bi, 62);     A##go ^= Do;     Bse = ROL64(A##go, 55);     A##ku ^= Du;     Bsi = ROL64(A##ku, 39);     A##ma ^= Da;     Bso = ROL64(A##ma, 41);     A##se ^= De;     Bsu = ROL64(A##se, 2);     E##sa =   Bsa ^((~Bse)&  Bsi );     Ca ^= E##sa;     E##se = (~Bse)^(  Bsi |  Bso );     Ce ^= E##se;     E##si =   Bsi ^(  Bso &  Bsu );     Ci ^= E##si;     E##so =   Bso ^(  Bsu |  Bsa );     Co ^= E##so;     E##su =   Bsu ^(  Bsa &  Bse );     Cu ^= E##su;
+/* --- Code for round (lane complementing pattern 'bebigokimisa') */
+/* --- 64-bit lanes mapped to 64-bit words */
+#define thetaRhoPiChiIota(i, A, E)     Da = Cu^ROL64(Ce, 1);     De = Ca^ROL64(Ci, 1);     Di = Ce^ROL64(Co, 1);     Do = Ci^ROL64(Cu, 1);     Du = Co^ROL64(Ca, 1);     A##ba ^= Da;     Bba = A##ba;     A##ge ^= De;     Bbe = ROL64(A##ge, 44);     A##ki ^= Di;     Bbi = ROL64(A##ki, 43);     A##mo ^= Do;     Bbo = ROL64(A##mo, 21);     A##su ^= Du;     Bbu = ROL64(A##su, 14);     E##ba =   Bba ^(  Bbe |  Bbi );     E##ba ^= KeccakF1600RoundConstants[i];     E##be =   Bbe ^((~Bbi)|  Bbo );     E##bi =   Bbi ^(  Bbo &  Bbu );     E##bo =   Bbo ^(  Bbu |  Bba );     E##bu =   Bbu ^(  Bba &  Bbe );     A##bo ^= Do;     Bga = ROL64(A##bo, 28);     A##gu ^= Du;     Bge = ROL64(A##gu, 20);     A##ka ^= Da;     Bgi = ROL64(A##ka, 3);     A##me ^= De;     Bgo = ROL64(A##me, 45);     A##si ^= Di;     Bgu = ROL64(A##si, 61);     E##ga =   Bga ^(  Bge |  Bgi );     E##ge =   Bge ^(  Bgi &  Bgo );     E##gi =   Bgi ^(  Bgo |(~Bgu));     E##go =   Bgo ^(  Bgu |  Bga );     E##gu =   Bgu ^(  Bga &  Bge );     A##be ^= De;     Bka = ROL64(A##be, 1);     A##gi ^= Di;     Bke = ROL64(A##gi, 6);     A##ko ^= Do;     Bki = ROL64(A##ko, 25);     A##mu ^= Du;     Bko = ROL64(A##mu, 8);     A##sa ^= Da;     Bku = ROL64(A##sa, 18);     E##ka =   Bka ^(  Bke |  Bki );     E##ke =   Bke ^(  Bki &  Bko );     E##ki =   Bki ^((~Bko)&  Bku );     E##ko = (~Bko)^(  Bku |  Bka );     E##ku =   Bku ^(  Bka &  Bke );     A##bu ^= Du;     Bma = ROL64(A##bu, 27);     A##ga ^= Da;     Bme = ROL64(A##ga, 36);     A##ke ^= De;     Bmi = ROL64(A##ke, 10);     A##mi ^= Di;     Bmo = ROL64(A##mi, 15);     A##so ^= Do;     Bmu = ROL64(A##so, 56);     E##ma =   Bma ^(  Bme &  Bmi );     E##me =   Bme ^(  Bmi |  Bmo );     E##mi =   Bmi ^((~Bmo)|  Bmu );     E##mo = (~Bmo)^(  Bmu &  Bma );     E##mu =   Bmu ^(  Bma |  Bme );     A##bi ^= Di;     Bsa = ROL64(A##bi, 62);     A##go ^= Do;     Bse = ROL64(A##go, 55);     A##ku ^= Du;     Bsi = ROL64(A##ku, 39);     A##ma ^= Da;     Bso = ROL64(A##ma, 41);     A##se ^= De;     Bsu = ROL64(A##se, 2);     E##sa =   Bsa ^((~Bse)&  Bsi );     E##se = (~Bse)^(  Bsi |  Bso );     E##si =   Bsi ^(  Bso &  Bsu );     E##so =   Bso ^(  Bsu |  Bsa );     E##su =   Bsu ^(  Bsa &  Bse );
+#else
+/* --- Code for round, with prepare-theta */
+/* --- 64-bit lanes mapped to 64-bit words */
+#define thetaRhoPiChiIotaPrepareTheta(i, A, E)     Da = Cu^ROL64(Ce, 1);     De = Ca^ROL64(Ci, 1);     Di = Ce^ROL64(Co, 1);     Do = Ci^ROL64(Cu, 1);     Du = Co^ROL64(Ca, 1);     A##ba ^= Da;     Bba = A##ba;     A##ge ^= De;     Bbe = ROL64(A##ge, 44);     A##ki ^= Di;     Bbi = ROL64(A##ki, 43);     A##mo ^= Do;     Bbo = ROL64(A##mo, 21);     A##su ^= Du;     Bbu = ROL64(A##su, 14);     E##ba =   Bba ^((~Bbe)&  Bbi );     E##ba ^= KeccakF1600RoundConstants[i];     Ca = E##ba;     E##be =   Bbe ^((~Bbi)&  Bbo );     Ce = E##be;     E##bi =   Bbi ^((~Bbo)&  Bbu );     Ci = E##bi;     E##bo =   Bbo ^((~Bbu)&  Bba );     Co = E##bo;     E##bu =   Bbu ^((~Bba)&  Bbe );     Cu = E##bu;     A##bo ^= Do;     Bga = ROL64(A##bo, 28);     A##gu ^= Du;     Bge = ROL64(A##gu, 20);     A##ka ^= Da;     Bgi = ROL64(A##ka, 3);     A##me ^= De;     Bgo = ROL64(A##me, 45);     A##si ^= Di;     Bgu = ROL64(A##si, 61);     E##ga =   Bga ^((~Bge)&  Bgi );     Ca ^= E##ga;     E##ge =   Bge ^((~Bgi)&  Bgo );     Ce ^= E##ge;     E##gi =   Bgi ^((~Bgo)&  Bgu );     Ci ^= E##gi;     E##go =   Bgo ^((~Bgu)&  Bga );     Co ^= E##go;     E##gu =   Bgu ^((~Bga)&  Bge );     Cu ^= E##gu;     A##be ^= De;     Bka = ROL64(A##be, 1);     A##gi ^= Di;     Bke = ROL64(A##gi, 6);     A##ko ^= Do;     Bki = ROL64(A##ko, 25);     A##mu ^= Du;     Bko = ROL64(A##mu, 8);     A##sa ^= Da;     Bku = ROL64(A##sa, 18);     E##ka =   Bka ^((~Bke)&  Bki );     Ca ^= E##ka;     E##ke =   Bke ^((~Bki)&  Bko );     Ce ^= E##ke;     E##ki =   Bki ^((~Bko)&  Bku );     Ci ^= E##ki;     E##ko =   Bko ^((~Bku)&  Bka );     Co ^= E##ko;     E##ku =   Bku ^((~Bka)&  Bke );     Cu ^= E##ku;     A##bu ^= Du;     Bma = ROL64(A##bu, 27);     A##ga ^= Da;     Bme = ROL64(A##ga, 36);     A##ke ^= De;     Bmi = ROL64(A##ke, 10);     A##mi ^= Di;     Bmo = ROL64(A##mi, 15);     A##so ^= Do;     Bmu = ROL64(A##so, 56);     E##ma =   Bma ^((~Bme)&  Bmi );     Ca ^= E##ma;     E##me =   Bme ^((~Bmi)&  Bmo );     Ce ^= E##me;     E##mi =   Bmi ^((~Bmo)&  Bmu );     Ci ^= E##mi;     E##mo =   Bmo ^((~Bmu)&  Bma );     Co ^= E##mo;     E##mu =   Bmu ^((~Bma)&  Bme );     Cu ^= E##mu;     A##bi ^= Di;     Bsa = ROL64(A##bi, 62);     A##go ^= Do;     Bse = ROL64(A##go, 55);     A##ku ^= Du;     Bsi = ROL64(A##ku, 39);     A##ma ^= Da;     Bso = ROL64(A##ma, 41);     A##se ^= De;     Bsu = ROL64(A##se, 2);     E##sa =   Bsa ^((~Bse)&  Bsi );     Ca ^= E##sa;     E##se =   Bse ^((~Bsi)&  Bso );     Ce ^= E##se;     E##si =   Bsi ^((~Bso)&  Bsu );     Ci ^= E##si;     E##so =   Bso ^((~Bsu)&  Bsa );     Co ^= E##so;     E##su =   Bsu ^((~Bsa)&  Bse );     Cu ^= E##su;
+/* --- Code for round */
+/* --- 64-bit lanes mapped to 64-bit words */
+#define thetaRhoPiChiIota(i, A, E)     Da = Cu^ROL64(Ce, 1);     De = Ca^ROL64(Ci, 1);     Di = Ce^ROL64(Co, 1);     Do = Ci^ROL64(Cu, 1);     Du = Co^ROL64(Ca, 1);     A##ba ^= Da;     Bba = A##ba;     A##ge ^= De;     Bbe = ROL64(A##ge, 44);     A##ki ^= Di;     Bbi = ROL64(A##ki, 43);     A##mo ^= Do;     Bbo = ROL64(A##mo, 21);     A##su ^= Du;     Bbu = ROL64(A##su, 14);     E##ba =   Bba ^((~Bbe)&  Bbi );     E##ba ^= KeccakF1600RoundConstants[i];     E##be =   Bbe ^((~Bbi)&  Bbo );     E##bi =   Bbi ^((~Bbo)&  Bbu );     E##bo =   Bbo ^((~Bbu)&  Bba );     E##bu =   Bbu ^((~Bba)&  Bbe );     A##bo ^= Do;     Bga = ROL64(A##bo, 28);     A##gu ^= Du;     Bge = ROL64(A##gu, 20);     A##ka ^= Da;     Bgi = ROL64(A##ka, 3);     A##me ^= De;     Bgo = ROL64(A##me, 45);     A##si ^= Di;     Bgu = ROL64(A##si, 61);     E##ga =   Bga ^((~Bge)&  Bgi );     E##ge =   Bge ^((~Bgi)&  Bgo );     E##gi =   Bgi ^((~Bgo)&  Bgu );     E##go =   Bgo ^((~Bgu)&  Bga );     E##gu =   Bgu ^((~Bga)&  Bge );     A##be ^= De;     Bka = ROL64(A##be, 1);     A##gi ^= Di;     Bke = ROL64(A##gi, 6);     A##ko ^= Do;     Bki = ROL64(A##ko, 25);     A##mu ^= Du;     Bko = ROL64(A##mu, 8);     A##sa ^= Da;     Bku = ROL64(A##sa, 18);     E##ka =   Bka ^((~Bke)&  Bki );     E##ke =   Bke ^((~Bki)&  Bko );     E##ki =   Bki ^((~Bko)&  Bku );     E##ko =   Bko ^((~Bku)&  Bka );     E##ku =   Bku ^((~Bka)&  Bke );     A##bu ^= Du;     Bma = ROL64(A##bu, 27);     A##ga ^= Da;     Bme = ROL64(A##ga, 36);     A##ke ^= De;     Bmi = ROL64(A##ke, 10);     A##mi ^= Di;     Bmo = ROL64(A##mi, 15);     A##so ^= Do;     Bmu = ROL64(A##so, 56);     E##ma =   Bma ^((~Bme)&  Bmi );     E##me =   Bme ^((~Bmi)&  Bmo );     E##mi =   Bmi ^((~Bmo)&  Bmu );     E##mo =   Bmo ^((~Bmu)&  Bma );     E##mu =   Bmu ^((~Bma)&  Bme );     A##bi ^= Di;     Bsa = ROL64(A##bi, 62);     A##go ^= Do;     Bse = ROL64(A##go, 55);     A##ku ^= Du;     Bsi = ROL64(A##ku, 39);     A##ma ^= Da;     Bso = ROL64(A##ma, 41);     A##se ^= De;     Bsu = ROL64(A##se, 2);     E##sa =   Bsa ^((~Bse)&  Bsi );     E##se =   Bse ^((~Bsi)&  Bso );     E##si =   Bsi ^((~Bso)&  Bsu );     E##so =   Bso ^((~Bsu)&  Bsa );     E##su =   Bsu ^((~Bsa)&  Bse );
+#endif
+#define copyFromState(X, state)     X##ba = state[ 0];     X##be = state[ 1];     X##bi = state[ 2];     X##bo = state[ 3];     X##bu = state[ 4];     X##ga = state[ 5];     X##ge = state[ 6];     X##gi = state[ 7];     X##go = state[ 8];     X##gu = state[ 9];     X##ka = state[10];     X##ke = state[11];     X##ki = state[12];     X##ko = state[13];     X##ku = state[14];     X##ma = state[15];     X##me = state[16];     X##mi = state[17];     X##mo = state[18];     X##mu = state[19];     X##sa = state[20];     X##se = state[21];     X##si = state[22];     X##so = state[23];     X##su = state[24];
+#define copyToState(state, X)     state[ 0] = X##ba;     state[ 1] = X##be;     state[ 2] = X##bi;     state[ 3] = X##bo;     state[ 4] = X##bu;     state[ 5] = X##ga;     state[ 6] = X##ge;     state[ 7] = X##gi;     state[ 8] = X##go;     state[ 9] = X##gu;     state[10] = X##ka;     state[11] = X##ke;     state[12] = X##ki;     state[13] = X##ko;     state[14] = X##ku;     state[15] = X##ma;     state[16] = X##me;     state[17] = X##mi;     state[18] = X##mo;     state[19] = X##mu;     state[20] = X##sa;     state[21] = X##se;     state[22] = X##si;     state[23] = X##so;     state[24] = X##su;
+#define copyStateVariables(X, Y)     X##ba = Y##ba;     X##be = Y##be;     X##bi = Y##bi;     X##bo = Y##bo;     X##bu = Y##bu;     X##ga = Y##ga;     X##ge = Y##ge;     X##gi = Y##gi;     X##go = Y##go;     X##gu = Y##gu;     X##ka = Y##ka;     X##ke = Y##ke;     X##ki = Y##ki;     X##ko = Y##ko;     X##ku = Y##ku;     X##ma = Y##ma;     X##me = Y##me;     X##mi = Y##mi;     X##mo = Y##mo;     X##mu = Y##mu;     X##sa = Y##sa;     X##se = Y##se;     X##si = Y##si;     X##so = Y##so;     X##su = Y##su;
+#if ((defined(FullUnrolling)) || (Unrolling == 12))
+#define rounds12     prepareTheta     thetaRhoPiChiIotaPrepareTheta(12, A, E)     thetaRhoPiChiIotaPrepareTheta(13, E, A)     thetaRhoPiChiIotaPrepareTheta(14, A, E)     thetaRhoPiChiIotaPrepareTheta(15, E, A)     thetaRhoPiChiIotaPrepareTheta(16, A, E)     thetaRhoPiChiIotaPrepareTheta(17, E, A)     thetaRhoPiChiIotaPrepareTheta(18, A, E)     thetaRhoPiChiIotaPrepareTheta(19, E, A)     thetaRhoPiChiIotaPrepareTheta(20, A, E)     thetaRhoPiChiIotaPrepareTheta(21, E, A)     thetaRhoPiChiIotaPrepareTheta(22, A, E)     thetaRhoPiChiIota(23, E, A)
+#elif (Unrolling == 6)
+#define rounds12     prepareTheta     for(i=12; i<24; i+=6) {         thetaRhoPiChiIotaPrepareTheta(i  , A, E)         thetaRhoPiChiIotaPrepareTheta(i+1, E, A)         thetaRhoPiChiIotaPrepareTheta(i+2, A, E)         thetaRhoPiChiIotaPrepareTheta(i+3, E, A)         thetaRhoPiChiIotaPrepareTheta(i+4, A, E)         thetaRhoPiChiIotaPrepareTheta(i+5, E, A)     }
+#elif (Unrolling == 4)
+#define rounds12     prepareTheta     for(i=12; i<24; i+=4) {         thetaRhoPiChiIotaPrepareTheta(i  , A, E)         thetaRhoPiChiIotaPrepareTheta(i+1, E, A)         thetaRhoPiChiIotaPrepareTheta(i+2, A, E)         thetaRhoPiChiIotaPrepareTheta(i+3, E, A)     }
+#elif (Unrolling == 3)
+#define rounds12     prepareTheta     for(i=12; i<24; i+=3) {         thetaRhoPiChiIotaPrepareTheta(i  , A, E)         thetaRhoPiChiIotaPrepareTheta(i+1, E, A)         thetaRhoPiChiIotaPrepareTheta(i+2, A, E)         copyStateVariables(A, E)     }
+#elif (Unrolling == 2)
+#define rounds12     prepareTheta     for(i=12; i<24; i+=2) {         thetaRhoPiChiIotaPrepareTheta(i  , A, E)         thetaRhoPiChiIotaPrepareTheta(i+1, E, A)     }
+#elif (Unrolling == 1)
+#define rounds12     prepareTheta     for(i=12; i<24; i++) {         thetaRhoPiChiIotaPrepareTheta(i  , A, E)         copyStateVariables(A, E)     }
+#else
+#error "Unrolling is not correctly specified!"
+#endif
+void KeccakP1600_Permute_12rounds(void *state)
+{
+    declareABCDE
+    #ifndef KeccakP1600_fullUnrolling
+    unsigned int i;
+    #endif
+    UINT64 *stateAsLanes = (UINT64*)state;
+    copyFromState(A, stateAsLanes)
+    rounds12
+    copyToState(stateAsLanes, A)
+}
+/* ---------------------------------------------------------------- */
+void KeccakP1600_ExtractBytesInLane(const void *state, unsigned int lanePosition, unsigned char *data, unsigned int offset, unsigned int length)
+{
+    UINT64 lane = ((UINT64*)state)[lanePosition];
+#ifdef KeccakP1600_useLaneComplementing
+    if ((lanePosition == 1) || (lanePosition == 2) || (lanePosition == 8) || (lanePosition == 12) || (lanePosition == 17) || (lanePosition == 20))
+        lane = ~lane;
+#endif
+#if (PLATFORM_BYTE_ORDER == IS_LITTLE_ENDIAN)
+    {
+        UINT64 lane1[1];
+        lane1[0] = lane;
+        memcpy(data, (UINT8*)lane1+offset, length);
+    }
+#else
+    unsigned int i;
+    lane >>= offset*8;
+    for(i=0; i<length; i++) {
+        data[i] = lane & 0xFF;
+        lane >>= 8;
+    }
+#endif
+}
+/* ---------------------------------------------------------------- */
+#if (PLATFORM_BYTE_ORDER != IS_LITTLE_ENDIAN)
+static void fromWordToBytes(UINT8 *bytes, const UINT64 word)
+{
+    unsigned int i;
+    for(i=0; i<(64/8); i++)
+        bytes[i] = (word >> (8*i)) & 0xFF;
+}
+#endif
+void KeccakP1600_ExtractLanes(const void *state, unsigned char *data, unsigned int laneCount)
+{
+#if (PLATFORM_BYTE_ORDER == IS_LITTLE_ENDIAN)
+    memcpy(data, state, laneCount*8);
+#else
+    unsigned int i;
+    for(i=0; i<laneCount; i++)
+        fromWordToBytes(data+(i*8), ((const UINT64*)state)[i]);
+#endif
+#ifdef KeccakP1600_useLaneComplementing
+    if (laneCount > 1) {
+        ((UINT64*)data)[ 1] = ~((UINT64*)data)[ 1];
+        if (laneCount > 2) {
+            ((UINT64*)data)[ 2] = ~((UINT64*)data)[ 2];
+            if (laneCount > 8) {
+                ((UINT64*)data)[ 8] = ~((UINT64*)data)[ 8];
+                if (laneCount > 12) {
+                    ((UINT64*)data)[12] = ~((UINT64*)data)[12];
+                    if (laneCount > 17) {
+                        ((UINT64*)data)[17] = ~((UINT64*)data)[17];
+                        if (laneCount > 20) {
+                            ((UINT64*)data)[20] = ~((UINT64*)data)[20];
+                        }
+                    }
+                }
+            }
+        }
+    }
+#endif
+}
+/* ---------------------------------------------------------------- */
+#define SnP_ExtractBytes(state, data, offset, length, SnP_ExtractLanes, SnP_ExtractBytesInLane, SnP_laneLengthInBytes)     {         if ((offset) == 0) {             SnP_ExtractLanes(state, data, (length)/SnP_laneLengthInBytes);             SnP_ExtractBytesInLane(state,                 (length)/SnP_laneLengthInBytes,                 (data)+((length)/SnP_laneLengthInBytes)*SnP_laneLengthInBytes,                 0,                 (length)%SnP_laneLengthInBytes);         }         else {             unsigned int _sizeLeft = (length);             unsigned int _lanePosition = (offset)/SnP_laneLengthInBytes;             unsigned int _offsetInLane = (offset)%SnP_laneLengthInBytes;             unsigned char *_curData = (data);             while(_sizeLeft > 0) {                 unsigned int _bytesInLane = SnP_laneLengthInBytes - _offsetInLane;                 if (_bytesInLane > _sizeLeft)                     _bytesInLane = _sizeLeft;                 SnP_ExtractBytesInLane(state, _lanePosition, _curData, _offsetInLane, _bytesInLane);                 _sizeLeft -= _bytesInLane;                 _lanePosition++;                 _offsetInLane = 0;                 _curData += _bytesInLane;             }         }     }
+void KeccakP1600_ExtractBytes(const void *state, unsigned char *data, unsigned int offset, unsigned int length)
+{
+    SnP_ExtractBytes(state, data, offset, length, KeccakP1600_ExtractLanes, KeccakP1600_ExtractBytesInLane, 8);
+}
+/* ---------------------------------------------------------------- */
+#if (PLATFORM_BYTE_ORDER == IS_LITTLE_ENDIAN)
+#define HTOLE64(x) (x)
+#else
+#define HTOLE64(x) (  ((x & 0xff00000000000000ull) >> 56) |   ((x & 0x00ff000000000000ull) >> 40) |   ((x & 0x0000ff0000000000ull) >> 24) |   ((x & 0x000000ff00000000ull) >> 8)  |   ((x & 0x00000000ff000000ull) << 8)  |   ((x & 0x0000000000ff0000ull) << 24) |   ((x & 0x000000000000ff00ull) << 40) |   ((x & 0x00000000000000ffull) << 56))
+#endif
+#define addInput(X, input, laneCount)     if (laneCount == 21) {         X##ba ^= HTOLE64(input[ 0]);         X##be ^= HTOLE64(input[ 1]);         X##bi ^= HTOLE64(input[ 2]);         X##bo ^= HTOLE64(input[ 3]);         X##bu ^= HTOLE64(input[ 4]);         X##ga ^= HTOLE64(input[ 5]);         X##ge ^= HTOLE64(input[ 6]);         X##gi ^= HTOLE64(input[ 7]);         X##go ^= HTOLE64(input[ 8]);         X##gu ^= HTOLE64(input[ 9]);         X##ka ^= HTOLE64(input[10]);         X##ke ^= HTOLE64(input[11]);         X##ki ^= HTOLE64(input[12]);         X##ko ^= HTOLE64(input[13]);         X##ku ^= HTOLE64(input[14]);         X##ma ^= HTOLE64(input[15]);         X##me ^= HTOLE64(input[16]);         X##mi ^= HTOLE64(input[17]);         X##mo ^= HTOLE64(input[18]);         X##mu ^= HTOLE64(input[19]);         X##sa ^= HTOLE64(input[20]);     }     else if (laneCount < 16) {         if (laneCount < 8) {             if (laneCount < 4) {                 if (laneCount < 2) {                     if (laneCount < 1) {                     }                     else {                         X##ba ^= HTOLE64(input[ 0]);                     }                 }                 else {                     X##ba ^= HTOLE64(input[ 0]);                     X##be ^= HTOLE64(input[ 1]);                     if (laneCount < 3) {                     }                     else {                         X##bi ^= HTOLE64(input[ 2]);                     }                 }             }             else {                 X##ba ^= HTOLE64(input[ 0]);                 X##be ^= HTOLE64(input[ 1]);                 X##bi ^= HTOLE64(input[ 2]);                 X##bo ^= HTOLE64(input[ 3]);                 if (laneCount < 6) {                     if (laneCount < 5) {                     }                     else {                         X##bu ^= HTOLE64(input[ 4]);                     }                 }                 else {                     X##bu ^= HTOLE64(input[ 4]);                     X##ga ^= HTOLE64(input[ 5]);                     if (laneCount < 7) {                     }                     else {                         X##ge ^= HTOLE64(input[ 6]);                     }                 }             }         }         else {             X##ba ^= HTOLE64(input[ 0]);             X##be ^= HTOLE64(input[ 1]);             X##bi ^= HTOLE64(input[ 2]);             X##bo ^= HTOLE64(input[ 3]);             X##bu ^= HTOLE64(input[ 4]);             X##ga ^= HTOLE64(input[ 5]);             X##ge ^= HTOLE64(input[ 6]);             X##gi ^= HTOLE64(input[ 7]);             if (laneCount < 12) {                 if (laneCount < 10) {                     if (laneCount < 9) {                     }                     else {                         X##go ^= HTOLE64(input[ 8]);                     }                 }                 else {                     X##go ^= HTOLE64(input[ 8]);                     X##gu ^= HTOLE64(input[ 9]);                     if (laneCount < 11) {                     }                     else {                         X##ka ^= HTOLE64(input[10]);                     }                 }             }             else {                 X##go ^= HTOLE64(input[ 8]);                 X##gu ^= HTOLE64(input[ 9]);                 X##ka ^= HTOLE64(input[10]);                 X##ke ^= HTOLE64(input[11]);                 if (laneCount < 14) {                     if (laneCount < 13) {                     }                     else {                         X##ki ^= HTOLE64(input[12]);                     }                 }                 else {                     X##ki ^= HTOLE64(input[12]);                     X##ko ^= HTOLE64(input[13]);                     if (laneCount < 15) {                     }                     else {                         X##ku ^= HTOLE64(input[14]);                     }                 }             }         }     }     else {         X##ba ^= HTOLE64(input[ 0]);         X##be ^= HTOLE64(input[ 1]);         X##bi ^= HTOLE64(input[ 2]);         X##bo ^= HTOLE64(input[ 3]);         X##bu ^= HTOLE64(input[ 4]);         X##ga ^= HTOLE64(input[ 5]);         X##ge ^= HTOLE64(input[ 6]);         X##gi ^= HTOLE64(input[ 7]);         X##go ^= HTOLE64(input[ 8]);         X##gu ^= HTOLE64(input[ 9]);         X##ka ^= HTOLE64(input[10]);         X##ke ^= HTOLE64(input[11]);         X##ki ^= HTOLE64(input[12]);         X##ko ^= HTOLE64(input[13]);         X##ku ^= HTOLE64(input[14]);         X##ma ^= HTOLE64(input[15]);         if (laneCount < 24) {             if (laneCount < 20) {                 if (laneCount < 18) {                     if (laneCount < 17) {                     }                     else {                         X##me ^= HTOLE64(input[16]);                     }                 }                 else {                     X##me ^= HTOLE64(input[16]);                     X##mi ^= HTOLE64(input[17]);                     if (laneCount < 19) {                     }                     else {                         X##mo ^= HTOLE64(input[18]);                     }                 }             }             else {                 X##me ^= HTOLE64(input[16]);                 X##mi ^= HTOLE64(input[17]);                 X##mo ^= HTOLE64(input[18]);                 X##mu ^= HTOLE64(input[19]);                 if (laneCount < 22) {                     if (laneCount < 21) {                     }                     else {                         X##sa ^= HTOLE64(input[20]);                     }                 }                 else {                     X##sa ^= HTOLE64(input[20]);                     X##se ^= HTOLE64(input[21]);                     if (laneCount < 23) {                     }                     else {                         X##si ^= HTOLE64(input[22]);                     }                 }             }         }         else {             X##me ^= HTOLE64(input[16]);             X##mi ^= HTOLE64(input[17]);             X##mo ^= HTOLE64(input[18]);             X##mu ^= HTOLE64(input[19]);             X##sa ^= HTOLE64(input[20]);             X##se ^= HTOLE64(input[21]);             X##si ^= HTOLE64(input[22]);             X##so ^= HTOLE64(input[23]);             if (laneCount < 25) {             }             else {                 X##su ^= HTOLE64(input[24]);             }         }     }
+size_t KeccakP1600_12rounds_FastLoop_Absorb(void *state, unsigned int laneCount, const unsigned char *data, size_t dataByteLen)
+{
+    size_t originalDataByteLen = dataByteLen;
+    declareABCDE
+    #ifndef KeccakP1600_fullUnrolling
+    unsigned int i;
+    #endif
+    UINT64 *stateAsLanes = (UINT64*)state;
+    UINT64 *inDataAsLanes = (UINT64*)data;
+    copyFromState(A, stateAsLanes)
+    while(dataByteLen >= laneCount*8) {
+        addInput(A, inDataAsLanes, laneCount)
+        rounds12
+        inDataAsLanes += laneCount;
+        dataByteLen -= laneCount*8;
+    }
+    copyToState(stateAsLanes, A)
+    return originalDataByteLen - dataByteLen;
+}
+#else
+/*
+Implementation by Ronny Van Keer, hereby denoted as "the implementer".
+For more information, feedback or questions, please refer to our website:
+https://keccak.team/
+To the extent possible under law, the implementer has waived all copyright
+and related or neighboring rights to the source code in this file.
+http://creativecommons.org/publicdomain/zero/1.0/
+---
+Please refer to the XKCP for more details.
+*/
+#ifndef _KeccakP_1600_SnP_h_
+#define _KeccakP_1600_SnP_h_
+#define KeccakP1600_implementation      "in-place 32-bit optimized implementation"
+#define KeccakP1600_stateSizeInBytes    200
+#define KeccakP1600_stateAlignment      8
+#define KeccakP1600_StaticInitialize()
+void KeccakP1600_Initialize(void *state);
+void KeccakP1600_AddByte(void *state, unsigned char data, unsigned int offset);
+void KeccakP1600_AddBytes(void *state, const unsigned char *data, unsigned int offset, unsigned int length);
+void KeccakP1600_Permute_12rounds(void *state);
+void KeccakP1600_ExtractBytes(const void *state, unsigned char *data, unsigned int offset, unsigned int length);
+#endif
+/*
+Implementation by Ronny Van Keer, hereby denoted as "the implementer".
+For more information, feedback or questions, please refer to our website:
+https://keccak.team/
+To the extent possible under law, the implementer has waived all copyright
+and related or neighboring rights to the source code in this file.
+http://creativecommons.org/publicdomain/zero/1.0/
+---
+Please refer to the XKCP for more details.
+*/
+/*
+Implementation by Ronny Van Keer, hereby denoted as "the implementer".
+For more information, feedback or questions, please refer to our website:
+https://keccak.team/
+To the extent possible under law, the implementer has waived all copyright
+and related or neighboring rights to the source code in this file.
+http://creativecommons.org/publicdomain/zero/1.0/
+---
+Please refer to the XKCP for more details.
+*/
+#ifndef _KeccakP_1600_SnP_h_
+#define _KeccakP_1600_SnP_h_
+#define KeccakP1600_implementation      "in-place 32-bit optimized implementation"
+#define KeccakP1600_stateSizeInBytes    200
+#define KeccakP1600_stateAlignment      8
+#define KeccakP1600_StaticInitialize()
+void KeccakP1600_Initialize(void *state);
+void KeccakP1600_AddByte(void *state, unsigned char data, unsigned int offset);
+void KeccakP1600_AddBytes(void *state, const unsigned char *data, unsigned int offset, unsigned int length);
+void KeccakP1600_Permute_12rounds(void *state);
+void KeccakP1600_ExtractBytes(const void *state, unsigned char *data, unsigned int offset, unsigned int length);
+#endif
+typedef unsigned char UINT8;
+typedef unsigned int UINT32;
+/* WARNING: on 8-bit and 16-bit platforms, this should be replaced by: */
+/* typedef unsigned long       UINT32; */
+#define ROL32(a, offset) ((((UINT32)a) << (offset)) ^ (((UINT32)a) >> (32-(offset))))
+/* Credit to Henry S. Warren, Hacker's Delight, Addison-Wesley, 2002 */
+#define prepareToBitInterleaving(low, high, temp, temp0, temp1)         temp0 = (low);         temp = (temp0 ^ (temp0 >>  1)) & 0x22222222UL;  temp0 = temp0 ^ temp ^ (temp <<  1);         temp = (temp0 ^ (temp0 >>  2)) & 0x0C0C0C0CUL;  temp0 = temp0 ^ temp ^ (temp <<  2);         temp = (temp0 ^ (temp0 >>  4)) & 0x00F000F0UL;  temp0 = temp0 ^ temp ^ (temp <<  4);         temp = (temp0 ^ (temp0 >>  8)) & 0x0000FF00UL;  temp0 = temp0 ^ temp ^ (temp <<  8);         temp1 = (high);         temp = (temp1 ^ (temp1 >>  1)) & 0x22222222UL;  temp1 = temp1 ^ temp ^ (temp <<  1);         temp = (temp1 ^ (temp1 >>  2)) & 0x0C0C0C0CUL;  temp1 = temp1 ^ temp ^ (temp <<  2);         temp = (temp1 ^ (temp1 >>  4)) & 0x00F000F0UL;  temp1 = temp1 ^ temp ^ (temp <<  4);         temp = (temp1 ^ (temp1 >>  8)) & 0x0000FF00UL;  temp1 = temp1 ^ temp ^ (temp <<  8);
+#define toBitInterleavingAndXOR(low, high, even, odd, temp, temp0, temp1)         prepareToBitInterleaving(low, high, temp, temp0, temp1)         even ^= (temp0 & 0x0000FFFF) | (temp1 << 16);         odd ^= (temp0 >> 16) | (temp1 & 0xFFFF0000);
+#define toBitInterleavingAndAND(low, high, even, odd, temp, temp0, temp1)         prepareToBitInterleaving(low, high, temp, temp0, temp1)         even &= (temp0 & 0x0000FFFF) | (temp1 << 16);         odd &= (temp0 >> 16) | (temp1 & 0xFFFF0000);
+#define toBitInterleavingAndSet(low, high, even, odd, temp, temp0, temp1)         prepareToBitInterleaving(low, high, temp, temp0, temp1)         even = (temp0 & 0x0000FFFF) | (temp1 << 16);         odd = (temp0 >> 16) | (temp1 & 0xFFFF0000);
+/* Credit to Henry S. Warren, Hacker's Delight, Addison-Wesley, 2002 */
+#define prepareFromBitInterleaving(even, odd, temp, temp0, temp1)         temp0 = (even);         temp1 = (odd);         temp = (temp0 & 0x0000FFFF) | (temp1 << 16);         temp1 = (temp0 >> 16) | (temp1 & 0xFFFF0000);         temp0 = temp;         temp = (temp0 ^ (temp0 >>  8)) & 0x0000FF00UL;  temp0 = temp0 ^ temp ^ (temp <<  8);         temp = (temp0 ^ (temp0 >>  4)) & 0x00F000F0UL;  temp0 = temp0 ^ temp ^ (temp <<  4);         temp = (temp0 ^ (temp0 >>  2)) & 0x0C0C0C0CUL;  temp0 = temp0 ^ temp ^ (temp <<  2);         temp = (temp0 ^ (temp0 >>  1)) & 0x22222222UL;  temp0 = temp0 ^ temp ^ (temp <<  1);         temp = (temp1 ^ (temp1 >>  8)) & 0x0000FF00UL;  temp1 = temp1 ^ temp ^ (temp <<  8);         temp = (temp1 ^ (temp1 >>  4)) & 0x00F000F0UL;  temp1 = temp1 ^ temp ^ (temp <<  4);         temp = (temp1 ^ (temp1 >>  2)) & 0x0C0C0C0CUL;  temp1 = temp1 ^ temp ^ (temp <<  2);         temp = (temp1 ^ (temp1 >>  1)) & 0x22222222UL;  temp1 = temp1 ^ temp ^ (temp <<  1);
+#define fromBitInterleaving(even, odd, low, high, temp, temp0, temp1)         prepareFromBitInterleaving(even, odd, temp, temp0, temp1)         low = temp0;         high = temp1;
+#define fromBitInterleavingAndXOR(even, odd, lowIn, highIn, lowOut, highOut, temp, temp0, temp1)         prepareFromBitInterleaving(even, odd, temp, temp0, temp1)         lowOut = lowIn ^ temp0;         highOut = highIn ^ temp1;
+void KeccakP1600_SetBytesInLaneToZero(void *state, unsigned int lanePosition, unsigned int offset, unsigned int length)
+{
+    UINT8 laneAsBytes[8];
+    UINT32 low, high;
+    UINT32 temp, temp0, temp1;
+    UINT32 *stateAsHalfLanes = (UINT32*)state;
+    memset(laneAsBytes, 0xFF, offset);
+    memset(laneAsBytes+offset, 0x00, length);
+    memset(laneAsBytes+offset+length, 0xFF, 8-offset-length);
+#if (PLATFORM_BYTE_ORDER == IS_LITTLE_ENDIAN)
+    low = *((UINT32*)(laneAsBytes+0));
+    high = *((UINT32*)(laneAsBytes+4));
+#else
+    low = laneAsBytes[0]
+        | ((UINT32)(laneAsBytes[1]) << 8)
+        | ((UINT32)(laneAsBytes[2]) << 16)
+        | ((UINT32)(laneAsBytes[3]) << 24);
+    high = laneAsBytes[4]
+        | ((UINT32)(laneAsBytes[5]) << 8)
+        | ((UINT32)(laneAsBytes[6]) << 16)
+        | ((UINT32)(laneAsBytes[7]) << 24);
+#endif
+    toBitInterleavingAndAND(low, high, stateAsHalfLanes[lanePosition*2+0], stateAsHalfLanes[lanePosition*2+1], temp, temp0, temp1);
+}
+/* ---------------------------------------------------------------- */
+void KeccakP1600_Initialize(void *state)
+{
+    memset(state, 0, 200);
+}
+/* ---------------------------------------------------------------- */
+void KeccakP1600_AddByte(void *state, unsigned char byte, unsigned int offset)
+{
+    unsigned int lanePosition = offset/8;
+    unsigned int offsetInLane = offset%8;
+    UINT32 low, high;
+    UINT32 temp, temp0, temp1;
+    UINT32 *stateAsHalfLanes = (UINT32*)state;
+    if (offsetInLane < 4) {
+        low = (UINT32)byte << (offsetInLane*8);
+        high = 0;
+    }
+    else {
+        low = 0;
+        high = (UINT32)byte << ((offsetInLane-4)*8);
+    }
+    toBitInterleavingAndXOR(low, high, stateAsHalfLanes[lanePosition*2+0], stateAsHalfLanes[lanePosition*2+1], temp, temp0, temp1);
+}
+/* ---------------------------------------------------------------- */
+void KeccakP1600_AddBytesInLane(void *state, unsigned int lanePosition, const unsigned char *data, unsigned int offset, unsigned int length)
+{
+    UINT8 laneAsBytes[8];
+    UINT32 low, high;
+    UINT32 temp, temp0, temp1;
+    UINT32 *stateAsHalfLanes = (UINT32*)state;
+    memset(laneAsBytes, 0, 8);
+    memcpy(laneAsBytes+offset, data, length);
+#if (PLATFORM_BYTE_ORDER == IS_LITTLE_ENDIAN)
+    low = *((UINT32*)(laneAsBytes+0));
+    high = *((UINT32*)(laneAsBytes+4));
+#else
+    low = laneAsBytes[0]
+        | ((UINT32)(laneAsBytes[1]) << 8)
+        | ((UINT32)(laneAsBytes[2]) << 16)
+        | ((UINT32)(laneAsBytes[3]) << 24);
+    high = laneAsBytes[4]
+        | ((UINT32)(laneAsBytes[5]) << 8)
+        | ((UINT32)(laneAsBytes[6]) << 16)
+        | ((UINT32)(laneAsBytes[7]) << 24);
+#endif
+    toBitInterleavingAndXOR(low, high, stateAsHalfLanes[lanePosition*2+0], stateAsHalfLanes[lanePosition*2+1], temp, temp0, temp1);
+}
+/* ---------------------------------------------------------------- */
+void KeccakP1600_AddLanes(void *state, const unsigned char *data, unsigned int laneCount)
+{
+#if (PLATFORM_BYTE_ORDER == IS_LITTLE_ENDIAN)
+    const UINT32 * pI = (const UINT32 *)data;
+    UINT32 * pS = (UINT32*)state;
+    UINT32 t, x0, x1;
+    int i;
+    for (i = laneCount-1; i >= 0; --i) {
+#ifdef NO_MISALIGNED_ACCESSES
+        UINT32 low;
+        UINT32 high;
+        memcpy(&low, pI++, 4);
+        memcpy(&high, pI++, 4);
+        toBitInterleavingAndXOR(low, high, *(pS++), *(pS++), t, x0, x1);
+#else
+        toBitInterleavingAndXOR(*(pI++), *(pI++), *(pS++), *(pS++), t, x0, x1)
+#endif
+    }
+#else
+    unsigned int lanePosition;
+    for(lanePosition=0; lanePosition<laneCount; lanePosition++) {
+        UINT8 laneAsBytes[8];
+        memcpy(laneAsBytes, data+lanePosition*8, 8);
+        UINT32 low = laneAsBytes[0]
+            | ((UINT32)(laneAsBytes[1]) << 8)
+            | ((UINT32)(laneAsBytes[2]) << 16)
+            | ((UINT32)(laneAsBytes[3]) << 24);
+        UINT32 high = laneAsBytes[4]
+            | ((UINT32)(laneAsBytes[5]) << 8)
+            | ((UINT32)(laneAsBytes[6]) << 16)
+            | ((UINT32)(laneAsBytes[7]) << 24);
+        UINT32 even, odd, temp, temp0, temp1;
+        UINT32 *stateAsHalfLanes = (UINT32*)state;
+        toBitInterleavingAndXOR(low, high, stateAsHalfLanes[lanePosition*2+0], stateAsHalfLanes[lanePosition*2+1], temp, temp0, temp1);
+    }
+#endif
+}
+/* ---------------------------------------------------------------- */
+#define SnP_AddBytes(state, data, offset, length, SnP_AddLanes, SnP_AddBytesInLane, SnP_laneLengthInBytes)     {         if ((offset) == 0) {             SnP_AddLanes(state, data, (length)/SnP_laneLengthInBytes);             SnP_AddBytesInLane(state,                 (length)/SnP_laneLengthInBytes,                 (data)+((length)/SnP_laneLengthInBytes)*SnP_laneLengthInBytes,                 0,                 (length)%SnP_laneLengthInBytes);         }         else {             unsigned int _sizeLeft = (length);             unsigned int _lanePosition = (offset)/SnP_laneLengthInBytes;             unsigned int _offsetInLane = (offset)%SnP_laneLengthInBytes;             const unsigned char *_curData = (data);             while(_sizeLeft > 0) {                 unsigned int _bytesInLane = SnP_laneLengthInBytes - _offsetInLane;                 if (_bytesInLane > _sizeLeft)                     _bytesInLane = _sizeLeft;                 SnP_AddBytesInLane(state, _lanePosition, _curData, _offsetInLane, _bytesInLane);                 _sizeLeft -= _bytesInLane;                 _lanePosition++;                 _offsetInLane = 0;                 _curData += _bytesInLane;             }         }     }
+void KeccakP1600_AddBytes(void *state, const unsigned char *data, unsigned int offset, unsigned int length)
+{
+    SnP_AddBytes(state, data, offset, length, KeccakP1600_AddLanes, KeccakP1600_AddBytesInLane, 8);
+}
+/* ---------------------------------------------------------------- */
+void KeccakP1600_ExtractBytesInLane(const void *state, unsigned int lanePosition, unsigned char *data, unsigned int offset, unsigned int length)
+{
+    UINT32 *stateAsHalfLanes = (UINT32*)state;
+    UINT32 low, high, temp, temp0, temp1;
+    UINT8 laneAsBytes[8];
+    fromBitInterleaving(stateAsHalfLanes[lanePosition*2], stateAsHalfLanes[lanePosition*2+1], low, high, temp, temp0, temp1);
+#if (PLATFORM_BYTE_ORDER == IS_LITTLE_ENDIAN)
+    *((UINT32*)(laneAsBytes+0)) = low;
+    *((UINT32*)(laneAsBytes+4)) = high;
+#else
+    laneAsBytes[0] = low & 0xFF;
+    laneAsBytes[1] = (low >> 8) & 0xFF;
+    laneAsBytes[2] = (low >> 16) & 0xFF;
+    laneAsBytes[3] = (low >> 24) & 0xFF;
+    laneAsBytes[4] = high & 0xFF;
+    laneAsBytes[5] = (high >> 8) & 0xFF;
+    laneAsBytes[6] = (high >> 16) & 0xFF;
+    laneAsBytes[7] = (high >> 24) & 0xFF;
+#endif
+    memcpy(data, laneAsBytes+offset, length);
+}
+/* ---------------------------------------------------------------- */
+void KeccakP1600_ExtractLanes(const void *state, unsigned char *data, unsigned int laneCount)
+{
+#if (PLATFORM_BYTE_ORDER == IS_LITTLE_ENDIAN)
+    UINT32 * pI = (UINT32 *)data;
+    const UINT32 * pS = ( const UINT32 *)state;
+    UINT32 t, x0, x1;
+    int i;
+    for (i = laneCount-1; i >= 0; --i) {
+#ifdef NO_MISALIGNED_ACCESSES
+        UINT32 low;
+        UINT32 high;
+        fromBitInterleaving(*(pS++), *(pS++), low, high, t, x0, x1);
+        memcpy(pI++, &low, 4);
+        memcpy(pI++, &high, 4);
+#else
+        fromBitInterleaving(*(pS++), *(pS++), *(pI++), *(pI++), t, x0, x1)
+#endif
+    }
+#else
+    unsigned int lanePosition;
+    for(lanePosition=0; lanePosition<laneCount; lanePosition++) {
+        UINT32 *stateAsHalfLanes = (UINT32*)state;
+        UINT32 low, high, temp, temp0, temp1;
+        fromBitInterleaving(stateAsHalfLanes[lanePosition*2], stateAsHalfLanes[lanePosition*2+1], low, high, temp, temp0, temp1);
+        UINT8 laneAsBytes[8];
+        laneAsBytes[0] = low & 0xFF;
+        laneAsBytes[1] = (low >> 8) & 0xFF;
+        laneAsBytes[2] = (low >> 16) & 0xFF;
+        laneAsBytes[3] = (low >> 24) & 0xFF;
+        laneAsBytes[4] = high & 0xFF;
+        laneAsBytes[5] = (high >> 8) & 0xFF;
+        laneAsBytes[6] = (high >> 16) & 0xFF;
+        laneAsBytes[7] = (high >> 24) & 0xFF;
+        memcpy(data+lanePosition*8, laneAsBytes, 8);
+    }
+#endif
+}
+/* ---------------------------------------------------------------- */
+#define SnP_ExtractBytes(state, data, offset, length, SnP_ExtractLanes, SnP_ExtractBytesInLane, SnP_laneLengthInBytes)     {         if ((offset) == 0) {             SnP_ExtractLanes(state, data, (length)/SnP_laneLengthInBytes);             SnP_ExtractBytesInLane(state,                 (length)/SnP_laneLengthInBytes,                 (data)+((length)/SnP_laneLengthInBytes)*SnP_laneLengthInBytes,                 0,                 (length)%SnP_laneLengthInBytes);         }         else {             unsigned int _sizeLeft = (length);             unsigned int _lanePosition = (offset)/SnP_laneLengthInBytes;             unsigned int _offsetInLane = (offset)%SnP_laneLengthInBytes;             unsigned char *_curData = (data);             while(_sizeLeft > 0) {                 unsigned int _bytesInLane = SnP_laneLengthInBytes - _offsetInLane;                 if (_bytesInLane > _sizeLeft)                     _bytesInLane = _sizeLeft;                 SnP_ExtractBytesInLane(state, _lanePosition, _curData, _offsetInLane, _bytesInLane);                 _sizeLeft -= _bytesInLane;                 _lanePosition++;                 _offsetInLane = 0;                 _curData += _bytesInLane;             }         }     }
+void KeccakP1600_ExtractBytes(const void *state, unsigned char *data, unsigned int offset, unsigned int length)
+{
+    SnP_ExtractBytes(state, data, offset, length, KeccakP1600_ExtractLanes, KeccakP1600_ExtractBytesInLane, 8);
+}
+/* ---------------------------------------------------------------- */
+static const UINT32 KeccakF1600RoundConstants_int2[2*24+1] =
+{
+    0x00000001UL,    0x00000000UL,
+    0x00000000UL,    0x00000089UL,
+    0x00000000UL,    0x8000008bUL,
+    0x00000000UL,    0x80008080UL,
+    0x00000001UL,    0x0000008bUL,
+    0x00000001UL,    0x00008000UL,
+    0x00000001UL,    0x80008088UL,
+    0x00000001UL,    0x80000082UL,
+    0x00000000UL,    0x0000000bUL,
+    0x00000000UL,    0x0000000aUL,
+    0x00000001UL,    0x00008082UL,
+    0x00000000UL,    0x00008003UL,
+    0x00000001UL,    0x0000808bUL,
+    0x00000001UL,    0x8000000bUL,
+    0x00000001UL,    0x8000008aUL,
+    0x00000001UL,    0x80000081UL,
+    0x00000000UL,    0x80000081UL,
+    0x00000000UL,    0x80000008UL,
+    0x00000000UL,    0x00000083UL,
+    0x00000000UL,    0x80008003UL,
+    0x00000001UL,    0x80008088UL,
+    0x00000000UL,    0x80000088UL,
+    0x00000001UL,    0x00008000UL,
+    0x00000000UL,    0x80008082UL,
+    0x000000FFUL
+};
+#define KeccakRound0()         Cx = Abu0^Agu0^Aku0^Amu0^Asu0;         Du1 = Abe1^Age1^Ake1^Ame1^Ase1;         Da0 = Cx^ROL32(Du1, 1);         Cz = Abu1^Agu1^Aku1^Amu1^Asu1;         Du0 = Abe0^Age0^Ake0^Ame0^Ase0;         Da1 = Cz^Du0;         Cw = Abi0^Agi0^Aki0^Ami0^Asi0;         Do0 = Cw^ROL32(Cz, 1);         Cy = Abi1^Agi1^Aki1^Ami1^Asi1;         Do1 = Cy^Cx;         Cx = Aba0^Aga0^Aka0^Ama0^Asa0;         De0 = Cx^ROL32(Cy, 1);         Cz = Aba1^Aga1^Aka1^Ama1^Asa1;         De1 = Cz^Cw;         Cy = Abo1^Ago1^Ako1^Amo1^Aso1;         Di0 = Du0^ROL32(Cy, 1);         Cw = Abo0^Ago0^Ako0^Amo0^Aso0;         Di1 = Du1^Cw;         Du0 = Cw^ROL32(Cz, 1);         Du1 = Cy^Cx;         Ba = (Aba0^Da0);         Be = ROL32((Age0^De0), 22);         Bi = ROL32((Aki1^Di1), 22);         Bo = ROL32((Amo1^Do1), 11);         Bu = ROL32((Asu0^Du0),  7);         Aba0 =   Ba ^((~Be)&  Bi );         Aba0 ^= *(pRoundConstants++);         Age0 =   Be ^((~Bi)&  Bo );         Aki1 =   Bi ^((~Bo)&  Bu );         Amo1 =   Bo ^((~Bu)&  Ba );         Asu0 =   Bu ^((~Ba)&  Be );         Ba = (Aba1^Da1);         Be = ROL32((Age1^De1), 22);         Bi = ROL32((Aki0^Di0), 21);         Bo = ROL32((Amo0^Do0), 10);         Bu = ROL32((Asu1^Du1),  7);         Aba1 =   Ba ^((~Be)&  Bi );         Aba1 ^= *(pRoundConstants++);         Age1 =   Be ^((~Bi)&  Bo );         Aki0 =   Bi ^((~Bo)&  Bu );         Amo0 =   Bo ^((~Bu)&  Ba );         Asu1 =   Bu ^((~Ba)&  Be );         Bi = ROL32((Aka1^Da1),  2);         Bo = ROL32((Ame1^De1), 23);         Bu = ROL32((Asi1^Di1), 31);         Ba = ROL32((Abo0^Do0), 14);         Be = ROL32((Agu0^Du0), 10);         Aka1 =   Ba ^((~Be)&  Bi );         Ame1 =   Be ^((~Bi)&  Bo );         Asi1 =   Bi ^((~Bo)&  Bu );         Abo0 =   Bo ^((~Bu)&  Ba );         Agu0 =   Bu ^((~Ba)&  Be );         Bi = ROL32((Aka0^Da0),  1);         Bo = ROL32((Ame0^De0), 22);         Bu = ROL32((Asi0^Di0), 30);         Ba = ROL32((Abo1^Do1), 14);         Be = ROL32((Agu1^Du1), 10);         Aka0 =   Ba ^((~Be)&  Bi );         Ame0 =   Be ^((~Bi)&  Bo );         Asi0 =   Bi ^((~Bo)&  Bu );         Abo1 =   Bo ^((~Bu)&  Ba );         Agu1 =   Bu ^((~Ba)&  Be );         Bu = ROL32((Asa0^Da0),  9);         Ba = ROL32((Abe1^De1),  1);         Be = ROL32((Agi0^Di0),  3);         Bi = ROL32((Ako1^Do1), 13);         Bo = ROL32((Amu0^Du0),  4);         Asa0 =   Ba ^((~Be)&  Bi );         Abe1 =   Be ^((~Bi)&  Bo );         Agi0 =   Bi ^((~Bo)&  Bu );         Ako1 =   Bo ^((~Bu)&  Ba );         Amu0 =   Bu ^((~Ba)&  Be );         Bu = ROL32((Asa1^Da1),  9);         Ba = (Abe0^De0);         Be = ROL32((Agi1^Di1),  3);         Bi = ROL32((Ako0^Do0), 12);         Bo = ROL32((Amu1^Du1),  4);         Asa1 =   Ba ^((~Be)&  Bi );         Abe0 =   Be ^((~Bi)&  Bo );         Agi1 =   Bi ^((~Bo)&  Bu );         Ako0 =   Bo ^((~Bu)&  Ba );         Amu1 =   Bu ^((~Ba)&  Be );         Be = ROL32((Aga0^Da0), 18);         Bi = ROL32((Ake0^De0),  5);         Bo = ROL32((Ami1^Di1),  8);         Bu = ROL32((Aso0^Do0), 28);         Ba = ROL32((Abu1^Du1), 14);         Aga0 =   Ba ^((~Be)&  Bi );         Ake0 =   Be ^((~Bi)&  Bo );         Ami1 =   Bi ^((~Bo)&  Bu );         Aso0 =   Bo ^((~Bu)&  Ba );         Abu1 =   Bu ^((~Ba)&  Be );         Be = ROL32((Aga1^Da1), 18);         Bi = ROL32((Ake1^De1),  5);         Bo = ROL32((Ami0^Di0),  7);         Bu = ROL32((Aso1^Do1), 28);         Ba = ROL32((Abu0^Du0), 13);         Aga1 =   Ba ^((~Be)&  Bi );         Ake1 =   Be ^((~Bi)&  Bo );         Ami0 =   Bi ^((~Bo)&  Bu );         Aso1 =   Bo ^((~Bu)&  Ba );         Abu0 =   Bu ^((~Ba)&  Be );         Bo = ROL32((Ama1^Da1), 21);         Bu = ROL32((Ase0^De0),  1);         Ba = ROL32((Abi0^Di0), 31);         Be = ROL32((Ago1^Do1), 28);         Bi = ROL32((Aku1^Du1), 20);         Ama1 =   Ba ^((~Be)&  Bi );         Ase0 =   Be ^((~Bi)&  Bo );         Abi0 =   Bi ^((~Bo)&  Bu );         Ago1 =   Bo ^((~Bu)&  Ba );         Aku1 =   Bu ^((~Ba)&  Be );         Bo = ROL32((Ama0^Da0), 20);         Bu = ROL32((Ase1^De1),  1);         Ba = ROL32((Abi1^Di1), 31);         Be = ROL32((Ago0^Do0), 27);         Bi = ROL32((Aku0^Du0), 19);         Ama0 =   Ba ^((~Be)&  Bi );         Ase1 =   Be ^((~Bi)&  Bo );         Abi1 =   Bi ^((~Bo)&  Bu );         Ago0 =   Bo ^((~Bu)&  Ba );         Aku0 =   Bu ^((~Ba)&  Be )
+#define KeccakRound1()         Cx = Asu0^Agu0^Amu0^Abu1^Aku1;         Du1 = Age1^Ame0^Abe0^Ake1^Ase1;         Da0 = Cx^ROL32(Du1, 1);         Cz = Asu1^Agu1^Amu1^Abu0^Aku0;         Du0 = Age0^Ame1^Abe1^Ake0^Ase0;         Da1 = Cz^Du0;         Cw = Aki1^Asi1^Agi0^Ami1^Abi0;         Do0 = Cw^ROL32(Cz, 1);         Cy = Aki0^Asi0^Agi1^Ami0^Abi1;         Do1 = Cy^Cx;         Cx = Aba0^Aka1^Asa0^Aga0^Ama1;         De0 = Cx^ROL32(Cy, 1);         Cz = Aba1^Aka0^Asa1^Aga1^Ama0;         De1 = Cz^Cw;         Cy = Amo0^Abo1^Ako0^Aso1^Ago0;         Di0 = Du0^ROL32(Cy, 1);         Cw = Amo1^Abo0^Ako1^Aso0^Ago1;         Di1 = Du1^Cw;         Du0 = Cw^ROL32(Cz, 1);         Du1 = Cy^Cx;         Ba = (Aba0^Da0);         Be = ROL32((Ame1^De0), 22);         Bi = ROL32((Agi1^Di1), 22);         Bo = ROL32((Aso1^Do1), 11);         Bu = ROL32((Aku1^Du0),  7);         Aba0 =   Ba ^((~Be)&  Bi );         Aba0 ^= *(pRoundConstants++);         Ame1 =   Be ^((~Bi)&  Bo );         Agi1 =   Bi ^((~Bo)&  Bu );         Aso1 =   Bo ^((~Bu)&  Ba );         Aku1 =   Bu ^((~Ba)&  Be );         Ba = (Aba1^Da1);         Be = ROL32((Ame0^De1), 22);         Bi = ROL32((Agi0^Di0), 21);         Bo = ROL32((Aso0^Do0), 10);         Bu = ROL32((Aku0^Du1),  7);         Aba1 =   Ba ^((~Be)&  Bi );         Aba1 ^= *(pRoundConstants++);         Ame0 =   Be ^((~Bi)&  Bo );         Agi0 =   Bi ^((~Bo)&  Bu );         Aso0 =   Bo ^((~Bu)&  Ba );         Aku0 =   Bu ^((~Ba)&  Be );         Bi = ROL32((Asa1^Da1),  2);         Bo = ROL32((Ake1^De1), 23);         Bu = ROL32((Abi1^Di1), 31);         Ba = ROL32((Amo1^Do0), 14);         Be = ROL32((Agu0^Du0), 10);         Asa1 =   Ba ^((~Be)&  Bi );         Ake1 =   Be ^((~Bi)&  Bo );         Abi1 =   Bi ^((~Bo)&  Bu );         Amo1 =   Bo ^((~Bu)&  Ba );         Agu0 =   Bu ^((~Ba)&  Be );         Bi = ROL32((Asa0^Da0),  1);         Bo = ROL32((Ake0^De0), 22);         Bu = ROL32((Abi0^Di0), 30);         Ba = ROL32((Amo0^Do1), 14);         Be = ROL32((Agu1^Du1), 10);         Asa0 =   Ba ^((~Be)&  Bi );         Ake0 =   Be ^((~Bi)&  Bo );         Abi0 =   Bi ^((~Bo)&  Bu );         Amo0 =   Bo ^((~Bu)&  Ba );         Agu1 =   Bu ^((~Ba)&  Be );         Bu = ROL32((Ama1^Da0),  9);         Ba = ROL32((Age1^De1),  1);         Be = ROL32((Asi1^Di0),  3);         Bi = ROL32((Ako0^Do1), 13);         Bo = ROL32((Abu1^Du0),  4);         Ama1 =   Ba ^((~Be)&  Bi );         Age1 =   Be ^((~Bi)&  Bo );         Asi1 =   Bi ^((~Bo)&  Bu );         Ako0 =   Bo ^((~Bu)&  Ba );         Abu1 =   Bu ^((~Ba)&  Be );         Bu = ROL32((Ama0^Da1),  9);         Ba = (Age0^De0);         Be = ROL32((Asi0^Di1),  3);         Bi = ROL32((Ako1^Do0), 12);         Bo = ROL32((Abu0^Du1),  4);         Ama0 =   Ba ^((~Be)&  Bi );         Age0 =   Be ^((~Bi)&  Bo );         Asi0 =   Bi ^((~Bo)&  Bu );         Ako1 =   Bo ^((~Bu)&  Ba );         Abu0 =   Bu ^((~Ba)&  Be );         Be = ROL32((Aka1^Da0), 18);         Bi = ROL32((Abe1^De0),  5);         Bo = ROL32((Ami0^Di1),  8);         Bu = ROL32((Ago1^Do0), 28);         Ba = ROL32((Asu1^Du1), 14);         Aka1 =   Ba ^((~Be)&  Bi );         Abe1 =   Be ^((~Bi)&  Bo );         Ami0 =   Bi ^((~Bo)&  Bu );         Ago1 =   Bo ^((~Bu)&  Ba );         Asu1 =   Bu ^((~Ba)&  Be );         Be = ROL32((Aka0^Da1), 18);         Bi = ROL32((Abe0^De1),  5);         Bo = ROL32((Ami1^Di0),  7);         Bu = ROL32((Ago0^Do1), 28);         Ba = ROL32((Asu0^Du0), 13);         Aka0 =   Ba ^((~Be)&  Bi );         Abe0 =   Be ^((~Bi)&  Bo );         Ami1 =   Bi ^((~Bo)&  Bu );         Ago0 =   Bo ^((~Bu)&  Ba );         Asu0 =   Bu ^((~Ba)&  Be );         Bo = ROL32((Aga1^Da1), 21);         Bu = ROL32((Ase0^De0),  1);         Ba = ROL32((Aki1^Di0), 31);         Be = ROL32((Abo1^Do1), 28);         Bi = ROL32((Amu1^Du1), 20);         Aga1 =   Ba ^((~Be)&  Bi );         Ase0 =   Be ^((~Bi)&  Bo );         Aki1 =   Bi ^((~Bo)&  Bu );         Abo1 =   Bo ^((~Bu)&  Ba );         Amu1 =   Bu ^((~Ba)&  Be );         Bo = ROL32((Aga0^Da0), 20);         Bu = ROL32((Ase1^De1),  1);         Ba = ROL32((Aki0^Di1), 31);         Be = ROL32((Abo0^Do0), 27);         Bi = ROL32((Amu0^Du0), 19);         Aga0 =   Ba ^((~Be)&  Bi );         Ase1 =   Be ^((~Bi)&  Bo );         Aki0 =   Bi ^((~Bo)&  Bu );         Abo0 =   Bo ^((~Bu)&  Ba );         Amu0 =   Bu ^((~Ba)&  Be );
+#define KeccakRound2()         Cx = Aku1^Agu0^Abu1^Asu1^Amu1;         Du1 = Ame0^Ake0^Age0^Abe0^Ase1;         Da0 = Cx^ROL32(Du1, 1);         Cz = Aku0^Agu1^Abu0^Asu0^Amu0;         Du0 = Ame1^Ake1^Age1^Abe1^Ase0;         Da1 = Cz^Du0;         Cw = Agi1^Abi1^Asi1^Ami0^Aki1;         Do0 = Cw^ROL32(Cz, 1);         Cy = Agi0^Abi0^Asi0^Ami1^Aki0;         Do1 = Cy^Cx;         Cx = Aba0^Asa1^Ama1^Aka1^Aga1;         De0 = Cx^ROL32(Cy, 1);         Cz = Aba1^Asa0^Ama0^Aka0^Aga0;         De1 = Cz^Cw;         Cy = Aso0^Amo0^Ako1^Ago0^Abo0;         Di0 = Du0^ROL32(Cy, 1);         Cw = Aso1^Amo1^Ako0^Ago1^Abo1;         Di1 = Du1^Cw;         Du0 = Cw^ROL32(Cz, 1);         Du1 = Cy^Cx;         Ba = (Aba0^Da0);         Be = ROL32((Ake1^De0), 22);         Bi = ROL32((Asi0^Di1), 22);         Bo = ROL32((Ago0^Do1), 11);         Bu = ROL32((Amu1^Du0),  7);         Aba0 =   Ba ^((~Be)&  Bi );         Aba0 ^= *(pRoundConstants++);         Ake1 =   Be ^((~Bi)&  Bo );         Asi0 =   Bi ^((~Bo)&  Bu );         Ago0 =   Bo ^((~Bu)&  Ba );         Amu1 =   Bu ^((~Ba)&  Be );         Ba = (Aba1^Da1);         Be = ROL32((Ake0^De1), 22);         Bi = ROL32((Asi1^Di0), 21);         Bo = ROL32((Ago1^Do0), 10);         Bu = ROL32((Amu0^Du1),  7);         Aba1 =   Ba ^((~Be)&  Bi );         Aba1 ^= *(pRoundConstants++);         Ake0 =   Be ^((~Bi)&  Bo );         Asi1 =   Bi ^((~Bo)&  Bu );         Ago1 =   Bo ^((~Bu)&  Ba );         Amu0 =   Bu ^((~Ba)&  Be );         Bi = ROL32((Ama0^Da1),  2);         Bo = ROL32((Abe0^De1), 23);         Bu = ROL32((Aki0^Di1), 31);         Ba = ROL32((Aso1^Do0), 14);         Be = ROL32((Agu0^Du0), 10);         Ama0 =   Ba ^((~Be)&  Bi );         Abe0 =   Be ^((~Bi)&  Bo );         Aki0 =   Bi ^((~Bo)&  Bu );         Aso1 =   Bo ^((~Bu)&  Ba );         Agu0 =   Bu ^((~Ba)&  Be );         Bi = ROL32((Ama1^Da0),  1);         Bo = ROL32((Abe1^De0), 22);         Bu = ROL32((Aki1^Di0), 30);         Ba = ROL32((Aso0^Do1), 14);         Be = ROL32((Agu1^Du1), 10);         Ama1 =   Ba ^((~Be)&  Bi );         Abe1 =   Be ^((~Bi)&  Bo );         Aki1 =   Bi ^((~Bo)&  Bu );         Aso0 =   Bo ^((~Bu)&  Ba );         Agu1 =   Bu ^((~Ba)&  Be );         Bu = ROL32((Aga1^Da0),  9);         Ba = ROL32((Ame0^De1),  1);         Be = ROL32((Abi1^Di0),  3);         Bi = ROL32((Ako1^Do1), 13);         Bo = ROL32((Asu1^Du0),  4);         Aga1 =   Ba ^((~Be)&  Bi );         Ame0 =   Be ^((~Bi)&  Bo );         Abi1 =   Bi ^((~Bo)&  Bu );         Ako1 =   Bo ^((~Bu)&  Ba );         Asu1 =   Bu ^((~Ba)&  Be );         Bu = ROL32((Aga0^Da1),  9);         Ba = (Ame1^De0);         Be = ROL32((Abi0^Di1),  3);         Bi = ROL32((Ako0^Do0), 12);         Bo = ROL32((Asu0^Du1),  4);         Aga0 =   Ba ^((~Be)&  Bi );         Ame1 =   Be ^((~Bi)&  Bo );         Abi0 =   Bi ^((~Bo)&  Bu );         Ako0 =   Bo ^((~Bu)&  Ba );         Asu0 =   Bu ^((~Ba)&  Be );         Be = ROL32((Asa1^Da0), 18);         Bi = ROL32((Age1^De0),  5);         Bo = ROL32((Ami1^Di1),  8);         Bu = ROL32((Abo1^Do0), 28);         Ba = ROL32((Aku0^Du1), 14);         Asa1 =   Ba ^((~Be)&  Bi );         Age1 =   Be ^((~Bi)&  Bo );         Ami1 =   Bi ^((~Bo)&  Bu );         Abo1 =   Bo ^((~Bu)&  Ba );         Aku0 =   Bu ^((~Ba)&  Be );         Be = ROL32((Asa0^Da1), 18);         Bi = ROL32((Age0^De1),  5);         Bo = ROL32((Ami0^Di0),  7);         Bu = ROL32((Abo0^Do1), 28);         Ba = ROL32((Aku1^Du0), 13);         Asa0 =   Ba ^((~Be)&  Bi );         Age0 =   Be ^((~Bi)&  Bo );         Ami0 =   Bi ^((~Bo)&  Bu );         Abo0 =   Bo ^((~Bu)&  Ba );         Aku1 =   Bu ^((~Ba)&  Be );         Bo = ROL32((Aka0^Da1), 21);         Bu = ROL32((Ase0^De0),  1);         Ba = ROL32((Agi1^Di0), 31);         Be = ROL32((Amo0^Do1), 28);         Bi = ROL32((Abu0^Du1), 20);         Aka0 =   Ba ^((~Be)&  Bi );         Ase0 =   Be ^((~Bi)&  Bo );         Agi1 =   Bi ^((~Bo)&  Bu );         Amo0 =   Bo ^((~Bu)&  Ba );         Abu0 =   Bu ^((~Ba)&  Be );         Bo = ROL32((Aka1^Da0), 20);         Bu = ROL32((Ase1^De1),  1);         Ba = ROL32((Agi0^Di1), 31);         Be = ROL32((Amo1^Do0), 27);         Bi = ROL32((Abu1^Du0), 19);         Aka1 =   Ba ^((~Be)&  Bi );         Ase1 =   Be ^((~Bi)&  Bo );         Agi0 =   Bi ^((~Bo)&  Bu );         Amo1 =   Bo ^((~Bu)&  Ba );         Abu1 =   Bu ^((~Ba)&  Be );
+#define KeccakRound3()         Cx = Amu1^Agu0^Asu1^Aku0^Abu0;         Du1 = Ake0^Abe1^Ame1^Age0^Ase1;         Da0 = Cx^ROL32(Du1, 1);         Cz = Amu0^Agu1^Asu0^Aku1^Abu1;         Du0 = Ake1^Abe0^Ame0^Age1^Ase0;         Da1 = Cz^Du0;         Cw = Asi0^Aki0^Abi1^Ami1^Agi1;         Do0 = Cw^ROL32(Cz, 1);         Cy = Asi1^Aki1^Abi0^Ami0^Agi0;         Do1 = Cy^Cx;         Cx = Aba0^Ama0^Aga1^Asa1^Aka0;         De0 = Cx^ROL32(Cy, 1);         Cz = Aba1^Ama1^Aga0^Asa0^Aka1;         De1 = Cz^Cw;         Cy = Ago1^Aso0^Ako0^Abo0^Amo1;         Di0 = Du0^ROL32(Cy, 1);         Cw = Ago0^Aso1^Ako1^Abo1^Amo0;         Di1 = Du1^Cw;         Du0 = Cw^ROL32(Cz, 1);         Du1 = Cy^Cx;         Ba = (Aba0^Da0);         Be = ROL32((Abe0^De0), 22);         Bi = ROL32((Abi0^Di1), 22);         Bo = ROL32((Abo0^Do1), 11);         Bu = ROL32((Abu0^Du0),  7);         Aba0 =   Ba ^((~Be)&  Bi );         Aba0 ^= *(pRoundConstants++);         Abe0 =   Be ^((~Bi)&  Bo );         Abi0 =   Bi ^((~Bo)&  Bu );         Abo0 =   Bo ^((~Bu)&  Ba );         Abu0 =   Bu ^((~Ba)&  Be );         Ba = (Aba1^Da1);         Be = ROL32((Abe1^De1), 22);         Bi = ROL32((Abi1^Di0), 21);         Bo = ROL32((Abo1^Do0), 10);         Bu = ROL32((Abu1^Du1),  7);         Aba1 =   Ba ^((~Be)&  Bi );         Aba1 ^= *(pRoundConstants++);         Abe1 =   Be ^((~Bi)&  Bo );         Abi1 =   Bi ^((~Bo)&  Bu );         Abo1 =   Bo ^((~Bu)&  Ba );         Abu1 =   Bu ^((~Ba)&  Be );         Bi = ROL32((Aga0^Da1),  2);         Bo = ROL32((Age0^De1), 23);         Bu = ROL32((Agi0^Di1), 31);         Ba = ROL32((Ago0^Do0), 14);         Be = ROL32((Agu0^Du0), 10);         Aga0 =   Ba ^((~Be)&  Bi );         Age0 =   Be ^((~Bi)&  Bo );         Agi0 =   Bi ^((~Bo)&  Bu );         Ago0 =   Bo ^((~Bu)&  Ba );         Agu0 =   Bu ^((~Ba)&  Be );         Bi = ROL32((Aga1^Da0),  1);         Bo = ROL32((Age1^De0), 22);         Bu = ROL32((Agi1^Di0), 30);         Ba = ROL32((Ago1^Do1), 14);         Be = ROL32((Agu1^Du1), 10);         Aga1 =   Ba ^((~Be)&  Bi );         Age1 =   Be ^((~Bi)&  Bo );         Agi1 =   Bi ^((~Bo)&  Bu );         Ago1 =   Bo ^((~Bu)&  Ba );         Agu1 =   Bu ^((~Ba)&  Be );         Bu = ROL32((Aka0^Da0),  9);         Ba = ROL32((Ake0^De1),  1);         Be = ROL32((Aki0^Di0),  3);         Bi = ROL32((Ako0^Do1), 13);         Bo = ROL32((Aku0^Du0),  4);         Aka0 =   Ba ^((~Be)&  Bi );         Ake0 =   Be ^((~Bi)&  Bo );         Aki0 =   Bi ^((~Bo)&  Bu );         Ako0 =   Bo ^((~Bu)&  Ba );         Aku0 =   Bu ^((~Ba)&  Be );         Bu = ROL32((Aka1^Da1),  9);         Ba = (Ake1^De0);         Be = ROL32((Aki1^Di1),  3);         Bi = ROL32((Ako1^Do0), 12);         Bo = ROL32((Aku1^Du1),  4);         Aka1 =   Ba ^((~Be)&  Bi );         Ake1 =   Be ^((~Bi)&  Bo );         Aki1 =   Bi ^((~Bo)&  Bu );         Ako1 =   Bo ^((~Bu)&  Ba );         Aku1 =   Bu ^((~Ba)&  Be );         Be = ROL32((Ama0^Da0), 18);         Bi = ROL32((Ame0^De0),  5);         Bo = ROL32((Ami0^Di1),  8);         Bu = ROL32((Amo0^Do0), 28);         Ba = ROL32((Amu0^Du1), 14);         Ama0 =   Ba ^((~Be)&  Bi );         Ame0 =   Be ^((~Bi)&  Bo );         Ami0 =   Bi ^((~Bo)&  Bu );         Amo0 =   Bo ^((~Bu)&  Ba );         Amu0 =   Bu ^((~Ba)&  Be );         Be = ROL32((Ama1^Da1), 18);         Bi = ROL32((Ame1^De1),  5);         Bo = ROL32((Ami1^Di0),  7);         Bu = ROL32((Amo1^Do1), 28);         Ba = ROL32((Amu1^Du0), 13);         Ama1 =   Ba ^((~Be)&  Bi );         Ame1 =   Be ^((~Bi)&  Bo );         Ami1 =   Bi ^((~Bo)&  Bu );         Amo1 =   Bo ^((~Bu)&  Ba );         Amu1 =   Bu ^((~Ba)&  Be );         Bo = ROL32((Asa0^Da1), 21);         Bu = ROL32((Ase0^De0),  1);         Ba = ROL32((Asi0^Di0), 31);         Be = ROL32((Aso0^Do1), 28);         Bi = ROL32((Asu0^Du1), 20);         Asa0 =   Ba ^((~Be)&  Bi );         Ase0 =   Be ^((~Bi)&  Bo );         Asi0 =   Bi ^((~Bo)&  Bu );         Aso0 =   Bo ^((~Bu)&  Ba );         Asu0 =   Bu ^((~Ba)&  Be );         Bo = ROL32((Asa1^Da0), 20);         Bu = ROL32((Ase1^De1),  1);         Ba = ROL32((Asi1^Di1), 31);         Be = ROL32((Aso1^Do0), 27);         Bi = ROL32((Asu1^Du0), 19);         Asa1 =   Ba ^((~Be)&  Bi );         Ase1 =   Be ^((~Bi)&  Bo );         Asi1 =   Bi ^((~Bo)&  Bu );         Aso1 =   Bo ^((~Bu)&  Ba );         Asu1 =   Bu ^((~Ba)&  Be );
+void KeccakP1600_Permute_Nrounds(void *state, unsigned int nRounds)
+{
+    UINT32 Da0, De0, Di0, Do0, Du0;
+    UINT32 Da1, De1, Di1, Do1, Du1;
+    UINT32 Ba, Be, Bi, Bo, Bu;
+    UINT32 Cx, Cy, Cz, Cw;
+    const UINT32 *pRoundConstants = KeccakF1600RoundConstants_int2+(24-nRounds)*2;
+    UINT32 *stateAsHalfLanes = (UINT32*)state;
+    #define Aba0 stateAsHalfLanes[ 0]
+    #define Aba1 stateAsHalfLanes[ 1]
+    #define Abe0 stateAsHalfLanes[ 2]
+    #define Abe1 stateAsHalfLanes[ 3]
+    #define Abi0 stateAsHalfLanes[ 4]
+    #define Abi1 stateAsHalfLanes[ 5]
+    #define Abo0 stateAsHalfLanes[ 6]
+    #define Abo1 stateAsHalfLanes[ 7]
+    #define Abu0 stateAsHalfLanes[ 8]
+    #define Abu1 stateAsHalfLanes[ 9]
+    #define Aga0 stateAsHalfLanes[10]
+    #define Aga1 stateAsHalfLanes[11]
+    #define Age0 stateAsHalfLanes[12]
+    #define Age1 stateAsHalfLanes[13]
+    #define Agi0 stateAsHalfLanes[14]
+    #define Agi1 stateAsHalfLanes[15]
+    #define Ago0 stateAsHalfLanes[16]
+    #define Ago1 stateAsHalfLanes[17]
+    #define Agu0 stateAsHalfLanes[18]
+    #define Agu1 stateAsHalfLanes[19]
+    #define Aka0 stateAsHalfLanes[20]
+    #define Aka1 stateAsHalfLanes[21]
+    #define Ake0 stateAsHalfLanes[22]
+    #define Ake1 stateAsHalfLanes[23]
+    #define Aki0 stateAsHalfLanes[24]
+    #define Aki1 stateAsHalfLanes[25]
+    #define Ako0 stateAsHalfLanes[26]
+    #define Ako1 stateAsHalfLanes[27]
+    #define Aku0 stateAsHalfLanes[28]
+    #define Aku1 stateAsHalfLanes[29]
+    #define Ama0 stateAsHalfLanes[30]
+    #define Ama1 stateAsHalfLanes[31]
+    #define Ame0 stateAsHalfLanes[32]
+    #define Ame1 stateAsHalfLanes[33]
+    #define Ami0 stateAsHalfLanes[34]
+    #define Ami1 stateAsHalfLanes[35]
+    #define Amo0 stateAsHalfLanes[36]
+    #define Amo1 stateAsHalfLanes[37]
+    #define Amu0 stateAsHalfLanes[38]
+    #define Amu1 stateAsHalfLanes[39]
+    #define Asa0 stateAsHalfLanes[40]
+    #define Asa1 stateAsHalfLanes[41]
+    #define Ase0 stateAsHalfLanes[42]
+    #define Ase1 stateAsHalfLanes[43]
+    #define Asi0 stateAsHalfLanes[44]
+    #define Asi1 stateAsHalfLanes[45]
+    #define Aso0 stateAsHalfLanes[46]
+    #define Aso1 stateAsHalfLanes[47]
+    #define Asu0 stateAsHalfLanes[48]
+    #define Asu1 stateAsHalfLanes[49]
+    nRounds &= 3;
+    switch ( nRounds )
+    {
+        #define I0 Ba
+        #define I1 Be
+        #define T0 Bi
+        #define T1 Bo
+        #define SwapPI13( in0,in1,in2,in3,eo0,eo1,eo2,eo3 )             I0 = (in0)[0]; I1 = (in0)[1];                   T0 = (in1)[0]; T1 = (in1)[1];                   (in0)[eo0] = T0; (in0)[eo0^1] = T1;             T0 = (in2)[0]; T1 = (in2)[1];                   (in1)[eo1] = T0; (in1)[eo1^1] = T1;             T0 = (in3)[0]; T1 = (in3)[1];                   (in2)[eo2] = T0; (in2)[eo2^1] = T1;             (in3)[eo3] = I0; (in3)[eo3^1] = I1
+        #define SwapPI2( in0,in1,in2,in3 )             I0 = (in0)[0]; I1 = (in0)[1];             T0 = (in1)[0]; T1 = (in1)[1];             (in0)[1] = T0; (in0)[0] = T1;             (in1)[1] = I0; (in1)[0] = I1;             I0 = (in2)[0]; I1 = (in2)[1];             T0 = (in3)[0]; T1 = (in3)[1];             (in2)[1] = T0; (in2)[0] = T1;             (in3)[1] = I0; (in3)[0] = I1
+        #define SwapEO( even,odd ) T0 = even; even = odd; odd = T0
+        case 1:
+            SwapPI13( &Aga0, &Aka0, &Asa0, &Ama0, 1, 0, 1, 0 );
+            SwapPI13( &Abe0, &Age0, &Ame0, &Ake0, 0, 1, 0, 1 );
+            SwapPI13( &Abi0, &Aki0, &Agi0, &Asi0, 1, 0, 1, 0 );
+            SwapEO( Ami0, Ami1 );
+            SwapPI13( &Abo0, &Amo0, &Aso0, &Ago0, 1, 0, 1, 0 );
+            SwapEO( Ako0, Ako1 );
+            SwapPI13( &Abu0, &Asu0, &Aku0, &Amu0, 0, 1, 0, 1 );
+            break;
+        case 2:
+            SwapPI2( &Aga0, &Asa0, &Aka0, &Ama0 );
+            SwapPI2( &Abe0, &Ame0, &Age0, &Ake0 );
+            SwapPI2( &Abi0, &Agi0, &Aki0, &Asi0 );
+            SwapPI2( &Abo0, &Aso0, &Ago0, &Amo0 );
+            SwapPI2( &Abu0, &Aku0, &Amu0, &Asu0 );
+            break;
+        case 3:
+            SwapPI13( &Aga0, &Ama0, &Asa0, &Aka0, 0, 1, 0, 1 );
+            SwapPI13( &Abe0, &Ake0, &Ame0, &Age0, 1, 0, 1, 0 );
+            SwapPI13( &Abi0, &Asi0, &Agi0, &Aki0, 0, 1, 0, 1 );
+            SwapEO( Ami0, Ami1 );
+            SwapPI13( &Abo0, &Ago0, &Aso0, &Amo0, 0, 1, 0, 1 );
+            SwapEO( Ako0, Ako1 );
+            SwapPI13( &Abu0, &Amu0, &Aku0, &Asu0, 1, 0, 1, 0 );
+            break;
+        #undef I0
+        #undef I1
+        #undef T0
+        #undef T1
+        #undef SwapPI13
+        #undef SwapPI2
+        #undef SwapEO
+    }
+    do
+    {
+        /* Code for 4 rounds, using factor 2 interleaving, 64-bit lanes mapped to 32-bit words */
+        switch ( nRounds )
+        {
+            case 0: KeccakRound0();
+            case 3: KeccakRound1();
+            case 2: KeccakRound2();
+            case 1: KeccakRound3();
+        }
+        nRounds = 0;
+    }
+    while ( *pRoundConstants != 0xFF );
+    #undef Aba0
+    #undef Aba1
+    #undef Abe0
+    #undef Abe1
+    #undef Abi0
+    #undef Abi1
+    #undef Abo0
+    #undef Abo1
+    #undef Abu0
+    #undef Abu1
+    #undef Aga0
+    #undef Aga1
+    #undef Age0
+    #undef Age1
+    #undef Agi0
+    #undef Agi1
+    #undef Ago0
+    #undef Ago1
+    #undef Agu0
+    #undef Agu1
+    #undef Aka0
+    #undef Aka1
+    #undef Ake0
+    #undef Ake1
+    #undef Aki0
+    #undef Aki1
+    #undef Ako0
+    #undef Ako1
+    #undef Aku0
+    #undef Aku1
+    #undef Ama0
+    #undef Ama1
+    #undef Ame0
+    #undef Ame1
+    #undef Ami0
+    #undef Ami1
+    #undef Amo0
+    #undef Amo1
+    #undef Amu0
+    #undef Amu1
+    #undef Asa0
+    #undef Asa1
+    #undef Ase0
+    #undef Ase1
+    #undef Asi0
+    #undef Asi1
+    #undef Aso0
+    #undef Aso1
+    #undef Asu0
+    #undef Asu1
+}
+/* ---------------------------------------------------------------- */
+void KeccakP1600_Permute_12rounds(void *state)
+{
+     KeccakP1600_Permute_Nrounds(state, 12);
+}
+#endif
+/*
+Implementation by Ronny Van Keer, hereby denoted as "the implementer".
+For more information, feedback or questions, please refer to our website:
+https://keccak.team/
+To the extent possible under law, the implementer has waived all copyright
+and related or neighboring rights to the source code in this file.
+http://creativecommons.org/publicdomain/zero/1.0/
+*/
+#ifndef _KangarooTwelve_h_
+#define _KangarooTwelve_h_
+//#include "KeccakP-1600-SnP.h"
+#ifdef __64__
+#else
+#endif
+#ifdef ALIGN
+#undef ALIGN
+#endif
+#if defined(__GNUC__)
+#define ALIGN(x) __attribute__ ((aligned(x)))
+#elif defined(_MSC_VER)
+#define ALIGN(x) __declspec(align(x))
+#elif defined(__ARMCC_VERSION)
+#define ALIGN(x) __align(x)
+#else
+#define ALIGN(x)
+#endif
+ALIGN(KeccakP1600_stateAlignment) typedef struct KeccakWidth1600_12rounds_SpongeInstanceStruct {
+    unsigned char state[KeccakP1600_stateSizeInBytes];
+    unsigned int rate;
+    unsigned int byteIOIndex;
+    int squeezing;
+} KeccakWidth1600_12rounds_SpongeInstance;
+typedef enum {
+    NOT_INITIALIZED,
+    ABSORBING,
+    FINAL,
+    SQUEEZING
+} KCP_Phases;
+typedef KCP_Phases KangarooTwelve_Phases;
+typedef struct {
+    KeccakWidth1600_12rounds_SpongeInstance queueNode;
+    KeccakWidth1600_12rounds_SpongeInstance finalNode;
+    size_t fixedOutputLength;
+    size_t blockNumber;
+    unsigned int queueAbsorbedLen;
+    KangarooTwelve_Phases phase;
+} KangarooTwelve_Instance;
+/** Extendable ouput function KangarooTwelve.
+  * @param  input           Pointer to the input message (M).
+  * @param  inputByteLen    The length of the input message in bytes.
+  * @param  output          Pointer to the output buffer.
+  * @param  outputByteLen   The desired number of output bytes.
+  * @param  customization   Pointer to the customization string (C).
+  * @param  customByteLen   The length of the customization string in bytes.
+  * @return 0 if successful, 1 otherwise.
+  */
+int KangarooTwelve(const unsigned char *input, size_t inputByteLen, unsigned char *output, size_t outputByteLen, const unsigned char *customization, size_t customByteLen );
+/**
+  * Function to initialize a KangarooTwelve instance.
+  * @param  ktInstance      Pointer to the instance to be initialized.
+  * @param  outputByteLen   The desired number of output bytes,
+  *                         or 0 for an arbitrarily-long output.
+  * @return 0 if successful, 1 otherwise.
+  */
+int KangarooTwelve_Initialize(KangarooTwelve_Instance *ktInstance, size_t outputByteLen);
+/**
+  * Function to give input data to be absorbed.
+  * @param  ktInstance      Pointer to the instance initialized by KangarooTwelve_Initialize().
+  * @param  input           Pointer to the input message data (M).
+  * @param  inputByteLen    The number of bytes provided in the input message data.
+  * @return 0 if successful, 1 otherwise.
+  */
+int KangarooTwelve_Update(KangarooTwelve_Instance *ktInstance, const unsigned char *input, size_t inputByteLen);
+/**
+  * Function to call after all the input message has been input, and to get
+  * output bytes if the length was specified when calling KangarooTwelve_Initialize().
+  * @param  ktInstance      Pointer to the hash instance initialized by KangarooTwelve_Initialize().
+  * If @a outputByteLen was not 0 in the call to KangarooTwelve_Initialize(), the number of
+  *     output bytes is equal to @a outputByteLen.
+  * If @a outputByteLen was 0 in the call to KangarooTwelve_Initialize(), the output bytes
+  *     must be extracted using the KangarooTwelve_Squeeze() function.
+  * @param  output          Pointer to the buffer where to store the output data.
+  * @param  customization   Pointer to the customization string (C).
+  * @param  customByteLen   The length of the customization string in bytes.
+  * @return 0 if successful, 1 otherwise.
+  */
+int KangarooTwelve_Final(KangarooTwelve_Instance *ktInstance, unsigned char *output, const unsigned char *customization, size_t customByteLen);
+/**
+  * Function to squeeze output data.
+  * @param  ktInstance     Pointer to the hash instance initialized by KangarooTwelve_Initialize().
+  * @param  data           Pointer to the buffer where to store the output data.
+  * @param  outputByteLen  The number of output bytes desired.
+  * @pre    KangarooTwelve_Final() must have been already called.
+  * @return 0 if successful, 1 otherwise.
+  */
+int KangarooTwelve_Squeeze(KangarooTwelve_Instance *ktInstance, unsigned char *output, size_t outputByteLen);
+#endif
+int KeccakWidth1600_12rounds_SpongeInitialize(KeccakWidth1600_12rounds_SpongeInstance *spongeInstance, unsigned int rate, unsigned int capacity);
+int KeccakWidth1600_12rounds_SpongeAbsorb(KeccakWidth1600_12rounds_SpongeInstance *spongeInstance, const unsigned char *data, size_t dataByteLen);
+int KeccakWidth1600_12rounds_SpongeAbsorbLastFewBits(KeccakWidth1600_12rounds_SpongeInstance *spongeInstance, unsigned char delimitedData);
+int KeccakWidth1600_12rounds_SpongeSqueeze(KeccakWidth1600_12rounds_SpongeInstance *spongeInstance, unsigned char *data, size_t dataByteLen);
+int KeccakWidth1600_12rounds_SpongeInitialize(KeccakWidth1600_12rounds_SpongeInstance *instance, unsigned int rate, unsigned int capacity)
+{
+    if (rate+capacity != 1600)
+        return 1;
+    if ((rate <= 0) || (rate > 1600) || ((rate % 8) != 0))
+        return 1;
+    KeccakP1600_StaticInitialize();
+    KeccakP1600_Initialize(instance->state);
+    instance->rate = rate;
+    instance->byteIOIndex = 0;
+    instance->squeezing = 0;
+    return 0;
+}
+/* ---------------------------------------------------------------- */
+int KeccakWidth1600_12rounds_SpongeAbsorb(KeccakWidth1600_12rounds_SpongeInstance *instance, const unsigned char *data, size_t dataByteLen)
+{
+    size_t i, j;
+    unsigned int partialBlock;
+    const unsigned char *curData;
+    unsigned int rateInBytes = instance->rate/8;
+    if (instance->squeezing)
+        return 1;
+    i = 0;
+    curData = data;
+    while(i < dataByteLen) {
+        if ((instance->byteIOIndex == 0) && (dataByteLen >= (i + rateInBytes))) {
+#ifdef KeccakP1600_12rounds_FastLoop_supported
+            /* processing full blocks first */
+            if ((rateInBytes % (1600/200)) == 0) {
+                /* fast lane: whole lane rate */
+                j = KeccakP1600_12rounds_FastLoop_Absorb(instance->state, rateInBytes/(1600/200), curData, dataByteLen - i);
+                i += j;
+                curData += j;
+            }
+            else {
+#endif
+                for(j=dataByteLen-i; j>=rateInBytes; j-=rateInBytes) {
+                    KeccakP1600_AddBytes(instance->state, curData, 0, rateInBytes);
+                    KeccakP1600_Permute_12rounds(instance->state);
+                    curData+=rateInBytes;
+                }
+                i = dataByteLen - j;
+#ifdef KeccakP1600_12rounds_FastLoop_supported
+            }
+#endif
+        }
+        else {
+            /* normal lane: using the message queue */
+            partialBlock = (unsigned int)(dataByteLen - i);
+            if (partialBlock+instance->byteIOIndex > rateInBytes)
+                partialBlock = rateInBytes-instance->byteIOIndex;
+            i += partialBlock;
+            KeccakP1600_AddBytes(instance->state, curData, instance->byteIOIndex, partialBlock);
+            curData += partialBlock;
+            instance->byteIOIndex += partialBlock;
+            if (instance->byteIOIndex == rateInBytes) {
+                KeccakP1600_Permute_12rounds(instance->state);
+                instance->byteIOIndex = 0;
+            }
+        }
+    }
+    return 0;
+}
+/* ---------------------------------------------------------------- */
+int KeccakWidth1600_12rounds_SpongeAbsorbLastFewBits(KeccakWidth1600_12rounds_SpongeInstance *instance, unsigned char delimitedData)
+{
+    unsigned int rateInBytes = instance->rate/8;
+    if (delimitedData == 0)
+        return 1;
+    if (instance->squeezing)
+        return 1;
+    /* Last few bits, whose delimiter coincides with first bit of padding */
+    KeccakP1600_AddByte(instance->state, delimitedData, instance->byteIOIndex);
+    /* If the first bit of padding is at position rate-1, we need a whole new block for the second bit of padding */
+    if ((delimitedData >= 0x80) && (instance->byteIOIndex == (rateInBytes-1)))
+        KeccakP1600_Permute_12rounds(instance->state);
+    /* Second bit of padding */
+    KeccakP1600_AddByte(instance->state, 0x80, rateInBytes-1);
+    KeccakP1600_Permute_12rounds(instance->state);
+    instance->byteIOIndex = 0;
+    instance->squeezing = 1;
+    return 0;
+}
+/* ---------------------------------------------------------------- */
+int KeccakWidth1600_12rounds_SpongeSqueeze(KeccakWidth1600_12rounds_SpongeInstance *instance, unsigned char *data, size_t dataByteLen)
+{
+    size_t i, j;
+    unsigned int partialBlock;
+    unsigned int rateInBytes = instance->rate/8;
+    unsigned char *curData;
+    if (!instance->squeezing)
+        KeccakWidth1600_12rounds_SpongeAbsorbLastFewBits(instance, 0x01);
+    i = 0;
+    curData = data;
+    while(i < dataByteLen) {
+        if ((instance->byteIOIndex == rateInBytes) && (dataByteLen >= (i + rateInBytes))) {
+            for(j=dataByteLen-i; j>=rateInBytes; j-=rateInBytes) {
+                KeccakP1600_Permute_12rounds(instance->state);
+                KeccakP1600_ExtractBytes(instance->state, curData, 0, rateInBytes);
+                curData+=rateInBytes;
+            }
+            i = dataByteLen - j;
+        }
+        else {
+            /* normal lane: using the message queue */
+            if (instance->byteIOIndex == rateInBytes) {
+                KeccakP1600_Permute_12rounds(instance->state);
+                instance->byteIOIndex = 0;
+            }
+            partialBlock = (unsigned int)(dataByteLen - i);
+            if (partialBlock+instance->byteIOIndex > rateInBytes)
+                partialBlock = rateInBytes-instance->byteIOIndex;
+            i += partialBlock;
+            KeccakP1600_ExtractBytes(instance->state, curData, instance->byteIOIndex, partialBlock);
+            curData += partialBlock;
+            instance->byteIOIndex += partialBlock;
+        }
+    }
+    return 0;
+}
+/* ---------------------------------------------------------------- */
+#define chunkSize       8192
+#define laneSize        8
+#define suffixLeaf      0x0B
+#define security        128
+#define capacity        (2*security)
+#define capacityInBytes (capacity/8)
+#define capacityInLanes (capacityInBytes/laneSize)
+#define rate            (1600-capacity)
+#define rateInBytes     (rate/8)
+#define rateInLanes     (rateInBytes/laneSize)
+#define ParallelSpongeFastLoop( Parallellism )     while ( inLen >= Parallellism * chunkSize ) {         ALIGN(KeccakP1600times##Parallellism##_statesAlignment) unsigned char states[KeccakP1600times##Parallellism##_statesSizeInBytes];         unsigned char intermediate[Parallellism*capacityInBytes];         unsigned int localBlockLen = chunkSize;         const unsigned char * localInput = input;         unsigned int i;         unsigned int fastLoopOffset;                 KeccakP1600times##Parallellism##_StaticInitialize();         KeccakP1600times##Parallellism##_InitializeAll(states);         fastLoopOffset = KeccakP1600times##Parallellism##_12rounds_FastLoop_Absorb(states, rateInLanes, chunkSize / laneSize, rateInLanes, localInput, Parallellism * chunkSize);         localBlockLen -= fastLoopOffset;         localInput += fastLoopOffset;         for ( i = 0; i < Parallellism; ++i, localInput += chunkSize ) {             KeccakP1600times##Parallellism##_AddBytes(states, i, localInput, 0, localBlockLen);             KeccakP1600times##Parallellism##_AddByte(states, i, suffixLeaf, localBlockLen);             KeccakP1600times##Parallellism##_AddByte(states, i, 0x80, rateInBytes-1);         }         KeccakP1600times##Parallellism##_PermuteAll_12rounds(states);         input += Parallellism * chunkSize;         inLen -= Parallellism * chunkSize;         ktInstance->blockNumber += Parallellism;         KeccakP1600times##Parallellism##_ExtractLanesAll(states, intermediate, capacityInLanes, capacityInLanes );         if (KeccakWidth1600_12rounds_SpongeAbsorb(&ktInstance->finalNode, intermediate, Parallellism * capacityInBytes) != 0) return 1;     }
+#define ParallelSpongeLoop( Parallellism )     while ( inLen >= Parallellism * chunkSize ) {         ALIGN(KeccakP1600times##Parallellism##_statesAlignment) unsigned char states[KeccakP1600times##Parallellism##_statesSizeInBytes];         unsigned char intermediate[Parallellism*capacityInBytes];         unsigned int localBlockLen = chunkSize;         const unsigned char * localInput = input;         unsigned int i;                 KeccakP1600times##Parallellism##_StaticInitialize();         KeccakP1600times##Parallellism##_InitializeAll(states);         while(localBlockLen >= rateInBytes) {             KeccakP1600times##Parallellism##_AddLanesAll(states, localInput, rateInLanes, chunkSize / laneSize);             KeccakP1600times##Parallellism##_PermuteAll_12rounds(states);             localBlockLen -= rateInBytes;             localInput += rateInBytes;            }         for ( i = 0; i < Parallellism; ++i, localInput += chunkSize ) {             KeccakP1600times##Parallellism##_AddBytes(states, i, localInput, 0, localBlockLen);             KeccakP1600times##Parallellism##_AddByte(states, i, suffixLeaf, localBlockLen);             KeccakP1600times##Parallellism##_AddByte(states, i, 0x80, rateInBytes-1);         }         KeccakP1600times##Parallellism##_PermuteAll_12rounds(states);         input += Parallellism * chunkSize;         inLen -= Parallellism * chunkSize;         ktInstance->blockNumber += Parallellism;         KeccakP1600times##Parallellism##_ExtractLanesAll(states, intermediate, capacityInLanes, capacityInLanes );         if (KeccakWidth1600_12rounds_SpongeAbsorb(&ktInstance->finalNode, intermediate, Parallellism * capacityInBytes) != 0) return 1;     }
+static unsigned int right_encode( unsigned char * encbuf, size_t value )
+{
+    unsigned int n, i;
+    size_t v;
+    for ( v = value, n = 0; v && (n < sizeof(size_t)); ++n, v >>= 8 )
+        ;
+    for ( i = 1; i <= n; ++i )
+        encbuf[i-1] = (unsigned char)(value >> (8 * (n-i)));
+    encbuf[n] = (unsigned char)n;
+    return n + 1;
+}
+int KangarooTwelve_Initialize(KangarooTwelve_Instance *ktInstance, size_t outputLen)
+{
+    ktInstance->fixedOutputLength = outputLen;
+    ktInstance->queueAbsorbedLen = 0;
+    ktInstance->blockNumber = 0;
+    ktInstance->phase = ABSORBING;
+    return KeccakWidth1600_12rounds_SpongeInitialize(&ktInstance->finalNode, rate, capacity);
+}
+int KangarooTwelve_Update(KangarooTwelve_Instance *ktInstance, const unsigned char *input, size_t inLen)
+{
+    if (ktInstance->phase != ABSORBING)
+        return 1;
+    if ( ktInstance->blockNumber == 0 ) {
+        /* First block, absorb in final node */
+        unsigned int len = (unsigned int)((inLen < (chunkSize - ktInstance->queueAbsorbedLen)) ? inLen : (chunkSize - ktInstance->queueAbsorbedLen));
+        if (KeccakWidth1600_12rounds_SpongeAbsorb(&ktInstance->finalNode, input, len) != 0)
+            return 1;
+        input += len;
+        inLen -= len;
+        ktInstance->queueAbsorbedLen += len;
+        if ( (ktInstance->queueAbsorbedLen == chunkSize) && (inLen != 0) ) {
+            /* First block complete and more input data available, finalize it */
+            const unsigned char padding = 0x03;
+            ktInstance->queueAbsorbedLen = 0;
+            ktInstance->blockNumber = 1;
+            if (KeccakWidth1600_12rounds_SpongeAbsorb(&ktInstance->finalNode, &padding, 1) != 0)
+                return 1;
+            ktInstance->finalNode.byteIOIndex = (ktInstance->finalNode.byteIOIndex + 7) & ~7;
+        }
+    }
+    else if ( ktInstance->queueAbsorbedLen != 0 ) {
+        /* There is data in the queue, absorb further in queue until block complete */
+        unsigned int len = (unsigned int)((inLen < (chunkSize - ktInstance->queueAbsorbedLen)) ? inLen : (chunkSize - ktInstance->queueAbsorbedLen));
+        if (KeccakWidth1600_12rounds_SpongeAbsorb(&ktInstance->queueNode, input, len) != 0)
+            return 1;
+        input += len;
+        inLen -= len;
+        ktInstance->queueAbsorbedLen += len;
+        if ( ktInstance->queueAbsorbedLen == chunkSize ) {
+            unsigned char intermediate[capacityInBytes];
+            ktInstance->queueAbsorbedLen = 0;
+            ++ktInstance->blockNumber;
+            if (KeccakWidth1600_12rounds_SpongeAbsorbLastFewBits(&ktInstance->queueNode, suffixLeaf) != 0)
+                return 1;
+            if (KeccakWidth1600_12rounds_SpongeSqueeze(&ktInstance->queueNode, intermediate, capacityInBytes) != 0)
+                return 1;
+            if (KeccakWidth1600_12rounds_SpongeAbsorb(&ktInstance->finalNode, intermediate, capacityInBytes) != 0)
+                return 1;
+        }
+    }
+    #if defined(KeccakP1600times8_implementation) && !defined(KeccakP1600times8_isFallback)
+    #if defined(KeccakP1600times8_12rounds_FastLoop_supported)
+    ParallelSpongeFastLoop( 8 )
+    #else
+    ParallelSpongeLoop( 8 )
+    #endif
+    #endif
+    #if defined(KeccakP1600times4_implementation) && !defined(KeccakP1600times4_isFallback)
+    #if defined(KeccakP1600times4_12rounds_FastLoop_supported)
+    ParallelSpongeFastLoop( 4 )
+    #else
+    ParallelSpongeLoop( 4 )
+    #endif
+    #endif
+    #if defined(KeccakP1600times2_implementation) && !defined(KeccakP1600times2_isFallback)
+    #if defined(KeccakP1600times2_12rounds_FastLoop_supported)
+    ParallelSpongeFastLoop( 2 )
+    #else
+    ParallelSpongeLoop( 2 )
+    #endif
+    #endif
+    while ( inLen > 0 ) {
+        unsigned int len = (unsigned int)((inLen < chunkSize) ? inLen : chunkSize);
+        if (KeccakWidth1600_12rounds_SpongeInitialize(&ktInstance->queueNode, rate, capacity) != 0)
+            return 1;
+        if (KeccakWidth1600_12rounds_SpongeAbsorb(&ktInstance->queueNode, input, len) != 0)
+            return 1;
+        input += len;
+        inLen -= len;
+        if ( len == chunkSize ) {
+            unsigned char intermediate[capacityInBytes];
+            ++ktInstance->blockNumber;
+            if (KeccakWidth1600_12rounds_SpongeAbsorbLastFewBits(&ktInstance->queueNode, suffixLeaf) != 0)
+                return 1;
+            if (KeccakWidth1600_12rounds_SpongeSqueeze(&ktInstance->queueNode, intermediate, capacityInBytes) != 0)
+                return 1;
+            if (KeccakWidth1600_12rounds_SpongeAbsorb(&ktInstance->finalNode, intermediate, capacityInBytes) != 0)
+                return 1;
+        }
+        else
+            ktInstance->queueAbsorbedLen = len;
+    }
+    return 0;
+}
+int KangarooTwelve_Final(KangarooTwelve_Instance *ktInstance, unsigned char * output, const unsigned char * customization, size_t customLen)
+{
+    unsigned char encbuf[sizeof(size_t)+1+2];
+    unsigned char padding;
+    if (ktInstance->phase != ABSORBING)
+        return 1;
+    /* Absorb customization | right_encode(customLen) */
+    if ((customLen != 0) && (KangarooTwelve_Update(ktInstance, customization, customLen) != 0))
+        return 1;
+    if (KangarooTwelve_Update(ktInstance, encbuf, right_encode(encbuf, customLen)) != 0)
+        return 1;
+    if ( ktInstance->blockNumber == 0 ) {
+        /* Non complete first block in final node, pad it */
+        padding = 0x07;
+    }
+    else {
+        unsigned int n;
+        if ( ktInstance->queueAbsorbedLen != 0 ) {
+            /* There is data in the queue node */
+            unsigned char intermediate[capacityInBytes];
+            ++ktInstance->blockNumber;
+            if (KeccakWidth1600_12rounds_SpongeAbsorbLastFewBits(&ktInstance->queueNode, suffixLeaf) != 0)
+                return 1;
+            if (KeccakWidth1600_12rounds_SpongeSqueeze(&ktInstance->queueNode, intermediate, capacityInBytes) != 0)
+                return 1;
+            if (KeccakWidth1600_12rounds_SpongeAbsorb(&ktInstance->finalNode, intermediate, capacityInBytes) != 0)
+                return 1;
+        }
+        --ktInstance->blockNumber;
+        n = right_encode(encbuf, ktInstance->blockNumber);
+        encbuf[n++] = 0xFF;
+        encbuf[n++] = 0xFF;
+        if (KeccakWidth1600_12rounds_SpongeAbsorb(&ktInstance->finalNode, encbuf, n) != 0)
+            return 1;
+        padding = 0x06;
+    }
+    if (KeccakWidth1600_12rounds_SpongeAbsorbLastFewBits(&ktInstance->finalNode, padding) != 0)
+        return 1;
+    if ( ktInstance->fixedOutputLength != 0 ) {
+        ktInstance->phase = FINAL;
+        return KeccakWidth1600_12rounds_SpongeSqueeze(&ktInstance->finalNode, output, ktInstance->fixedOutputLength);
+    }
+    ktInstance->phase = SQUEEZING;
+    return 0;
+}
+int KangarooTwelve_Squeeze(KangarooTwelve_Instance *ktInstance, unsigned char * output, size_t outputLen)
+{
+    if (ktInstance->phase != SQUEEZING)
+        return 1;
+    return KeccakWidth1600_12rounds_SpongeSqueeze(&ktInstance->finalNode, output, outputLen);
+}
+int KangarooTwelve( const unsigned char * input, size_t inLen, unsigned char * output, size_t outLen, const unsigned char * customization, size_t customLen )
+{
+    KangarooTwelve_Instance ktInstance;
+    if (outLen == 0)
+        return 1;
+    if (KangarooTwelve_Initialize(&ktInstance, outLen) != 0)
+        return 1;
+    if (KangarooTwelve_Update(&ktInstance, input, inLen) != 0)
+        return 1;
+    return KangarooTwelve_Final(&ktInstance, output, customization, customLen);
+}
+#ifndef SALTY_RANDOM_GENERATOR_SOURCE
+#define SALTY_RANDOM_GENERATOR_SOURCE
+#endif
+#ifndef SACK_SRG_INTERNAL_INCLUDED
+#define SACK_SRG_INTERNAL_INCLUDED
 #ifdef SACK_BAG_EXPORTS
 #define SHA2_SOURCE
 #endif
@@ -76213,68 +78622,176 @@ void *sha3(const void *in, size_t inlen, void *md, int mdlen);
 void shake_xof(sha3_ctx_t *c);
 void shake_out(sha3_ctx_t *c, void *out, size_t len);
 #endif
-#ifndef SALTY_RANDOM_GENERATOR_SOURCE
-#define SALTY_RANDOM_GENERATOR_SOURCE
-#endif
-#define MY_MASK_MASK(n,length)	(MASK_TOP_MASK(length) << ((n)&0x7) )
-#define MY_GET_MASK(v,n,mask_size)  ( ( ((MASKSET_READTYPE*)((((uintptr_t)v))+(n)/CHAR_BIT))[0]											 & MY_MASK_MASK(n,mask_size) )																										>> (((n))&0x7))
 struct random_context {
 	LOGICAL use_version2 : 1;
 	LOGICAL use_version2_256 : 1;
 	LOGICAL use_version3 : 1;
-	SHA1Context sha1_ctx;
-	sha512_ctx  sha512;
-	sha256_ctx  sha256;
-	sha3_ctx_t  sha3;
+	LOGICAL use_versionK12 : 1;
+	union {
+		SHA1Context sha1_ctx;
+		sha512_ctx  sha512;
+		sha256_ctx  sha256;
+		sha3_ctx_t  sha3;
+		KangarooTwelve_Instance K12i;
+	} f;
+	size_t total_bits_used;
 	POINTER salt;
 	size_t salt_size;
-	void (*getsalt)( uintptr_t, POINTER *salt, size_t *salt_size );
+	void( *getsalt )(uintptr_t, POINTER *salt, size_t *salt_size);
 	uintptr_t psv_user;
-	uint8_t entropy[SHA1HashSize];
-	uint8_t entropy2[SHA512_DIGEST_SIZE];
-	uint8_t entropy2_256[SHA256_DIGEST_SIZE];
+	uint8_t *entropy;
+	union {
+		uint8_t entropy0[SHA1HashSize];
+		uint8_t entropy2[SHA512_DIGEST_SIZE];
+		uint8_t entropy2_256[SHA256_DIGEST_SIZE];
+ // 512 bits
 #define SHA3_DIGEST_SIZE 64
-	uint8_t entropy3[SHA3_DIGEST_SIZE];
+		uint8_t entropy3[SHA3_DIGEST_SIZE];
+  // 512 bits
+#define K12_DIGEST_SIZE 64
+		uint8_t entropy4[K12_DIGEST_SIZE];
+	} s;
 	size_t bits_used;
 	size_t bits_avail;
 };
-static void NeedBits( struct random_context *ctx )
-{
-	if( ctx->getsalt )
-		ctx->getsalt( ctx->psv_user, &ctx->salt, &ctx->salt_size );
-	else
-		ctx->salt_size = 0;
-	if( ctx->use_version3 ) {
-		if( ctx->salt_size )
-			sha3_update( &ctx->sha3, (const uint8_t*)ctx->salt, (unsigned int)ctx->salt_size );
-		sha3_final( &ctx->sha3, ctx->entropy3 );
-		sha3_init( &ctx->sha3, SHA3_DIGEST_SIZE );
-		sha3_update( &ctx->sha3, ctx->entropy3, SHA3_DIGEST_SIZE );
-		ctx->bits_avail = sizeof( ctx->entropy3 ) * 8;
-	} else if( ctx->use_version2_256 ) {
-		if( ctx->salt_size )
-			sha256_update( &ctx->sha256, (const uint8_t*)ctx->salt, (unsigned int)ctx->salt_size );
-		sha256_final( &ctx->sha256, ctx->entropy2_256 );
-		sha256_init( &ctx->sha256 );
-		sha256_update( &ctx->sha256, ctx->entropy2_256, SHA256_DIGEST_SIZE );
-		ctx->bits_avail = sizeof( ctx->entropy2_256 ) * 8;
-	} else if( ctx->use_version2 )
+struct byte_shuffle_key {
+// shuffle works on ints.
+	uint8_t map[256];
+	uint8_t dmap[256];
+};
+#define MY_MASK_MASK(n,length)	(MASK_TOP_MASK(length) << ((n)&0x7) )
+#define MY_GET_MASK(v,n,mask_size)  ( ( ((MASKSET_READTYPE*)((((uint8_t*)v))+(n)/CHAR_BIT))[0]											 & MY_MASK_MASK(n,mask_size) )																										>> (((n))&0x7))
+#define SRG_GetBit_(tmp,ctx)    (	    (ctx->total_bits_used += 1),	  (( (ctx->bits_used) >= ctx->bits_avail )?		  NeedBits( ctx ):(void)0),	  ( tmp = MY_GET_MASK( ctx->entropy, ctx->bits_used, 1 ) ),	  ( ctx->bits_used += 1 ),	  ( tmp ) )
+#define SRG_GetByte_(tmp,ctx)    (	    (ctx->total_bits_used += 8),	  (( (ctx->bits_used) >= ctx->bits_avail )?		  NeedBits( ctx ):(void)0),	  ( tmp = MY_GET_MASK( ctx->entropy, ctx->bits_used, 8 ) ),	  ( ctx->bits_used += 8 ),	  ( tmp ) )
+#ifndef SALTY_RANDOM_GENERATOR_SOURCE
+extern
+#endif
+ void NeedBits( struct random_context *ctx );
+#define BlockShuffle_SubByte_(key, bytes_input, bytes_output )  ( (bytes_output)[0] = key->map[(bytes_input)[0]] )
+#define BlockShuffle_Sub1Byte_(key, byte_input )  ( key->map[byte_input] )
+#define BlockShuffle_SubBytes_(key, in, out, byteCount ) {	  size_t n;	   uint8_t *bytes_input = in, *bytes_output = out;	  uint8_t *map = key->map;	  for( n = 0; n < byteCount; n++, bytes_input++, bytes_output++ ) {		  bytes_output[0] = map[bytes_input[0]];	  }  }
+#define BlockShuffle_BusByte_(key, bytes_input, bytes_output )  ( (bytes_output)[0] = key->dmap[(bytes_input)[0]] )
+#define BlockShuffle_Bus1Byte_(key, byte_input )  ( key->dmap[byte_input] )
+#define BlockShuffle_BusBytes_(key, in, out, byteCount )  {	  size_t n;	   uint8_t *bytes_input = in, *bytes_output = out;	  uint8_t *map = key->dmap;	  for( n = 0; n < byteCount; n++, bytes_input++, bytes_output++ ) {		  bytes_output[0] = map[bytes_input[0]];	   }  }
+#endif
+#define USE_K12_LONG_SQUEEZE 1
+#define K12_SQUEEZE_LENGTH   32768
+//#define K12_PRE_TEST
+#ifdef K12_PRE_TEST
+PRELOAD( zz ) {
+	KangarooTwelve_Instance i;
+	char output[64];
+	KangarooTwelve_Initialize( &i, 0 );
+	KangarooTwelve_Update( &i, (const unsigned char *)"abcd", 0 );
+ // customization is a final pad string.
+	KangarooTwelve_Final( &i, NULL, NULL, 0 );
+ // customization is a final pad string.
+	KangarooTwelve_Squeeze( &i, (unsigned char *)output, 64 );
+	lprintf( "---" );
+	LogBinary( output, 64 );
+	KangarooTwelve_Initialize( &i, 0 );
+	KangarooTwelve_Update( &i, (const unsigned char *)"asdf", 4 );
+ // customization is a final pad string.
+	KangarooTwelve_Final( &i, NULL, NULL, 0 );
+ // customization is a final pad string.
+	KangarooTwelve_Squeeze( &i, (unsigned char *)output, 64 );
+	lprintf( "---" );
+	LogBinary( output, 64 );
+	KangarooTwelve_Initialize( &i, 0 );
+	KangarooTwelve_Update( &i, (const unsigned char *)"asdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdfasdf", 64 );
+ // customization is a final pad string.
+	KangarooTwelve_Final( &i, NULL, NULL, 0 );
+ // customization is a final pad string.
+	KangarooTwelve_Squeeze( &i, (unsigned char *)output, 64 );
+	lprintf( "---" );
+	LogBinary( output, 64 );
 	{
-		if( ctx->salt_size )
-			sha512_update( &ctx->sha512, (const uint8_t*)ctx->salt, (unsigned int)ctx->salt_size );
-		sha512_final( &ctx->sha512, ctx->entropy2 );
-		sha512_init( &ctx->sha512 );
-		sha512_update( &ctx->sha512, ctx->entropy2, SHA512_DIGEST_SIZE );
-		ctx->bits_avail = sizeof( ctx->entropy2 ) * 8;
+		int n;
+		int start, end;
+		start = timeGetTime();
+		for( n = 0; n < 10000000; n++ ) {
+ // customization is a final pad string.
+			KangarooTwelve_Squeeze( &i, (unsigned char *)output, 64 );
+		}
+		end = timeGetTime();
+		lprintf( "did %d in %d  %d  %d", n, end - start, n / (end - start), (n * 32) / (end - start) );
 	}
-	else
-	{
-		if( ctx->salt_size )
-			SHA1Input( &ctx->sha1_ctx, (const uint8_t*)ctx->salt, ctx->salt_size );
-		SHA1Result( &ctx->sha1_ctx, ctx->entropy );
-		SHA1Reset( &ctx->sha1_ctx );
-		SHA1Input( &ctx->sha1_ctx, ctx->entropy, SHA1HashSize );
-		ctx->bits_avail = sizeof( ctx->entropy ) * 8;
+}
+#endif
+void NeedBits( struct random_context *ctx )
+{
+	if( ctx->use_versionK12 ) {
+#if USE_K12_LONG_SQUEEZE
+		if( ctx->f.K12i.phase == ABSORBING || ctx->total_bits_used > K12_SQUEEZE_LENGTH ) {
+			if( ctx->f.K12i.phase == SQUEEZING ) {
+				KangarooTwelve_Initialize( &ctx->f.K12i, 0 );
+				KangarooTwelve_Update( &ctx->f.K12i, ctx->s.entropy4, K12_DIGEST_SIZE );
+			}
+			if( ctx->getsalt ) {
+				ctx->getsalt( ctx->psv_user, &ctx->salt, &ctx->salt_size );
+				KangarooTwelve_Update( &ctx->f.K12i, (const uint8_t*)ctx->salt, (unsigned int)ctx->salt_size );
+			}
+ // customization is a final pad string.
+			KangarooTwelve_Final( &ctx->f.K12i, NULL, NULL, 0 );
+			ctx->total_bits_used = 0;
+		}
+		if( ctx->f.K12i.phase == SQUEEZING )
+ // customization is a final pad string.
+			KangarooTwelve_Squeeze( &ctx->f.K12i, ctx->s.entropy4, K12_DIGEST_SIZE );
+#else
+		if( ctx->getsalt ) {
+			ctx->getsalt( ctx->psv_user, &ctx->salt, &ctx->salt_size );
+			KangarooTwelve_Update( &ctx->f.K12i, (const uint8_t*)ctx->salt, (unsigned int)ctx->salt_size );
+		}
+ // customization is a final pad string.
+		KangarooTwelve_Final( &ctx->f.K12i, ctx->s.entropy4, NULL, 0 );
+		KangarooTwelve_Initialize( &ctx->f.K12i, K12_DIGEST_SIZE );
+		KangarooTwelve_Update( &ctx->f.K12i, ctx->s.entropy4, K12_DIGEST_SIZE );
+#endif
+		ctx->bits_avail = sizeof( ctx->s.entropy4 ) * CHAR_BIT;
+		ctx->entropy = ctx->s.entropy4;
+	}
+	else {
+		if( ctx->getsalt )
+			ctx->getsalt( ctx->psv_user, &ctx->salt, &ctx->salt_size );
+		else
+			ctx->salt_size = 0;
+		if( ctx->use_version3 ) {
+			if( ctx->salt_size )
+				sha3_update( &ctx->f.sha3, (const uint8_t*)ctx->salt, (unsigned int)ctx->salt_size );
+			sha3_final( &ctx->f.sha3, ctx->s.entropy3 );
+			sha3_init( &ctx->f.sha3, SHA3_DIGEST_SIZE );
+			sha3_update( &ctx->f.sha3, ctx->s.entropy3, SHA3_DIGEST_SIZE );
+			ctx->bits_avail = sizeof( ctx->s.entropy3 ) * CHAR_BIT;
+			ctx->entropy = ctx->s.entropy3;
+		}
+		else if( ctx->use_version2_256 ) {
+			if( ctx->salt_size )
+				sha256_update( &ctx->f.sha256, (const uint8_t*)ctx->salt, (unsigned int)ctx->salt_size );
+			sha256_final( &ctx->f.sha256, ctx->s.entropy2_256 );
+			sha256_init( &ctx->f.sha256 );
+			sha256_update( &ctx->f.sha256, ctx->s.entropy2_256, SHA256_DIGEST_SIZE );
+			ctx->bits_avail = sizeof( ctx->s.entropy2_256 ) * CHAR_BIT;
+			ctx->entropy = ctx->s.entropy2_256;
+		}
+		else if( ctx->use_version2 ) {
+			if( ctx->salt_size )
+				sha512_update( &ctx->f.sha512, (const uint8_t*)ctx->salt, (unsigned int)ctx->salt_size );
+			sha512_final( &ctx->f.sha512, ctx->s.entropy2 );
+			sha512_init( &ctx->f.sha512 );
+			sha512_update( &ctx->f.sha512, ctx->s.entropy2, SHA512_DIGEST_SIZE );
+			ctx->bits_avail = sizeof( ctx->s.entropy2 ) * CHAR_BIT;
+			ctx->entropy = ctx->s.entropy2;
+		}
+		else {
+			if( ctx->salt_size )
+				SHA1Input( &ctx->f.sha1_ctx, (const uint8_t*)ctx->salt, ctx->salt_size );
+			SHA1Result( &ctx->f.sha1_ctx, ctx->s.entropy0 );
+			SHA1Reset( &ctx->f.sha1_ctx );
+			SHA1Input( &ctx->f.sha1_ctx, ctx->s.entropy0, SHA1HashSize );
+			ctx->bits_avail = sizeof( ctx->s.entropy0 ) * CHAR_BIT;
+			ctx->entropy = ctx->s.entropy0;
+		}
 	}
 	ctx->bits_used = 0;
 }
@@ -76282,20 +78799,24 @@ struct random_context *SRG_CreateEntropyInternal( void (*getsalt)( uintptr_t, PO
                                                 , LOGICAL version2
                                                 , LOGICAL version2_256
                                                 , LOGICAL version3
+                                                , LOGICAL versionk12
                                                 )
 {
 	struct random_context *ctx = New( struct random_context );
+	ctx->use_versionK12 = versionk12;
 	ctx->use_version3 = version3;
 	ctx->use_version2_256 = version2_256;
 	ctx->use_version2 = version2;
+	if( ctx->use_versionK12 )
+		KangarooTwelve_Initialize( &ctx->f.K12i, USE_K12_LONG_SQUEEZE ?0: K12_DIGEST_SIZE );
 	if( ctx->use_version3 )
-		sha3_init( &ctx->sha3, SHA3_DIGEST_SIZE );
+		sha3_init( &ctx->f.sha3, SHA3_DIGEST_SIZE );
 	else if( ctx->use_version2_256 )
-		sha256_init( &ctx->sha256 );
+		sha256_init( &ctx->f.sha256 );
 	else if( ctx->use_version2 )
-		sha512_init( &ctx->sha512 );
+		sha512_init( &ctx->f.sha512 );
 	else
-		SHA1Reset( &ctx->sha1_ctx );
+		SHA1Reset( &ctx->f.sha1_ctx );
 	ctx->getsalt = getsalt;
 	ctx->psv_user = psv_user;
 	ctx->bits_used = 0;
@@ -76304,24 +78825,42 @@ struct random_context *SRG_CreateEntropyInternal( void (*getsalt)( uintptr_t, PO
 }
 struct random_context *SRG_CreateEntropy( void (*getsalt)( uintptr_t, POINTER *salt, size_t *salt_size ), uintptr_t psv_user )
 {
-	return SRG_CreateEntropyInternal( getsalt, psv_user, FALSE, FALSE, FALSE );
+	return SRG_CreateEntropyInternal( getsalt, psv_user, FALSE, FALSE, FALSE, FALSE );
 }
 struct random_context *SRG_CreateEntropy2( void (*getsalt)( uintptr_t, POINTER *salt, size_t *salt_size ), uintptr_t psv_user )
 {
-	return SRG_CreateEntropyInternal( getsalt, psv_user, TRUE, FALSE, FALSE );
+	return SRG_CreateEntropyInternal( getsalt, psv_user, TRUE, FALSE, FALSE, FALSE );
 }
 struct random_context *SRG_CreateEntropy2_256( void( *getsalt )(uintptr_t, POINTER *salt, size_t *salt_size), uintptr_t psv_user )
 {
-	return SRG_CreateEntropyInternal( getsalt, psv_user, FALSE, TRUE, FALSE );
+	return SRG_CreateEntropyInternal( getsalt, psv_user, FALSE, TRUE, FALSE, FALSE );
 }
 struct random_context *SRG_CreateEntropy3( void( *getsalt )(uintptr_t, POINTER *salt, size_t *salt_size), uintptr_t psv_user )
 {
-	return SRG_CreateEntropyInternal( getsalt, psv_user, FALSE, FALSE, TRUE );
+	return SRG_CreateEntropyInternal( getsalt, psv_user, FALSE, FALSE, TRUE, FALSE );
+}
+struct random_context *SRG_CreateEntropy4( void( *getsalt )(uintptr_t, POINTER *salt, size_t *salt_size), uintptr_t psv_user )
+{
+	return SRG_CreateEntropyInternal( getsalt, psv_user, FALSE, FALSE, FALSE, TRUE );
 }
 void SRG_DestroyEntropy( struct random_context **ppEntropy )
 {
 	Release( (*ppEntropy) );
 	(*ppEntropy) = NULL;
+}
+uint32_t SRG_GetBit( struct random_context *ctx )
+{
+	uint32_t tmp;
+	if( !ctx ) DebugBreak();
+	ctx->total_bits_used += 1;
+	//if( ctx->bits_used > 512 ) DebugBreak();
+	if( (ctx->bits_used) >= ctx->bits_avail ) {
+		NeedBits( ctx );
+	}
+	tmp = MY_MASK_MASK( ctx->bits_used, 1 );
+	tmp = MY_GET_MASK( ctx->entropy, ctx->bits_used, 1 );
+	ctx->bits_used += 1;
+	return tmp;
 }
 void SRG_GetEntropyBuffer( struct random_context *ctx, uint32_t *buffer, uint32_t bits )
 {
@@ -76331,6 +78870,7 @@ void SRG_GetEntropyBuffer( struct random_context *ctx, uint32_t *buffer, uint32_
 	uint32_t get_bits;
 	uint32_t resultBits = 0;
 	if( !ctx ) DebugBreak();
+	ctx->total_bits_used += bits;
 	//if( ctx->bits_used > 512 ) DebugBreak();
 	do {
 		if( bits > sizeof( tmp ) * 8 )
@@ -76359,27 +78899,13 @@ void SRG_GetEntropyBuffer( struct random_context *ctx, uint32_t *buffer, uint32_
 				// partial can never be greater than 32; input is only max of 32
 				//if( partial_bits > (sizeof( partial_tmp ) * 8) )
 				//	partial_bits = (sizeof( partial_tmp ) * 8);
-				if( ctx->use_version3 )
-					partial_tmp = MY_GET_MASK( ctx->entropy3, ctx->bits_used, partial_bits );
-				else if( ctx->use_version2_256 )
-					partial_tmp = MY_GET_MASK( ctx->entropy2_256, ctx->bits_used, partial_bits );
-				else if( ctx->use_version2 )
-					partial_tmp = MY_GET_MASK( ctx->entropy2, ctx->bits_used, partial_bits );
-				else
-					partial_tmp = MY_GET_MASK( ctx->entropy, ctx->bits_used, partial_bits );
+				partial_tmp = MY_GET_MASK( ctx->entropy, ctx->bits_used, partial_bits );
 			}
 			NeedBits( ctx );
 			bits -= partial_bits;
 		}
 		else {
-			if( ctx->use_version3 )
-				tmp = MY_GET_MASK( ctx->entropy3, ctx->bits_used, get_bits );
-			else if( ctx->use_version2_256 )
-				tmp = MY_GET_MASK( ctx->entropy2_256, ctx->bits_used, get_bits );
-			else if( ctx->use_version2 )
-				tmp = MY_GET_MASK( ctx->entropy2, ctx->bits_used, get_bits );
-			else
-				tmp = MY_GET_MASK( ctx->entropy, ctx->bits_used, get_bits );
+			tmp = MY_GET_MASK( ctx->entropy, ctx->bits_used, get_bits );
 			ctx->bits_used += get_bits;
 			//if( ctx->bits_used > 512 ) DebugBreak();
 			if( partial_bits ) {
@@ -76387,7 +78913,7 @@ void SRG_GetEntropyBuffer( struct random_context *ctx, uint32_t *buffer, uint32_
 				partial_bits = 0;
 			}
 			if( (get_bits+resultBits) > 24 )
-				(*buffer) |= tmp << resultBits;
+				(*buffer) = tmp << resultBits;
 			else if( (get_bits+resultBits) > 16 ) {
 				(*((uint16_t*)buffer)) |= tmp << resultBits;
 				(*(((uint8_t*)buffer)+2)) |= ((tmp << resultBits) & 0xFF0000)>>16;
@@ -76424,97 +78950,146 @@ int32_t SRG_GetEntropy( struct random_context *ctx, int bits, int get_signed )
 }
 void SRG_ResetEntropy( struct random_context *ctx )
 {
-	if( ctx->use_version3 )
-		sha3_init( &ctx->sha3, SHA3_DIGEST_SIZE );
+	ctx->total_bits_used = 0;
+	if( ctx->use_versionK12 )
+		KangarooTwelve_Initialize( &ctx->f.K12i, USE_K12_LONG_SQUEEZE ? 0:K12_DIGEST_SIZE  );
+	else if( ctx->use_version3 )
+		sha3_init( &ctx->f.sha3, SHA3_DIGEST_SIZE );
 	else if( ctx->use_version2_256 )
-		sha256_init( &ctx->sha256 );
+		sha256_init( &ctx->f.sha256 );
 	else if( ctx->use_version2 )
-		sha512_init( &ctx->sha512 );
+		sha512_init( &ctx->f.sha512 );
 	else
-		SHA1Reset( &ctx->sha1_ctx );
+		SHA1Reset( &ctx->f.sha1_ctx );
 	ctx->bits_used = 0;
 	ctx->bits_avail = 0;
 }
+void SRG_StreamEntropy( struct random_context *ctx )
+{
+	if( ctx->use_versionK12 )
+		KangarooTwelve_Update( &ctx->f.K12i, ctx->s.entropy4, K12_DIGEST_SIZE );
+	else if( ctx->use_version3 )
+		sha3_update( &ctx->f.sha3, ctx->s.entropy4, SHA3_DIGEST_SIZE );
+	else if( ctx->use_version2_256 )
+		sha256_update( &ctx->f.sha256, ctx->s.entropy2_256, SHA256_DIGEST_SIZE );
+	else if( ctx->use_version2 )
+		sha512_update( &ctx->f.sha512, ctx->s.entropy2, SHA512_DIGEST_SIZE );
+	else
+		SHA1Input( &ctx->f.sha1_ctx, ctx->s.entropy0, SHA1HashSize );
+}
 void SRG_FeedEntropy( struct random_context *ctx, const uint8_t *salt, size_t salt_size )
 {
-	if( ctx->use_version3 )
-		sha3_update( &ctx->sha3, salt, (unsigned int)salt_size );
+	if( ctx->use_versionK12 )
+		KangarooTwelve_Update( &ctx->f.K12i, salt, (unsigned int)salt_size );
+	else if( ctx->use_version3 )
+		sha3_update( &ctx->f.sha3, salt, (unsigned int)salt_size );
 	else if( ctx->use_version2_256 )
-		sha256_update( &ctx->sha256, salt, (unsigned int)salt_size );
+		sha256_update( &ctx->f.sha256, salt, (unsigned int)salt_size );
 	else if( ctx->use_version2 )
-		sha512_update( &ctx->sha512, salt, (unsigned int)salt_size );
+		sha512_update( &ctx->f.sha512, salt, (unsigned int)salt_size );
 	else
-		SHA1Input( &ctx->sha1_ctx, salt, salt_size );
+		SHA1Input( &ctx->f.sha1_ctx, salt, salt_size );
 }
-void SRG_SaveState( struct random_context *ctx, POINTER *external_buffer_holder )
+void SRG_SaveState( struct random_context *ctx, POINTER *external_buffer_holder, size_t *dataSize )
 {
 	if( !(*external_buffer_holder) )
 		(*external_buffer_holder) = New( struct random_context );
-	MemCpy( (*external_buffer_holder), ctx, sizeof( struct random_context ) );
+	(*(struct random_context*)(*external_buffer_holder)) = (*ctx);
+	if( dataSize )
+		(*dataSize) = sizeof( struct random_context );
 }
 void SRG_RestoreState( struct random_context *ctx, POINTER external_buffer_holder )
 {
-	MemCpy( ctx, (external_buffer_holder), sizeof( struct random_context ) );
+	(*ctx) = *(struct random_context*)external_buffer_holder;
 }
 static void salt_generator(uintptr_t psv, POINTER *salt, size_t *salt_size ) {
-	static uint32_t tick;
+	static struct tickBuffer {
+		uint32_t tick;
+		uint64_t cputick;
+	} tick;
 	(void)psv;
-	tick = GetTickCount();
+	tick.cputick = GetCPUTick();
+	tick.tick = GetTickCount();
 	salt[0] = &tick;
 	salt_size[0] = sizeof( tick );
 }
-char *SRG_ID_Generator( void ) {
-	static struct random_context *ctx;
-	uint32_t buf[2*(16+16)];
-	size_t outlen;
-	if( !ctx ) ctx = SRG_CreateEntropy2( salt_generator, 0 );
-	SRG_GetEntropyBuffer( ctx, buf, 8*(16+16) );
-	return EncodeBase64Ex( (uint8*)buf, (16+16), &outlen, (const char *)1 );
-}
-char *SRG_ID_Generator_256( void ) {
-	static struct random_context *_ctx[32];
-	static uint32_t used[32];
-	uint32_t buf[2 * (16 + 16)];
-	size_t outlen;
+#define SRG_MAX_GENERATOR_THREADS 32
+static struct random_context *getGenerator(
+			struct random_context *pool[SRG_MAX_GENERATOR_THREADS]
+			, uint32_t used[SRG_MAX_GENERATOR_THREADS]
+			, struct random_context * (*generator)(void( *)(uintptr_t , POINTER *, size_t *), uintptr_t)
+			, int *pUsingCtx
+		)
+{
+	struct random_context *ctx;
 	int usingCtx;
-	static struct random_context *ctx;
 	usingCtx = 0;
 	do {
-		while( used[++usingCtx] ) { if( ++usingCtx >= 32 ) usingCtx = 0; }
+		while( used[++usingCtx] ) { if( ++usingCtx >= SRG_MAX_GENERATOR_THREADS ) usingCtx = 0; }
 	} while( LockedExchange( used + usingCtx, 1 ) );
-	ctx = _ctx[usingCtx];
-	if( !ctx ) ctx = _ctx[usingCtx] = SRG_CreateEntropy2_256( salt_generator, 0 );
-	SRG_GetEntropyBuffer( ctx, buf, 8 * (16 + 16) );
+	ctx = pool[usingCtx];
+	if( !ctx ) ctx = pool[usingCtx] = generator( salt_generator, 0 );
+	(*pUsingCtx) = usingCtx;
+	return ctx;
+}
+char *SRG_ID_Generator( void ) {
+	struct random_context *ctx;
+	uint32_t buf[(16 + 16) / 4];
+	size_t outlen;
+	static struct random_context *_ctx[SRG_MAX_GENERATOR_THREADS];
+	static uint32_t used[SRG_MAX_GENERATOR_THREADS];
+	int usingCtx;
+	ctx = getGenerator( _ctx, used, SRG_CreateEntropy2, &usingCtx );
+	do {
+		SRG_GetEntropyBuffer( ctx, buf, 8 * (16 + 16) );
+	} while( ( buf[0] & 0x3f ) < 10 );
+	used[usingCtx] = 0;
+	return EncodeBase64Ex( (uint8*)buf, (16 + 16), &outlen, (const char *)1 );
+}
+char *SRG_ID_Generator_256( void ) {
+	struct random_context *ctx;
+	uint32_t buf[(16 + 16) / 4];
+	size_t outlen;
+	static struct random_context *_ctx[SRG_MAX_GENERATOR_THREADS];
+	static uint32_t used[SRG_MAX_GENERATOR_THREADS];
+	int usingCtx;
+	ctx = getGenerator( _ctx, used, SRG_CreateEntropy2_256, &usingCtx );
+	do {
+		SRG_GetEntropyBuffer( ctx, buf, 8 * (16 + 16) );
+	} while( (buf[0] & 0x3f) < 10 );
 	used[usingCtx] = 0;
 	return EncodeBase64Ex( (uint8*)buf, (16 + 16), &outlen, (const char *)1 );
 }
 char *SRG_ID_Generator3( void ) {
-	static struct random_context *ctx;
-	uint32_t buf[2 * (16 + 16)];
+	struct random_context *ctx;
+	uint32_t buf[(16 + 16) / 4];
 	size_t outlen;
-	if( !ctx ) ctx = SRG_CreateEntropy3( salt_generator, 0 );
-	SRG_GetEntropyBuffer( ctx, buf, 8 * (16 + 16) );
+	static struct random_context *_ctx[SRG_MAX_GENERATOR_THREADS];
+	static uint32_t used[SRG_MAX_GENERATOR_THREADS];
+	int usingCtx;
+	usingCtx = 0;
+	ctx = getGenerator( _ctx, used, SRG_CreateEntropy3, &usingCtx );
+	do {
+		SRG_GetEntropyBuffer( ctx, buf, 8 * (16 + 16) );
+	} while( (buf[0] & 0x3f) < 10 );
+	used[usingCtx] = 0;
 	return EncodeBase64Ex( (uint8*)buf, (16 + 16), &outlen, (const char *)1 );
 }
-#ifdef WIN32
-#if 0
-// if standalone?
-BOOL WINAPI DllMain(
-	HINSTANCE hinstDLL,
-	DWORD fdwReason,
-	LPVOID lpvReserved
-						 )
-{
-	return TRUE;
+char *SRG_ID_Generator4( void ) {
+	struct random_context *ctx;
+	uint32_t buf[(16 + 16)/4];
+	size_t outlen;
+	static struct random_context *_ctx[SRG_MAX_GENERATOR_THREADS];
+	static uint32_t used[SRG_MAX_GENERATOR_THREADS];
+	int usingCtx;
+	usingCtx = 0;
+	ctx = getGenerator( _ctx, used, SRG_CreateEntropy4, &usingCtx );
+	do {
+		SRG_GetEntropyBuffer( ctx, buf, 8 * (16 + 16) );
+	} while( (buf[0] & 0x3f) < 10 );
+	used[usingCtx] = 0;
+	return EncodeBase64Ex( (uint8*)buf, (16 + 16), &outlen, (const char *)1 );
 }
-#endif
-// this is the watcom deadstart entry point.
-// by supplying this routine, then the native runtime doesn't get pulled
-// and no external clbr symbols are required.
-//void __DLLstart( void )
-//{
-//}
-#endif
 #ifndef SALTY_RANDOM_GENERATOR_SOURCE
 #define SALTY_RANDOM_GENERATOR_SOURCE
 #endif
@@ -76522,6 +79097,7 @@ static struct crypt_local
 {
 	char * use_salt;
 	struct random_context *entropy;
+	PLINKQUEUE plqCrypters;
 } crypt_local;
 static void FeedSalt( uintptr_t psv, POINTER *salt, size_t *salt_size )
 {
@@ -76644,6 +79220,909 @@ TEXTCHAR * SRG_EncryptData( CPOINTER buffer, size_t buflen )
 TEXTSTR SRG_EncryptString( CTEXTSTR buffer )
 {
 	return SRG_EncryptData( (uint8_t*)buffer, StrLen( buffer ) + 1 );
+}
+#ifndef NO_SSL
+#  include <openssl/evp.h>
+static void handleErrors( void )
+{
+	ERR_print_errors_fp( stderr );
+	abort();
+}
+size_t SRG_AES_encrypt( uint8_t *plaintext, size_t plaintext_len, uint8_t *key, uint8_t **ciphertext )
+{
+	EVP_CIPHER_CTX *ctx;
+	int len;
+	int ciphertext_len;
+	/* Create and initialise the context */
+	if( !(ctx = EVP_CIPHER_CTX_new()) ) handleErrors();
+	/* Initialise the encryption operation. IMPORTANT - ensure you use a key
+	 * and IV size appropriate for your cipher
+	 * In this example we are using 256 bit AES (i.e. a 256 bit key). The
+	 * IV size for *most* modes is the same as the block size. For AES this
+	 * is 128 bits */
+	if( 1 != EVP_EncryptInit_ex( ctx, EVP_aes_256_cbc(), NULL, key, key ) )
+		handleErrors();
+	EVP_CIPHER_CTX_set_padding( ctx, 0 );
+	int blockSize = EVP_CIPHER_CTX_block_size( ctx );
+	if( blockSize < 16 ) DebugBreak();
+	int outSize = (int)(plaintext_len + sizeof( uint32_t ) + (blockSize - 1));
+	uint8_t *block = NewArray( uint8_t, blockSize );
+	outSize -= outSize % blockSize;
+	ciphertext[0] = NewArray( uint8_t, outSize );
+	((uint32_t*)block)[0] = (uint32_t)plaintext_len;
+	size_t remaining = blockSize - sizeof( uint32_t );
+	if( remaining > plaintext_len ) {
+		memcpy( block + sizeof( uint32_t ), plaintext, plaintext_len );
+		remaining = plaintext_len + sizeof( uint32_t );
+		plaintext_len = 0;
+	}
+	else {
+		memcpy( block + sizeof( uint32_t ), plaintext, blockSize - sizeof( uint32_t ) );
+		remaining = blockSize;
+		plaintext_len -= (blockSize - sizeof( uint32_t ));
+	}
+	/* Provide the message to be encrypted, and obtain the encrypted output.
+	 * EVP_EncryptUpdate can be called multiple times if necessary
+	 */
+	if( 1 != EVP_EncryptUpdate( ctx, ciphertext[0], &len, (const unsigned char*)block, remaining ) )
+		handleErrors();
+	ciphertext_len = len;
+	Release( block );
+	if( plaintext_len > 0 ) {
+		if( plaintext_len % blockSize ) {
+			int tailLen = plaintext_len % blockSize;
+			if( 1 != EVP_EncryptUpdate( ctx, ciphertext[0] + ciphertext_len, &len
+				, plaintext + (blockSize - sizeof( uint32_t ))
+				, (int)(plaintext_len - tailLen) ) )
+				handleErrors();
+			ciphertext_len += len;
+			memcpy( block
+				, plaintext + (blockSize - sizeof( uint32_t )) + plaintext_len - tailLen
+				, tailLen);
+			memset( block + tailLen, 0, blockSize - tailLen );
+			if( 1 != EVP_EncryptUpdate( ctx, ciphertext[0] + ciphertext_len, &len
+				, block
+				, blockSize ) )
+				handleErrors();
+		}
+		else {
+			if( 1 != EVP_EncryptUpdate( ctx, ciphertext[0] + ciphertext_len, &len
+				, plaintext + (blockSize - sizeof( uint32_t ))
+				, (int)plaintext_len ) )
+				handleErrors();
+		}
+		ciphertext_len += len;
+	}
+	/* Finalise the encryption. Further ciphertext bytes may be written at
+	 * this stage.
+	 */
+	len = 0;
+	if( 1 != EVP_EncryptFinal_ex( ctx, ciphertext[0] + ciphertext_len, &len ) ) handleErrors();
+	ciphertext_len += len;
+	/* Clean up */
+	EVP_CIPHER_CTX_free( ctx );
+	return ciphertext_len;
+}
+int SRG_AES_decrypt( uint8_t *ciphertext, int ciphertext_len, uint8_t *key, uint8_t **plaintext )
+{
+	EVP_CIPHER_CTX *ctx;
+	int len;
+	int used = 0;
+	int plaintext_len;
+	/* Create and initialise the context */
+	if( !(ctx = EVP_CIPHER_CTX_new()) ) handleErrors();
+	/* Initialise the decryption operation. IMPORTANT - ensure you use a key
+	 * and IV size appropriate for your cipher
+	 * In this example we are using 256 bit AES (i.e. a 256 bit key). The
+	 * IV size for *most* modes is the same as the block size. For AES this
+	 * is 128 bits */
+	if( 1 != EVP_DecryptInit_ex( ctx, EVP_aes_256_cbc(), NULL, key, key ) )
+		handleErrors();
+	EVP_CIPHER_CTX_set_padding( ctx, 0 );
+	int blockSize = EVP_CIPHER_CTX_block_size( ctx );
+	uint8_t *block = NewArray( uint8_t, blockSize * 2 );
+	// read the first block of 1 block size.  This has the length so we know
+	// how much more to read.
+	if( 1 != EVP_DecryptUpdate( ctx, block, &len, ciphertext, blockSize ) )
+		handleErrors();
+	used += blockSize;
+	if( !len ) {
+		if( 1 != EVP_DecryptUpdate( ctx, block, &len, ciphertext + used, blockSize ) )
+			handleErrors();
+		used += blockSize;
+		if( !len ) {
+			lprintf( "Really? Give me the first block!" );
+			DebugBreak();
+		}
+	}
+	plaintext_len = ((uint32_t*)block)[0];
+ // have to accept over-writes from crypt
+	int outSize = (plaintext_len + (blockSize - 1));
+	outSize -= outSize % blockSize;
+	plaintext[0] = NewArray( uint8_t, outSize );
+	memcpy( plaintext[0], block + sizeof( uint32_t ), blockSize - sizeof( uint32_t ) );
+	if( ciphertext_len > blockSize ) {
+		/* Provide the message to be decrypted, and obtain the plaintext output.
+		 * EVP_DecryptUpdate can be called multiple times if necessary
+		 */
+		if( 1 != EVP_DecryptUpdate( ctx
+			, plaintext[0] + (blockSize - sizeof( uint32_t )), &len
+			, ciphertext + used
+			, ciphertext_len - used ) )
+			handleErrors();
+		//plaintext_len = len;
+	}
+	/* Finalise the decryption. Further plaintext bytes may be written at
+	 * this stage.
+	 */
+	if( 1 != EVP_DecryptFinal_ex( ctx, plaintext[0] + plaintext_len, &len ) ) handleErrors();
+	plaintext_len += len;
+	/* Clean up */
+	EVP_CIPHER_CTX_free( ctx );
+	Release( block );
+	return plaintext_len;
+}
+#endif
+// bit size of masking hash.
+#define RNGHASH 256
+static __inline void encryptBlock( uint8_t const * const map
+	, uint8_t * const output, size_t const outlen
+	, uint8_t const bufKey[RNGHASH/8]
+)
+{
+	uint8_t *curBuf_out;
+	size_t n;
+	uint8_t p = 0x55;
+	curBuf_out = output;
+#if __64__
+	for( n = 0; n < outlen; n += 8, curBuf_out += 8 ) {
+		((uint64_t*)curBuf_out)[0] ^= ((uint64_t*)(bufKey + (n % (RNGHASH / 8))))[0];;
+	}
+#else
+	for( n = 0; n < outlen; n += 4, curBuf_out += 4 ) {
+		((uint32_t*)curBuf_out)[0] ^= ((uint32_t*)(bufKey + (n % (RNGHASH / 8))))[0];
+	}
+#endif
+	curBuf_out = output;
+	for( n = 0; n < outlen; n++, curBuf_out++ ) {
+		p = curBuf_out[0] = map[curBuf_out[0] ^ p];
+	}
+	curBuf_out--;
+	p = 0xAA;
+	for( n = 0; n < outlen; n++, curBuf_out-- ) {
+		p = curBuf_out[0] = map[curBuf_out[0] ^ p];
+	}
+}
+void SRG_XSWS_encryptData( uint8_t *objBuf, size_t objBufLen
+	, uint64_t tick, const uint8_t *keyBuf, size_t keyBufLen
+	, uint8_t **outBuf, size_t *outBufLen
+) {
+	struct random_context *signEntropy = (struct random_context *)DequeLink( &crypt_local.plqCrypters );
+	size_t b;
+	//size_t outLen_;
+	if( !signEntropy )
+		signEntropy = SRG_CreateEntropy4( NULL, (uintptr_t)0 );
+	SRG_ResetEntropy( signEntropy );
+	SRG_FeedEntropy( signEntropy, (const uint8_t*)&tick, sizeof( tick ) );
+	SRG_FeedEntropy( signEntropy, (const uint8_t*)keyBuf, keyBufLen );
+	static uint8_t bufKey[RNGHASH /8];
+	SRG_GetEntropyBuffer( signEntropy, (uint32_t*)bufKey, RNGHASH );
+	struct byte_shuffle_key *bytKey = BlockShuffle_ByteShuffler( signEntropy );
+	if( outBuf ) {
+		(*outBufLen) = (sizeof( uint8_t ))
+			+ objBufLen
+			+ (((objBufLen + sizeof( uint8_t )) & 0x7)
+				? (8 - ((objBufLen + sizeof( uint8_t )) & 0x7))
+				: 0);
+		//outBuf[0] = (uint8_t*)HeapAllocateAligned( NULL, (*outBufLen), 4096 );
+		outBuf[0] = (uint8_t*)HeapAllocate( NULL, (*outBufLen) );
+ // clear any padding bits.
+		((uint64_t*)(outBuf[0] + (*outBufLen) - 8))[0] = 0;
+		//SRG_GetEntropyBuffer( signEntropy, (uint32_t*)outBuf[0] + (*outBufLen) - 8, 64 );
+  // copy contents for in-place encrypt.
+		memcpy( outBuf[0], objBuf, objBufLen );
+		((uint8_t*)(outBuf[0] + (*outBufLen) - 1))[0] = (uint8_t)(*outBufLen - objBufLen);
+	}
+	else {
+		outBufLen = &objBufLen;
+		outBuf = &objBuf;
+	}
+	for( b = 0; b < (*outBufLen); b += 4096 ) {
+		size_t bs = (*outBufLen) - b;
+		if( bs > 4096 )
+			encryptBlock( bytKey->map, outBuf[0] + b, 4096, bufKey );
+		else
+			encryptBlock( bytKey->map, outBuf[0] + b, bs, bufKey );
+	}
+	BlockShuffle_DropByteShuffler( bytKey );
+	EnqueLink( &crypt_local.plqCrypters, signEntropy );
+}
+static __inline void decryptBlock( uint8_t const * const dmap
+	, uint8_t *input, size_t const len
+	, uint8_t *output
+	, uint8_t const bufKey[RNGHASH / 8]
+) {
+	size_t n;
+	uint8_t *curBuf = output;
+	for( n = 0; n < (len - 1); n++, curBuf++, input++ ) {
+		curBuf[0] = dmap[input[0]] ^ input[1];
+	}
+	curBuf[0] = dmap[input[0]] ^ 0xAA;
+	curBuf = output + len - 1;
+	for( n = (int)(len - 1); n > 0; n--, curBuf-- ) {
+		curBuf[0] = dmap[curBuf[0]] ^ curBuf[-1];
+	}
+	curBuf[0] = dmap[curBuf[0]] ^ 0x55;
+#if __64__
+	for( n = 0; n < len; n += 8, output += 8 ) {
+		((uint64_t*)output)[0] ^= ((uint64_t*)(bufKey + (n % (RNGHASH / 8))))[0];
+	}
+#else
+	for( n = 0; n < len; n += 4, output += 4 ) {
+		((uint32_t*)output)[0] ^= ((uint32_t*)(bufKey + (n % (RNGHASH / 8))))[0];
+	}
+#endif
+}
+void SRG_XSWS_decryptData( uint8_t *objBuf, size_t objBufLen
+	, uint64_t tick, const uint8_t *keyBuf, size_t keyBufLen
+	, uint8_t **outBuf, size_t *outBufLen
+) {
+	struct random_context *signEntropy = (struct random_context *)DequeLink( &crypt_local.plqCrypters );
+	size_t b;
+	if( !signEntropy )
+		signEntropy = SRG_CreateEntropy4( NULL, (uintptr_t)0 );
+	SRG_ResetEntropy( signEntropy );
+	SRG_FeedEntropy( signEntropy, (const uint8_t*)&tick, sizeof( tick ) );
+	SRG_FeedEntropy( signEntropy, (const uint8_t*)keyBuf, keyBufLen );
+	static uint8_t bufKey[RNGHASH /8];
+	SRG_GetEntropyBuffer( signEntropy, (uint32_t*)bufKey, RNGHASH );
+	struct byte_shuffle_key *bytKey = BlockShuffle_ByteShuffler( signEntropy );
+	if( !outBuf ) {
+		for( b = 0; b < objBufLen; b += 4096 ) {
+			size_t bs = objBufLen - b;
+			if( bs > 4096 )
+				decryptBlock( bytKey->dmap, objBuf + b, 4096, objBuf + b, bufKey );
+			else
+				decryptBlock( bytKey->dmap, objBuf + b, bs, objBuf + b, bufKey );
+		}
+	}
+	else {
+		outBuf[0] = NewArray( uint8_t, (*outBufLen) = objBufLen );
+		for( b = 0; b < objBufLen; b += 4096 ) {
+			size_t bs = objBufLen - b;
+			if( bs > 4096 )
+				decryptBlock( bytKey->dmap, objBuf + b, 4096, outBuf[0] + b, bufKey );
+			else
+				decryptBlock( bytKey->dmap, objBuf + b, bs, outBuf[0] + b, bufKey );
+		}
+		// enforce pad bytes to be 0.
+		(*outBufLen) -= ((uint8_t*)(outBuf[0] + objBufLen - 1))[0];
+	}
+	// in-place encrypt does not pad.
+	if( outBuf )
+		if( (((uint64_t*)(outBuf[0] + objBufLen - 8))[0] & 0x00FFFFFFFFFFFFFFULL ) >> ((8 - ((uint8_t*)(outBuf[0] + objBufLen - 1))[0]) * 8) )
+ // segfault.
+			((uint32_t*)0)[0] = 0;
+	BlockShuffle_DropByteShuffler( bytKey );
+	EnqueLink( &crypt_local.plqCrypters, signEntropy );
+}
+#if 0
+// internal test code...
+// some performance benchmarking for instance.
+void logBinary( uint8_t *inbuf, int len ) {
+#define BINBUFSIZE 280
+#define LINELEN 64
+	char buf[280];
+	int ofs;
+	for( int i = 0; i < 32; i++ ) {
+		int j;
+		ofs = 0;
+		for( j = 0; j < 64; j++ ) {
+			if( (i * 64 + j) >= len ) break;
+			ofs += snprintf( buf + ofs, BINBUFSIZE - ofs, "%02x ", inbuf[i * LINELEN + j] );
+		}
+		for( ; j < 64; j++ ) {
+			ofs += snprintf( buf + ofs, BINBUFSIZE - ofs, "   " );
+		}
+		ofs += snprintf( buf + ofs, BINBUFSIZE - ofs, "   " );
+		for( int j = 0; j < LINELEN; j++ ) {
+			if( (i * 64 + j) >= len ) break;
+			ofs += snprintf( buf + ofs, BINBUFSIZE - ofs, "%c", (inbuf[i * LINELEN + j] >= 32 && inbuf[i * LINELEN + j] <= 127) ? inbuf[i * LINELEN + j] : '.' );
+		}
+		puts( buf );
+		if( (i * LINELEN + j) >= len ) break;
+	}
+}
+PRELOAD( CryptTestBuiltIn ) {
+	// this sample happened to be 44 bytes + 4 for the length = 48 = 3*16
+	// happened to be a perfect pad.
+	// with padding (libressl) padds a while extra block.
+	static char message[] = "Hello, This is a test, this is Only a test.";
+	static char messageBig[2048] = "Hello, This is a test, this is Only a test.";
+	static char messageMega[2048 * 2048] = "Hello, This is a test, this is Only a test.";
+	// this is a 1 bit change in message from message
+	static char message2[] = "Hello, This is a test, this is only a test.";
+	// this is a slightly shorter message, which needs padding
+	// (manual pad test to avoid a full 16 byte 0 pad block)
+	static char message3[] = "Hello, This is a test, this is the test.";
+	static uint8_t key[] = { 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0
+						   , 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0
+						   , 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0
+						   , 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0
+	};
+	uint8_t *output;
+	size_t outlen;
+	uint8_t *orig;
+	size_t origlen;
+#define DO_PERF_TESTS
+#define LENGTH_RECOVERY_TESTING
+#ifdef LENGTH_RECOVERY_TESTING
+	for( int p = 0; p < 10; p++ ) {
+		printf( "TESTDATA  %d\n", p );
+		logBinary( (uint8_t*)message, sizeof( message ) );
+		SRG_XSWS_encryptData( (uint8_t*)message, sizeof( message ) - p, 1234, key, sizeof( key ), &output, &outlen );
+		puts( "BINARY" );
+		logBinary( output, outlen );
+		SRG_XSWS_decryptData( (uint8_t*)output, outlen, 1234, key, sizeof( key ), &orig, &origlen );
+		puts( "ORIG" );
+		logBinary( orig, origlen );
+		Release( output );
+		Release( orig );
+	}
+	SRG_XSWS_encryptData( (uint8_t*)message2, sizeof( message2 ), 1234, key, sizeof( key ), &output, &outlen );
+	puts( "BINARY - 1 bit change input" );
+	logBinary( output, outlen );
+	Release( output );
+#endif
+#ifdef DO_PERF_TESTS
+	uint32_t start, end;
+	int i;
+	start = timeGetTime();
+	for( i = 0; i < 900000; i++ ) {
+		SRG_XSWS_encryptData( (uint8_t*)message, sizeof( message ), 1234, key, sizeof( key ), &output, &outlen );
+		Release( output );
+	}
+	end = timeGetTime();
+	printf( "Tiny DID %d in %d   %d %d\n", i, end - start, i * 1000 / (end - start)
+		, (i * 1000 / (end - start)) * sizeof( message )
+	);
+	Sleep( 1000 );
+	start = timeGetTime();
+	for( i = 0; i < 300000; i++ ) {
+		SRG_XSWS_encryptData( (uint8_t*)messageBig, sizeof( messageBig ), 1234, key, sizeof( key ), &output, &outlen );
+		Release( output );
+	}
+	end = timeGetTime();
+	printf( "Big DID %d in %d   %d %d\n", i, end - start, i * 1000 / (end - start)
+		, (i * 1000 / (end - start))*sizeof( messageBig )
+	);
+	Sleep( 1000 );
+	start = timeGetTime();
+	for( i = 0; i < 300; i++ ) {
+		SRG_XSWS_encryptData( (uint8_t*)messageMega, sizeof( messageMega ), 1234, key, sizeof( key ), &output, &outlen );
+		Release( output );
+	}
+	end = timeGetTime();
+	printf( "Mega DID %d in %d   %d %d\n", i, end - start, i * 1000 / (end - start)
+		, (i * 1000 / (end - start)) * sizeof( messageMega )
+	);
+	Sleep( 1000 );
+#endif
+#ifndef NO_SSL
+#  ifdef DO_PERF_TESTS
+	// SRG_AES_encrypt and SRG_AES_decrypt are symmetric.
+	start = timeGetTime();
+	for( i = 0; i < 300000; i++ ) {
+		SRG_XSWS_decryptData( (uint8_t*)message, sizeof( message ), 1234, key, sizeof( key ), &output, &outlen );
+		Release( output );
+	}
+	end = timeGetTime();
+	printf( "DID %d in %d   %d\n", i, end - start, i * 1000 / (end - start) );
+	Sleep( 1000 );
+#  endif
+	puts( "TESTDATA" );
+	logBinary( (uint8_t*)message, sizeof( message ) );
+	outlen = SRG_AES_encrypt( (uint8_t*)message, sizeof( message ), key, &output );
+	puts( "BINARY" );
+	logBinary( output, outlen );
+	origlen = SRG_AES_decrypt( output, outlen, key, &orig );
+	puts( "ORIG" );
+	logBinary( orig, origlen );
+	Release( output );
+	Release( orig );
+	puts( "TESTDATA" );
+	logBinary( (uint8_t*)message2, sizeof( message2 ) );
+	outlen = SRG_AES_encrypt( (uint8_t*)message2, sizeof( message2 ), key, &output );
+	puts( "BINARY" );
+	logBinary( output, outlen );
+	origlen = SRG_AES_decrypt( output, outlen, key, &orig );
+	puts( "ORIG" );
+	logBinary( orig, origlen );
+	Release( output );
+	Release( orig );
+	puts( "TESTDATA" );
+	logBinary( (uint8_t*)message3, sizeof( message3 ) );
+	outlen = SRG_AES_encrypt( (uint8_t*)message3, sizeof( message3 ), key, &output );
+	puts( "BINARY" );
+	logBinary( output, outlen );
+	origlen = SRG_AES_decrypt( output, outlen, key, &orig );
+	puts( "ORIG" );
+	logBinary( orig, origlen );
+	Release( output );
+	Release( orig );
+#endif
+#if 0
+	// memory leak tests.... if in 2M tests memory is +0, probably no leaks.
+	// is about 5 seconds for these tests each....
+	start = timeGetTime();
+	for( i = 0; i < 4000000; i++ ) {
+		outlen = SRG_AES_encrypt( (uint8_t*)message, sizeof( message ), key, &output );
+		Release( output );
+	}
+	end = timeGetTime();
+	printf( "tiny DID %d in %d   %d   %d\n", i, end - start, i * 1000 / (end - start)
+		, (i * 1000 / (end - start)) * sizeof( message )
+	);
+	start = timeGetTime();
+	for( i = 0; i < 200000; i++ ) {
+		outlen = SRG_AES_encrypt( (uint8_t*)messageBig, sizeof( messageBig ), key, &output );
+		Release( output );
+	}
+	end = timeGetTime();
+	printf( "Big DID %d in %d   %d   %d\n", i, end - start, i * 1000 / (end - start)
+		, (i * 1000 / (end - start)) * sizeof( messageBig )
+	);
+	start = timeGetTime();
+	for( i = 0; i < 100; i++ ) {
+		outlen = SRG_AES_encrypt( (uint8_t*)messageMega, sizeof( messageMega ), key, &output );
+		Release( output );
+	}
+	end = timeGetTime();
+	printf( "Mega DID %d in %d   %d   %d\n", i, end - start, i * 1000 / (end - start)
+		, (i * 1000 / (end - start)) * sizeof( messageMega )
+	);
+#endif
+#if 0
+	outlen = SRG_AES_encrypt( (uint8_t*)messageBig, sizeof( messageBig ), key, &output );
+	start = timeGetTime();
+	for( i = 0; i < 100000; i++ ) {
+		origlen = SRG_AES_decrypt( output, outlen, key, &orig );
+		Release( orig );
+	}
+	end = timeGetTime();
+	printf( "DID %d in %d   %d\n", i, end - start, i * 1000 / (end - start) );
+	Release( output );
+	Sleep( 1000 );
+	start = timeGetTime();
+	for( i = 0; i < 100000; i++ ) {
+		outlen = SRG_AES_encrypt( (uint8_t*)message, sizeof( message ), key, &output );
+		Release( output );
+	}
+	end = timeGetTime();
+	printf( "DID %d in %d   %d\n", i, end - start, i * 1000 / (end - start) );
+	outlen = SRG_AES_encrypt( (uint8_t*)message, sizeof( message ), key, &output );
+	start = timeGetTime();
+	for( i = 0; i < 100000; i++ ) {
+		origlen = SRG_AES_decrypt( output, outlen, key, &orig );
+		Release( orig );
+	}
+	end = timeGetTime();
+	printf( "DID %d in %d   %d\n", i, end - start, i * 1000 / (end - start) );
+	Release( output );
+	Sleep( 1000 );
+#endif
+}
+#endif
+struct block_shuffle_key
+{
+	size_t width;
+	size_t height;
+  // in case the map isn't entirely rectangular
+	size_t extra;
+	int *map;
+	struct random_context *ctx;
+};
+typedef struct holder_tag
+{
+	int number;
+	int r;
+	int pLess, pMore;
+} HOLDER, *PHOLDER;
+static int sort( int *nHolders, PHOLDER holders, int nTree, int number, int r )
+{
+	PHOLDER tree = holders + nTree;
+	if( nTree < 0 )
+	{
+		tree = holders + (*nHolders)++;
+		tree->number = number;
+		tree->r = r;
+		tree->pLess = tree->pMore = -1;
+		return (int)(tree - holders);
+	}
+	else
+	{
+		if( r > tree->r )
+			tree->pMore = sort( nHolders, holders, tree->pMore, number, r );
+		else
+			tree->pLess = sort( nHolders, holders, tree->pLess, number, r );
+	}
+	return nTree;
+}
+static void FoldTree( int *nNumber, int *numbers, PHOLDER holders, int nTree )
+{
+	PHOLDER tree = holders + nTree;
+	if( tree->pLess >= 0 )
+		FoldTree( nNumber, numbers, holders, tree->pLess );
+	numbers[(*nNumber)++] = tree->number;
+	if( tree->pMore >= 0 )
+		FoldTree( nNumber, numbers, holders, tree->pMore );
+}
+static void Shuffle( struct block_shuffle_key *key, int *numbers , int count )
+{
+	int tree;
+	int n;
+	int nHolders = 0;
+	int nNumber = 0;
+	int need_bits;
+	PHOLDER holders = NewArray( HOLDER, count );
+	tree = -1;
+	nNumber = 0;
+	for( n = 31; n > 0; n-- )
+		if( count & ( 1 << n ) )
+			break;
+	need_bits = n + 1;
+	for( n = 0; n < count; n++ )
+		tree = sort( &nHolders, holders, tree, numbers[n], SRG_GetEntropy( key->ctx, need_bits, 0 ) );
+	FoldTree( &nNumber, numbers, holders, tree );
+	Release( holders );
+}
+struct block_shuffle_key *BlockShuffle_CreateKey( struct random_context *ctx, size_t width, size_t height )
+{
+	struct block_shuffle_key *key = New( struct block_shuffle_key );
+	size_t n;
+	key->width = width;
+	key->height = height;
+	key->extra = 0;
+	key->map = NewArray( int, width * height );
+	key->ctx = ctx;
+	{
+		size_t m;
+		for( n = 0; n < width; n++ )
+			for( m = 0; m < height; m++ )
+			{
+				key->map[m*width+n] = (int)(m*width+n);
+			}
+		Shuffle( key, key->map, (int)(width * height) );
+	}
+	return key;
+}
+void BlockShuffle_GetDataBlock( struct block_shuffle_key *key
+	, uint8_t* encrypted, int x, int y, size_t w, size_t h, size_t encrypted_stride
+	, uint8_t* output, int ofs_x, int ofs_y, size_t stride )
+{
+	size_t ix, iy;
+	for( ix = 0; ix < (w); ix++ ) {
+		for( iy = 0; iy < (h); iy++ ) {
+			int km = key->map[ix%key->width + (iy%key->height) * key->width];
+			int kmx = km % key->width;
+			int kmy = (int)(km / key->width);
+			((uint8_t*)( ( (uintptr_t)output ) + (ix + ofs_x ) + stride * ( iy + ofs_y ) ))[0] =
+				((uint8_t*)( ( (uintptr_t)encrypted ) + (x+kmx)+(y*kmy)*encrypted_stride ))[0];
+		}
+	}
+}
+void BlockShuffle_GetData( struct block_shuffle_key *key
+	, uint8_t* encrypted, size_t x, size_t w
+	, uint8_t* output, size_t ofs_x )
+{
+	BlockShuffle_GetDataBlock( key, encrypted, (int)x, 0, w, 1, 0, output, (int)ofs_x, 0, 0 );
+}
+void BlockShuffle_SetDataBlock( struct block_shuffle_key *key
+	, uint8_t* encrypted, int x, int y, size_t w, size_t h, size_t output_stride
+	, uint8_t* input, int ofs_x, int ofs_y, size_t input_stride
+)
+{
+	size_t ix, iy;
+	for( ix = 0; ix < ( w ); ix++ )
+	{
+		for( iy = 0; iy < ( h ); iy++ )
+		{
+			int km = key->map[ix%key->width + (iy%key->height) * key->width];
+			int kmx = km % key->width;
+			int kmy = (int)(km / key->width);
+			((uint8_t*)( ( (uintptr_t)encrypted ) + (x + kmx) + (y+kmy)*output_stride  ))[0]
+				= ((uint8_t*)( ( (uintptr_t)input ) + (ix + ofs_x ) + input_stride * ( iy + ofs_y ) ))[0];
+		}
+	}
+}
+void BlockShuffle_SetData( struct block_shuffle_key *key
+	, uint8_t* encrypted, int x, size_t w
+	, uint8_t* input, int ofs_x )
+{
+	BlockShuffle_SetDataBlock( key, encrypted, x, 0, w, 1, 0
+		, input, ofs_x, 0, 0 );
+}
+//------------------------------------------------------------------
+// Byte Swap (works better than a position swap?)
+//------------------------------------------------------------------
+void BlockShuffle_DropByteShuffler( struct byte_shuffle_key *key ) {
+	Release( key );
+}
+//0, 43, 86
+//128, 171, 214
+static uint8_t leftStacks[3][2] = { { 0, 43 }, {43, 43}, {86,42} };
+static uint8_t rightStacks[4][2] = { { 128, 43 }, {171, 43}, {214,42} };
+static uint8_t leftOrders[4][3] = { { 1, 0, 2 }, { 1, 2, 0 }, {2, 1, 0 }, {2, 0, 1 } };
+static uint8_t rightOrders[4][3] = { { 0, 2, 1 }, { 2, 0, 1 }, { 1, 2, 0 }, {2, 1, 0 } };
+struct halfDeck {
+	int from;
+	int until;
+	int cut;
+	uint8_t starts[3];
+	uint8_t lens[3];
+};
+struct byte_shuffle_key *BlockShuffle_ByteShuffler( struct random_context *ctx ) {
+	//struct byte_shuffle_key *key = New( struct byte_shuffle_key );
+	struct byte_shuffle_key *key = ( struct byte_shuffle_key *)HeapAllocateAligned( NULL, sizeof( struct byte_shuffle_key ), 256 );
+	int n;
+	for( n = 0; n < 256; n++ )
+		key->map[n] = n;
+//#define USE_ALT_SHUFFLER
+#ifdef USE_ALT_SHUFFLER
+	uint8_t root = 0;
+	uint8_t last = 0;
+	for( n = 0; n < 256; n++ ) {
+		SRG_GetByte_( key->dmap[n], ctx );
+	}
+	while( root < 255 ) {
+		if( key->dmap[root] > key->dmap[root + 1] ) {
+			last = root;
+			while( key->dmap[root] > key->dmap[root + 1] ) {
+				uint8_t tmp;
+				tmp = key->map[root];
+				key->map[root] = key->map[root + 1];
+				key->map[root + 1] = tmp;
+				tmp = key->dmap[root];
+				key->dmap[root] = key->dmap[root + 1];
+				key->dmap[root + 1] = tmp;
+				if( root ) root--;
+				else {
+					root = last+1; last = root;
+				}
+			}
+			root = last+1;
+		}
+		else
+			root++;
+	}
+	//lprintf( "Shuffled:%d", root );
+	//LogBinary( key->map, 256 );
+	//lprintf( "sorted------" );
+	//LogBinary( key->dmap, 256 );
+#else
+	// simple-in-place shuffler.
+#  if 1
+	for( n = 0; n < 256; n++ ) {
+		int m;
+		int t;
+		SRG_GetByte_( m, ctx );
+		t = key->map[m];
+		key->map[m] = key->map[n];
+		key->map[n] = t;
+	}
+#  endif
+#endif
+#if 0
+		// validate that each number is in the mapping only once.
+		{
+			srcMap = 0;
+			uint8_t *check = maps[1 - srcMap];
+			int n;
+			for( n = 0; n < 256; n++ ) {
+				int m;
+				for( m = 0; m < 256; m++ ) {
+					if( m == n ) continue;
+					if( check[n] == check[m] ) {
+						lprintf( "Index %d matches %d  %d", n, m, check[n] );
+						DebugBreak();
+					}
+				}
+			}
+		}
+#endif
+	for( n = 0; n < 256; n++ )
+		key->dmap[key->map[n]] = n;
+	return key;
+}
+// Small Entropy version.  (SE)
+struct byte_shuffle_key *BlockShuffle_ByteShufflerSE( struct random_context *ctx ) {
+	struct byte_shuffle_key *key = New( struct byte_shuffle_key );
+	int n;
+	int srcMap;
+	uint8_t *maps[2] = { key->dmap, key->map };
+	for( n = 0; n < 256; n++ )
+		key->map[n] = n;
+	srcMap = 1;
+#define BLOCKSHUF_BYTE_ROUNDS 5
+	uint8_t stacks[86];
+	uint8_t halves[8][2];
+	uint8_t lrStarts[8];
+	uint8_t lrStart;
+	uint8_t *readLMap;
+	uint8_t *readRMap;
+	uint8_t *writeMap;
+	/* 40 bits for 8 shuffles. */
+	for( n = 0; n < BLOCKSHUF_BYTE_ROUNDS; n++ ) {
+		halves[n][0] = SRG_GetEntropy( ctx, 2, 0 );
+		halves[n][1] = SRG_GetEntropy( ctx, 2, 0 );
+		lrStarts[n] = SRG_GetEntropy( ctx, 1, 0 );
+	}
+	int t[2] = { 0, 0 };
+	SRG_GetBit_( lrStart, ctx );
+	for( n = 0; (t[0] < 43 || t[1] < 43) && n < 86; n++ ) {
+		int bit;
+		int c;
+		c = 1;
+		while( c < (5 - lrStart) && (SRG_GetBit_( bit, ctx ), !bit) ) {
+			c++;
+		}
+		lrStart = !lrStart;
+		stacks[n] = c;
+		t[n & 1] += c;
+	}
+	for( n = 0; n < BLOCKSHUF_BYTE_ROUNDS; n++ ) {
+		struct halfDeck left, right;
+		int s;
+		int useCards;
+		int outCard;
+		left.starts[0] = leftStacks[leftOrders[halves[n][0]][0]][0];
+		left.lens[0] = leftStacks[leftOrders[halves[n][0]][0]][1];
+		left.starts[1] = leftStacks[leftOrders[halves[n][0]][1]][0];
+		left.lens[1] = leftStacks[leftOrders[halves[n][0]][1]][1];
+		left.starts[2] = leftStacks[leftOrders[halves[n][0]][2]][0];
+		left.lens[2] = leftStacks[leftOrders[halves[n][0]][2]][1];
+		left.cut = 0;
+		left.from = left.starts[left.cut];
+		left.until = left.starts[left.cut] + left.lens[left.cut];
+		right.starts[0] = rightStacks[rightOrders[halves[n][1]][0]][0];
+		right.lens[0] = rightStacks[rightOrders[halves[n][1]][0]][1];
+		right.starts[1] = rightStacks[rightOrders[halves[n][1]][1]][0];
+		right.lens[1] = rightStacks[rightOrders[halves[n][1]][1]][1];
+		right.starts[2] = rightStacks[rightOrders[halves[n][1]][2]][0];
+		right.lens[2] = rightStacks[rightOrders[halves[n][1]][2]][1];
+		right.cut = 0;
+		right.from = right.starts[right.cut];
+		right.until = right.starts[right.cut] + right.lens[right.cut];
+		lrStart = lrStarts[n];
+		useCards = stacks[s = 0];
+		readLMap = maps[srcMap] + left.from;
+		readRMap = maps[srcMap] + right.from;
+		writeMap = maps[1 - srcMap];
+		s = 0;
+		for( outCard = 0; outCard < 256; ) {
+			int c;
+			useCards = stacks[s];
+			for( c = 0; c < useCards; c++ ) {
+				if( lrStart ) {
+					(writeMap++)[0] = (readLMap++)[0];
+					outCard++;
+					left.from++;
+					//maps[1 - srcMap][outCard++] = maps[srcMap][left.from++];
+					if( left.from >= left.until ) {
+						if( ++left.cut < 3 ) {
+							s = 0;
+							useCards = stacks[s];
+							c = -1;
+							left.from = left.starts[left.cut];
+							left.until = left.starts[left.cut] + left.lens[left.cut];
+							readLMap = maps[srcMap] + left.from;
+						}
+						while( left.cut != right.cut ) {
+							(writeMap++)[0] = (readRMap++)[0];
+							outCard++;
+							right.from++;
+							//maps[1 - srcMap][outCard++] = maps[srcMap][right.from++];
+							if( right.from >= right.until ) {
+								if( ++right.cut < 3 ) {
+									right.from = right.starts[right.cut];
+									right.until = right.starts[right.cut] + right.lens[right.cut];
+									readRMap = maps[srcMap] + right.from;
+								}
+							}
+						}
+						if( s ) break;
+						// L/R 2 new stacks... lrStart = same for whole stack each 3 subpart so...;
+					}
+				}
+				else {
+					(writeMap++)[0] = (readRMap++)[0];
+					outCard++;
+					right.from++;
+					//maps[1 - srcMap][outCard++] = maps[srcMap][right.from++];
+					if( right.from >= right.until ) {
+						if( ++right.cut < 3 ) {
+							s = 0;
+							useCards = stacks[s];
+							c = -1;
+							right.from = right.starts[right.cut];
+							right.until = right.starts[right.cut] + right.lens[right.cut];
+							readRMap = maps[srcMap] + right.from;
+						}
+						while( left.cut != right.cut ) {
+							(writeMap++)[0] = (readLMap++)[0];
+							outCard++;
+							left.from++;
+							//maps[1 - srcMap][outCard++] = maps[srcMap][left.from++];
+							if( left.from >= left.until ) {
+								if( ++left.cut < 3 ) {
+									left.from = left.starts[left.cut];
+									left.until = left.starts[left.cut] + left.lens[left.cut];
+									readLMap = maps[srcMap] + left.from;
+								}
+							}
+						}
+						if( s ) break;
+						// L/R 2 new stacks... lrStart = same for whole stack each 3 subpart so...;
+					}
+				}
+			}
+			if( outCard >= 256 )
+				break;
+			lrStart = 1 - lrStart;
+			s++;
+			if( s >= 86 ) {
+				useCards = stacks[s = 0];
+			}
+		}
+	}
+#if 0
+	// validate that each number is in the mapping only once.
+	{
+		uint8_t *check = maps[1 - srcMap];
+		int n;
+		int m;
+		for( n = 0; n < 256; n++ ) {
+			for( m = 0; m < 256; m++ ) {
+				if( m == n ) continue;
+				if( check[n] == check[m] ) {
+					lprintf( "Index %d matches %d  %d", n, m, check[n] );
+					DebugBreak();
+				}
+			}
+		}
+	}
+#endif
+	for( n = 0; n < 256; n++ )
+		key->dmap[key->map[n]] = n;
+	return key;
+}
+void BlockShuffle_SubByte( struct byte_shuffle_key *key
+	, uint8_t *bytes_input, uint8_t *bytes_output ) {
+	bytes_output[0] = key->map[bytes_input[0]];
+}
+void BlockShuffle_SubBytes( struct byte_shuffle_key *key
+	, uint8_t *bytes_input, uint8_t *bytes_output
+	, size_t byteCount )
+{
+	size_t n;
+	uint8_t *map = key->map;
+	for( n = 0; n < byteCount; n++, bytes_input++, bytes_output++ ) {
+		bytes_output[0] = map[bytes_input[0]];
+	}
+}
+void BlockShuffle_BusByte( struct byte_shuffle_key *key
+	, uint8_t *bytes_input, uint8_t *bytes_output ) {
+	bytes_output[0] = key->dmap[bytes_input[0]];
+}
+void BlockShuffle_BusBytes( struct byte_shuffle_key *key
+	, uint8_t *bytes_input, uint8_t *bytes_output
+	, size_t byteCount )
+{
+	size_t n;
+	uint8_t *map = key->dmap;
+	for( n = 0; n < byteCount; n++, bytes_input++, bytes_output++ ) {
+		bytes_output[0] = map[bytes_input[0]];
+	}
 }
 #ifdef _WIN64
 #ifndef __64__
@@ -76955,6 +80434,7 @@ void InvokeDeadstart( void )
 	if( bSuspend )
 	{
 		if( l.flags.bLog )
+ //-V595
 			lprintf( WIDE("Suspended, first proc is %s"), proc_schedule?proc_schedule->func:WIDE("No First") );
 		return;
 	}
