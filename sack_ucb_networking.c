@@ -455,198 +455,203 @@ But WHO doesn't have stdint?  BTW is sizeof( size_t ) == sizeof( void* )
 #include <wchar.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#if !defined( _WIN32 ) && !defined( __MAC__ )
+#  include <syscall.h>
+#elif defined( __MAC__ )
+#  include <sys/syscall.h>
+#endif
 #ifndef MY_TYPES_INCLUDED
-#define MY_TYPES_INCLUDED
+#  define MY_TYPES_INCLUDED
 // include this before anything else
 // thereby allowing us to redefine exit()
  // CHAR_BIT
-#include <limits.h>
+#  include <limits.h>
  // typelib requires this
-#ifdef _MSC_VER
-#ifndef UNDER_CE
+#  ifdef _MSC_VER
+#    ifndef UNDER_CE
  // memlib requires this, and it MUST be included befoer string.h if it is used.
-#include <intrin.h>
-#endif
-#endif
+#      include <intrin.h>
+#    endif
+#  endif
  // typelib requires this
-#include <string.h>
-#if !defined( WIN32 ) && !defined( _WIN32 ) && !defined( _PNACL )
-#include <dlfcn.h>
-#endif
-#if defined( _MSC_VER )
+#  include <string.h>
+#  if !defined( WIN32 ) && !defined( _WIN32 ) && !defined( _PNACL )
+#    include <dlfcn.h>
+#  endif
+#  if defined( _MSC_VER )
 // disable pointer conversion warnings - wish I could disable this
 // according to types...
 //#pragma warning( disable:4312; disable:4311 )
 // disable deprication warnings of snprintf, et al.
 //#pragma warning( disable:4996 )
-#define EMPTY_STRUCT struct { char nothing[]; }
-#endif
-#if defined( __WATCOMC__ )
-#define EMPTY_STRUCT char
-#endif
-#ifdef __cplusplus
+#    define EMPTY_STRUCT struct { char nothing[]; }
+#  endif
+#  if defined( __WATCOMC__ )
+#     define EMPTY_STRUCT char
+#  endif
+#  ifdef __cplusplus
 /* Could also consider defining 'SACK_NAMESPACE' as 'extern "C"
    ' {' and '..._END' as '}'                                    */
-#define SACK_NAMESPACE namespace sack {
+#    define SACK_NAMESPACE namespace sack {
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define SACK_NAMESPACE_END }
+#    define SACK_NAMESPACE_END }
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _CONTAINER_NAMESPACE namespace containers {
+#    define _CONTAINER_NAMESPACE namespace containers {
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _CONTAINER_NAMESPACE_END }
+#    define _CONTAINER_NAMESPACE_END }
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _LINKLIST_NAMESPACE namespace list {
+#    define _LINKLIST_NAMESPACE namespace list {
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _LINKLIST_NAMESPACE_END }
+#    define _LINKLIST_NAMESPACE_END }
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _DATALIST_NAMESPACE namespace data_list {
+#    define _DATALIST_NAMESPACE namespace data_list {
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _DATALIST_NAMESPACE_END }
+#    define _DATALIST_NAMESPACE_END }
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _SETS_NAMESPACE namespace sets {
+#    define _SETS_NAMESPACE namespace sets {
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _SETS_NAMESPACE_END }
+#    define _SETS_NAMESPACE_END }
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _TEXT_NAMESPACE namespace text {
+#    define _TEXT_NAMESPACE namespace text {
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _TEXT_NAMESPACE_END }
+#    define _TEXT_NAMESPACE_END }
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define TEXT_NAMESPACE SACK_NAMESPACE _CONTAINER_NAMESPACE namespace text {
+#    define TEXT_NAMESPACE SACK_NAMESPACE _CONTAINER_NAMESPACE namespace text {
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define TEXT_NAMESPACE_END  } _CONTAINER_NAMESPACE_END SACK_NAMESPACE_END
-#else
+#    define TEXT_NAMESPACE_END  } _CONTAINER_NAMESPACE_END SACK_NAMESPACE_END
+#  else
 /* Define the sack namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define SACK_NAMESPACE
+#    define SACK_NAMESPACE
 /* Define the sack namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define SACK_NAMESPACE_END
+#    define SACK_NAMESPACE_END
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _CONTAINER_NAMESPACE
+#    define _CONTAINER_NAMESPACE
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _CONTAINER_NAMESPACE_END
+#    define _CONTAINER_NAMESPACE_END
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _LINKLIST_NAMESPACE
+#    define _LINKLIST_NAMESPACE
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _LINKLIST_NAMESPACE_END
+#    define _LINKLIST_NAMESPACE_END
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _DATALIST_NAMESPACE
+#    define _DATALIST_NAMESPACE
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _DATALIST_NAMESPACE_END
+#    define _DATALIST_NAMESPACE_END
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _SETS_NAMESPACE
+#    define _SETS_NAMESPACE
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _SETS_NAMESPACE_END
+#    define _SETS_NAMESPACE_END
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _TEXT_NAMESPACE
+#    define _TEXT_NAMESPACE
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _TEXT_NAMESPACE_END
+#    define _TEXT_NAMESPACE_END
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define TEXT_NAMESPACE
+#    define TEXT_NAMESPACE
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define TEXT_NAMESPACE_END
-#endif
+#    define TEXT_NAMESPACE_END
+#  endif
 /* declare composite SACK_CONTAINER namespace to declare sack::container in a single line */
-#define SACK_CONTAINER_NAMESPACE SACK_NAMESPACE _CONTAINER_NAMESPACE
+#  define SACK_CONTAINER_NAMESPACE SACK_NAMESPACE _CONTAINER_NAMESPACE
 /* declare composite SACK_CONTAINER namespace to close sack::container in a single line */
-#define SACK_CONTAINER_NAMESPACE_END _CONTAINER_NAMESPACE_END SACK_NAMESPACE_END
+#  define SACK_CONTAINER_NAMESPACE_END _CONTAINER_NAMESPACE_END SACK_NAMESPACE_END
 /* declare composite SACK_CONTAINER namespace to declare sack::container::list in a single line */
-#define SACK_CONTAINER_LINKLIST_NAMESPACE SACK_CONTAINER_NAMESPACE _LISTLIST_NAMESPACE
+#  define SACK_CONTAINER_LINKLIST_NAMESPACE SACK_CONTAINER_NAMESPACE _LISTLIST_NAMESPACE
 /* declare composite SACK_CONTAINER namespace to close sack::container::list in a single line */
-#define SACK_CONTAINER_LINKLIST_NAMESPACE_END _LISTLIST_NAMESPACE_END SACK_CONTAINER_NAMESPACE
+#  define SACK_CONTAINER_LINKLIST_NAMESPACE_END _LISTLIST_NAMESPACE_END SACK_CONTAINER_NAMESPACE
 // this symbols is defined to enforce
 // the C Procedure standard - using a stack, and resulting
 // in EDX:EAX etc...
-#define CPROC
-#ifdef SACK_BAG_EXPORTS
-# ifdef BUILD_GLUE
+#  define CPROC
+#  ifdef SACK_BAG_EXPORTS
+#    ifdef BUILD_GLUE
 // this is used as the export method appropriate for C#?
-#  define EXPORT_METHOD [DllImport(LibName)] public
-# else
-#  ifdef __cplusplus_cli
-#   if defined( __STATIC__ ) || defined( __LINUX__ ) || defined( __ANDROID__ )
-#     define EXPORT_METHOD
-#     define IMPORT_METHOD extern
-#   else
-#     define EXPORT_METHOD __declspec(dllexport)
-#     define IMPORT_METHOD __declspec(dllimport)
-#   endif
-#   define LITERAL_LIB_EXPORT_METHOD __declspec(dllexport)
-#   define LITERAL_LIB_IMPORT_METHOD extern
-//__declspec(dllimport)
-#  else
-#   if defined( __STATIC__ ) || defined( __LINUX__ ) || defined( __ANDROID__ )
-#      define EXPORT_METHOD
-#      define IMPORT_METHOD extern
+#      define EXPORT_METHOD [DllImport(LibName)] public
 #    else
+#      ifdef __cplusplus_cli
+#        if defined( __STATIC__ ) || defined( __LINUX__ ) || defined( __ANDROID__ )
+#          define EXPORT_METHOD
+#          define IMPORT_METHOD extern
+#        else
+#          define EXPORT_METHOD __declspec(dllexport)
+#          define IMPORT_METHOD __declspec(dllimport)
+#        endif
+#        define LITERAL_LIB_EXPORT_METHOD __declspec(dllexport)
+#        define LITERAL_LIB_IMPORT_METHOD extern
+//__declspec(dllimport)
+#      else
+#        if defined( __STATIC__ ) || defined( __LINUX__ ) || defined( __ANDROID__ )
+#          define EXPORT_METHOD
+#          define IMPORT_METHOD extern
+#        else
 /* Method to declare functions exported from a DLL. (nothign on
    LINUX or building statically, but __declspec(dllimport) on
    windows )                                                    */
-#      define EXPORT_METHOD __declspec(dllexport)
+#          define EXPORT_METHOD __declspec(dllexport)
 /* method to define a function which will be Imported from a
    library. Under windows, this is probably
    __declspec(dllimport). Under linux this is probably 'extern'. */
-#      define IMPORT_METHOD __declspec(dllimport)
+#          define IMPORT_METHOD __declspec(dllimport)
+#        endif
+#        define LITERAL_LIB_EXPORT_METHOD __declspec(dllexport)
+#        define LITERAL_LIB_IMPORT_METHOD __declspec(dllimport)
+#      endif
 #    endif
-#      define LITERAL_LIB_EXPORT_METHOD __declspec(dllexport)
-#      define LITERAL_LIB_IMPORT_METHOD __declspec(dllimport)
-#  endif
-# endif
-#else
-# if ( !defined( __STATIC__ ) && defined( WIN32 ) && !defined( __cplusplus_cli) )
-#  define EXPORT_METHOD __declspec(dllexport)
-#  define IMPORT_METHOD __declspec(dllimport)
-#  define LITERAL_LIB_EXPORT_METHOD __declspec(dllexport)
-#  define LITERAL_LIB_IMPORT_METHOD __declspec(dllimport)
-# else
-// MRT:  This is needed.  Need to see what may be defined wrong and fix it.
-#  if defined( __LINUX__ ) || defined( __STATIC__ )
-#    define EXPORT_METHOD
-#    define IMPORT_METHOD extern
-#    define LITERAL_LIB_EXPORT_METHOD
-#    define LITERAL_LIB_IMPORT_METHOD extern
 #  else
+#  if ( !defined( __STATIC__ ) && defined( WIN32 ) && !defined( __cplusplus_cli) )
 #    define EXPORT_METHOD __declspec(dllexport)
 #    define IMPORT_METHOD __declspec(dllimport)
+#    define LITERAL_LIB_EXPORT_METHOD __declspec(dllexport)
+#    define LITERAL_LIB_IMPORT_METHOD __declspec(dllimport)
+#  else
+// MRT:  This is needed.  Need to see what may be defined wrong and fix it.
+#    if defined( __LINUX__ ) || defined( __STATIC__ )
+#      define EXPORT_METHOD
+#      define IMPORT_METHOD extern
+#      define LITERAL_LIB_EXPORT_METHOD
+#      define LITERAL_LIB_IMPORT_METHOD extern
+#    else
+#      define EXPORT_METHOD __declspec(dllexport)
+#      define IMPORT_METHOD __declspec(dllimport)
 /* Define how methods in LITERAL_LIBRARIES are exported.
    literal_libraries are libraries that are used for plugins,
    and are dynamically loaded by code. They break the rules of
    system prefix and suffix extensions. LITERAL_LIBRARIES are
    always dynamic, and never static.                           */
-#    define LITERAL_LIB_EXPORT_METHOD __declspec(dllexport)
+#      define LITERAL_LIB_EXPORT_METHOD __declspec(dllexport)
 /* Define how methods in LITERAL_LIBRARIES are imported.
    literal_libraries are libraries that are used for plugins,
    and are dynamically loaded by code. They break the rules of
    system prefix and suffix extensions. LITERAL_LIBRARIES are
    always dynamic, and never static.                           */
-#    define LITERAL_LIB_IMPORT_METHOD __declspec(dllimport)
+#      define LITERAL_LIB_IMPORT_METHOD __declspec(dllimport)
+#    endif
 #  endif
-# endif
 #endif
 // used when the keword specifying a structure is packed
 // needs to prefix the struct keyword.
@@ -1396,25 +1401,29 @@ SACK_NAMESPACE
 // threads and processes.
 typedef uint64_t THREAD_ID;
 #define GetMyThreadIDNL GetMyThreadID
-#if defined( _WIN32 ) || defined( __CYGWIN__ )
+#if defined( _WIN32 )
 #  define _GetMyThreadID()  ( (( ((uint64_t)GetCurrentProcessId()) << 32 ) | ( (uint64_t)GetCurrentThreadId() ) ) )
 #  define GetMyThreadID()  (GetThisThreadID())
 #else
 // this is now always the case
 // it's a safer solution anyhow...
-#  ifndef GETPID_RETURNS_PPID
-#    define GETPID_RETURNS_PPID
-#  endif
-#  ifdef GETPID_RETURNS_PPID
-#    ifdef __ANDROID__
-#      define GetMyThreadID()  (( ((uint64_t)getpid()) << 32 ) | ( (uint64_t)(gettid()) ) )
-#    else
-#      define GetMyThreadID()  (( ((uint64_t)getpid()) << 32 ) | ( (uint64_t)(pthread_self()) ) )
-#    endif
+#  ifdef __MAC__
+#    define GetMyThreadID()  (( ((uint64_t)getpid()) << 32 ) | ( (uint64_t)( syscall(SYS_thread_selfid) ) ) )
 #  else
-#    define GetMyThreadID()  (( ((uint64_t)getppid()) << 32 ) | ( (uint64_t)(getpid()|0x40000000)) )
+#    ifndef GETPID_RETURNS_PPID
+#      define GETPID_RETURNS_PPID
+#    endif
+#    ifdef GETPID_RETURNS_PPID
+#      ifdef __ANDROID__
+#        define GetMyThreadID()  (( ((uint64_t)getpid()) << 32 ) | ( (uint64_t)(gettid()) ) )
+#      else
+#        define GetMyThreadID()  (( ((uint64_t)getpid()) << 32 ) | ( (uint64_t)(syscall(SYS_gettid)) ) )
+#      endif
+#    else
+#      define GetMyThreadID()  (( ((uint64_t)getppid()) << 32 ) | ( (uint64_t)(getpid()|0x40000000)) )
+#    endif
 #  endif
-#    define _GetMyThreadID GetMyThreadID
+#  define _GetMyThreadID GetMyThreadID
 #endif
 //---------------------- Declare Link; 'single and a half'ly-linked lists -----------------------
 // Thse macros are for linking and unlininking things in a linked list.
@@ -3505,7 +3514,7 @@ TYPELIB_PROC  void TYPELIB_CALLTYPE  SegReleaseEx( PTEXT seg DBG_PASS );
    DBG_PASS :  \file and line debugging information               */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegConcatEx   (PTEXT output,PTEXT input,int32_t offset,size_t length DBG_PASS);
 /* <combine sack::containers::text::SegConcatEx@PTEXT@PTEXT@int32_t@size_t length>
-   looks like it takes a peice of one segment and appends it to
+   looks like it takes a piece of one segment and appends it to
    another....
    Needs More research to document correctly and exemplify.                     */
 #define SegConcat(out,in,ofs,len) SegConcatEx(out,in,ofs,len DBG_SRC)
@@ -4599,73 +4608,7 @@ IMPORT_METHOD
  // namespace sack {
 SACK_NAMESPACE_END
 // this should become common to all libraries and programs...
- // pronounced 'kahn-struct'
-/* Defines interface for Construct API.
-   Description
-   This API is for distributed process tracking. A launching
-   program will receive notifications to cause certain events to
-   happen. Applications built for use by this execution tracking
-   program will register that they are loading while they are
-   loading, and before the application Main() is invoked. the
-   application should then call LoadComplete() once they have
-   initialized and are ready to process. This allows a
-   quick-wait to wait for the process to register that it is
-   loading, and a longer wait for process completion. Certain
-   processes may not require others to be completely loaded, but
-   maybe just loading. (Two peer processes that have to
-   coordinate together to have either one complete
-   initialization).                                              */
-/* Define the procedure call type for construct API methods. */
-#define CONSTRUCT_API CPROC
-#ifdef CONSTRUCT_SOURCE
-#define CONSTRUCT_PROC EXPORT_METHOD
-#else
-/* Library linkage specification. */
-#define CONSTRUCT_PROC IMPORT_METHOD
-#endif
-#ifdef __cplusplus
-/* Defines TASK namespace (unused?) */
-#define _TASK_NAMESPACE namespace task {
-/* Define Construct namespace. Construct is for distributed
-   process tracking project. Applications will register on-load
-   that they are loading, and should register load completed
-   when they are done loading, or exit.                         */
-#define _CONSTRUCT_NAMESPACE namespace construct {
-/* Defines TASK namespace ending.(unused?) */
-#define _TASK_NAMESPACE_END }
-/* Define Construct namespace end. Construct is for distributed
-   process tracking project. Applications will register on-load
-   that they are loading, and should register load completed
-   when they are done loading, or exit.                         */
-#define _CONSTRUCT_NAMESPACE_END }
-#else
-#define _TASK_NAMESPACE
-#define _CONSTRUCT_NAMESPACE
-#define _TASK_NAMESPACE_END
-#define _CONSTRUCT_NAMESPACE_END
-#endif
-/* Define a symbol to specify full sack::task::construct
-   namespace.                                            */
-#define CONSTRUCT_NAMESPACE SACK_NAMESPACE _TASK_NAMESPACE _CONSTRUCT_NAMESPACE
-/* Define a symbol to specify full sack::task::construct
-   namespace ending.                                     */
-#define CONSTRUCT_NAMESPACE_END _CONSTRUCT_NAMESPACE_END _TASK_NAMESPACE_END SACK_NAMESPACE_END
-	SACK_NAMESPACE
-	_TASK_NAMESPACE
-	/* Registers with message service, assuming the summoner message service is active.
-	 Provides communication methods with a task manager, so the application can notify,
-	 start has completed.   The service is ready to work.*/
-_CONSTRUCT_NAMESPACE
-/* Called to indicate that a process is done initializing and is
-   ready to process. Notifies summoner service of Loading
-   completed. If enabled, there is also a library component that
-   will run at deadstart to just confirm initializing, this
-   would actually indicate the service is now ready to serve.    */
-CONSTRUCT_PROC void CONSTRUCT_API LoadComplete( void );
-CONSTRUCT_NAMESPACE_END
-#ifdef __cplusplus
-	using namespace sack::task::construct;
-#endif
+//#include <construct.h> // pronounced 'kahn-struct'
 /*
  *  Crafted by James Buckeyne
  *  Part of SACK github.com/d3x0r/SACK
@@ -7560,199 +7503,204 @@ But WHO doesn't have stdint?  BTW is sizeof( size_t ) == sizeof( void* )
 #include <wchar.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#if !defined( _WIN32 ) && !defined( __MAC__ )
+#  include <syscall.h>
+#elif defined( __MAC__ )
+#  include <sys/syscall.h>
+#endif
 #ifndef MY_TYPES_INCLUDED
-#define MY_TYPES_INCLUDED
+#  define MY_TYPES_INCLUDED
 // include this before anything else
 // thereby allowing us to redefine exit()
  // CHAR_BIT
-#include <limits.h>
+#  include <limits.h>
  // typelib requires this
-#include <stdarg.h>
-#ifdef _MSC_VER
-#ifndef UNDER_CE
+#  include <stdarg.h>
+#  ifdef _MSC_VER
+#    ifndef UNDER_CE
  // memlib requires this, and it MUST be included befoer string.h if it is used.
-#include <intrin.h>
-#endif
-#endif
+#      include <intrin.h>
+#    endif
+#  endif
  // typelib requires this
-#include <string.h>
-#if !defined( WIN32 ) && !defined( _WIN32 ) && !defined( _PNACL )
-#include <dlfcn.h>
-#endif
-#if defined( _MSC_VER )
+#  include <string.h>
+#  if !defined( WIN32 ) && !defined( _WIN32 ) && !defined( _PNACL )
+#    include <dlfcn.h>
+#  endif
+#  if defined( _MSC_VER )
 // disable pointer conversion warnings - wish I could disable this
 // according to types...
 //#pragma warning( disable:4312; disable:4311 )
 // disable deprication warnings of snprintf, et al.
 //#pragma warning( disable:4996 )
-#define EMPTY_STRUCT struct { char nothing[]; }
-#endif
-#if defined( __WATCOMC__ )
-#define EMPTY_STRUCT char
-#endif
-#ifdef __cplusplus
+#    define EMPTY_STRUCT struct { char nothing[]; }
+#  endif
+#  if defined( __WATCOMC__ )
+#     define EMPTY_STRUCT char
+#  endif
+#  ifdef __cplusplus
 /* Could also consider defining 'SACK_NAMESPACE' as 'extern "C"
    ' {' and '..._END' as '}'                                    */
-#define SACK_NAMESPACE namespace sack {
+#    define SACK_NAMESPACE namespace sack {
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define SACK_NAMESPACE_END }
+#    define SACK_NAMESPACE_END }
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _CONTAINER_NAMESPACE namespace containers {
+#    define _CONTAINER_NAMESPACE namespace containers {
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _CONTAINER_NAMESPACE_END }
+#    define _CONTAINER_NAMESPACE_END }
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _LINKLIST_NAMESPACE namespace list {
+#    define _LINKLIST_NAMESPACE namespace list {
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _LINKLIST_NAMESPACE_END }
+#    define _LINKLIST_NAMESPACE_END }
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _DATALIST_NAMESPACE namespace data_list {
+#    define _DATALIST_NAMESPACE namespace data_list {
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _DATALIST_NAMESPACE_END }
+#    define _DATALIST_NAMESPACE_END }
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _SETS_NAMESPACE namespace sets {
+#    define _SETS_NAMESPACE namespace sets {
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _SETS_NAMESPACE_END }
+#    define _SETS_NAMESPACE_END }
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _TEXT_NAMESPACE namespace text {
+#    define _TEXT_NAMESPACE namespace text {
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _TEXT_NAMESPACE_END }
+#    define _TEXT_NAMESPACE_END }
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define TEXT_NAMESPACE SACK_NAMESPACE _CONTAINER_NAMESPACE namespace text {
+#    define TEXT_NAMESPACE SACK_NAMESPACE _CONTAINER_NAMESPACE namespace text {
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define TEXT_NAMESPACE_END  } _CONTAINER_NAMESPACE_END SACK_NAMESPACE_END
-#else
+#    define TEXT_NAMESPACE_END  } _CONTAINER_NAMESPACE_END SACK_NAMESPACE_END
+#  else
 /* Define the sack namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define SACK_NAMESPACE
+#    define SACK_NAMESPACE
 /* Define the sack namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define SACK_NAMESPACE_END
+#    define SACK_NAMESPACE_END
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _CONTAINER_NAMESPACE
+#    define _CONTAINER_NAMESPACE
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _CONTAINER_NAMESPACE_END
+#    define _CONTAINER_NAMESPACE_END
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _LINKLIST_NAMESPACE
+#    define _LINKLIST_NAMESPACE
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _LINKLIST_NAMESPACE_END
+#    define _LINKLIST_NAMESPACE_END
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _DATALIST_NAMESPACE
+#    define _DATALIST_NAMESPACE
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _DATALIST_NAMESPACE_END
+#    define _DATALIST_NAMESPACE_END
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _SETS_NAMESPACE
+#    define _SETS_NAMESPACE
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _SETS_NAMESPACE_END
+#    define _SETS_NAMESPACE_END
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _TEXT_NAMESPACE
+#    define _TEXT_NAMESPACE
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define _TEXT_NAMESPACE_END
+#    define _TEXT_NAMESPACE_END
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define TEXT_NAMESPACE
+#    define TEXT_NAMESPACE
 /* Define the container namespace (when building with C++, the
    wrappers are namespace{} instead of extern"c"{} )           */
-#define TEXT_NAMESPACE_END
-#endif
+#    define TEXT_NAMESPACE_END
+#  endif
 /* declare composite SACK_CONTAINER namespace to declare sack::container in a single line */
-#define SACK_CONTAINER_NAMESPACE SACK_NAMESPACE _CONTAINER_NAMESPACE
+#  define SACK_CONTAINER_NAMESPACE SACK_NAMESPACE _CONTAINER_NAMESPACE
 /* declare composite SACK_CONTAINER namespace to close sack::container in a single line */
-#define SACK_CONTAINER_NAMESPACE_END _CONTAINER_NAMESPACE_END SACK_NAMESPACE_END
+#  define SACK_CONTAINER_NAMESPACE_END _CONTAINER_NAMESPACE_END SACK_NAMESPACE_END
 /* declare composite SACK_CONTAINER namespace to declare sack::container::list in a single line */
-#define SACK_CONTAINER_LINKLIST_NAMESPACE SACK_CONTAINER_NAMESPACE _LISTLIST_NAMESPACE
+#  define SACK_CONTAINER_LINKLIST_NAMESPACE SACK_CONTAINER_NAMESPACE _LISTLIST_NAMESPACE
 /* declare composite SACK_CONTAINER namespace to close sack::container::list in a single line */
-#define SACK_CONTAINER_LINKLIST_NAMESPACE_END _LISTLIST_NAMESPACE_END SACK_CONTAINER_NAMESPACE
+#  define SACK_CONTAINER_LINKLIST_NAMESPACE_END _LISTLIST_NAMESPACE_END SACK_CONTAINER_NAMESPACE
 // this symbols is defined to enforce
 // the C Procedure standard - using a stack, and resulting
 // in EDX:EAX etc...
-#define CPROC
-#ifdef SACK_BAG_EXPORTS
-# ifdef BUILD_GLUE
+#  define CPROC
+#  ifdef SACK_BAG_EXPORTS
+#    ifdef BUILD_GLUE
 // this is used as the export method appropriate for C#?
-#  define EXPORT_METHOD [DllImport(LibName)] public
-# else
-#  ifdef __cplusplus_cli
-#   if defined( __STATIC__ ) || defined( __LINUX__ ) || defined( __ANDROID__ )
-#     define EXPORT_METHOD
-#     define IMPORT_METHOD extern
-#   else
-#     define EXPORT_METHOD __declspec(dllexport)
-#     define IMPORT_METHOD __declspec(dllimport)
-#   endif
-#   define LITERAL_LIB_EXPORT_METHOD __declspec(dllexport)
-#   define LITERAL_LIB_IMPORT_METHOD extern
-//__declspec(dllimport)
-#  else
-#   if defined( __STATIC__ ) || defined( __LINUX__ ) || defined( __ANDROID__ )
-#      define EXPORT_METHOD
-#      define IMPORT_METHOD extern
+#      define EXPORT_METHOD [DllImport(LibName)] public
 #    else
+#      ifdef __cplusplus_cli
+#        if defined( __STATIC__ ) || defined( __LINUX__ ) || defined( __ANDROID__ )
+#          define EXPORT_METHOD
+#          define IMPORT_METHOD extern
+#        else
+#          define EXPORT_METHOD __declspec(dllexport)
+#          define IMPORT_METHOD __declspec(dllimport)
+#        endif
+#        define LITERAL_LIB_EXPORT_METHOD __declspec(dllexport)
+#        define LITERAL_LIB_IMPORT_METHOD extern
+//__declspec(dllimport)
+#      else
+#        if defined( __STATIC__ ) || defined( __LINUX__ ) || defined( __ANDROID__ )
+#          define EXPORT_METHOD
+#          define IMPORT_METHOD extern
+#        else
 /* Method to declare functions exported from a DLL. (nothign on
    LINUX or building statically, but __declspec(dllimport) on
    windows )                                                    */
-#      define EXPORT_METHOD __declspec(dllexport)
+#          define EXPORT_METHOD __declspec(dllexport)
 /* method to define a function which will be Imported from a
    library. Under windows, this is probably
    __declspec(dllimport). Under linux this is probably 'extern'. */
-#      define IMPORT_METHOD __declspec(dllimport)
+#          define IMPORT_METHOD __declspec(dllimport)
+#        endif
+#        define LITERAL_LIB_EXPORT_METHOD __declspec(dllexport)
+#        define LITERAL_LIB_IMPORT_METHOD __declspec(dllimport)
+#      endif
 #    endif
-#      define LITERAL_LIB_EXPORT_METHOD __declspec(dllexport)
-#      define LITERAL_LIB_IMPORT_METHOD __declspec(dllimport)
-#  endif
-# endif
-#else
-# if ( !defined( __STATIC__ ) && defined( WIN32 ) && !defined( __cplusplus_cli) )
-#  define EXPORT_METHOD __declspec(dllexport)
-#  define IMPORT_METHOD __declspec(dllimport)
-#  define LITERAL_LIB_EXPORT_METHOD __declspec(dllexport)
-#  define LITERAL_LIB_IMPORT_METHOD __declspec(dllimport)
-# else
-// MRT:  This is needed.  Need to see what may be defined wrong and fix it.
-#  if defined( __LINUX__ ) || defined( __STATIC__ )
-#    define EXPORT_METHOD
-#    define IMPORT_METHOD extern
-#    define LITERAL_LIB_EXPORT_METHOD
-#    define LITERAL_LIB_IMPORT_METHOD extern
 #  else
+#  if ( !defined( __STATIC__ ) && defined( WIN32 ) && !defined( __cplusplus_cli) )
 #    define EXPORT_METHOD __declspec(dllexport)
 #    define IMPORT_METHOD __declspec(dllimport)
+#    define LITERAL_LIB_EXPORT_METHOD __declspec(dllexport)
+#    define LITERAL_LIB_IMPORT_METHOD __declspec(dllimport)
+#  else
+// MRT:  This is needed.  Need to see what may be defined wrong and fix it.
+#    if defined( __LINUX__ ) || defined( __STATIC__ )
+#      define EXPORT_METHOD
+#      define IMPORT_METHOD extern
+#      define LITERAL_LIB_EXPORT_METHOD
+#      define LITERAL_LIB_IMPORT_METHOD extern
+#    else
+#      define EXPORT_METHOD __declspec(dllexport)
+#      define IMPORT_METHOD __declspec(dllimport)
 /* Define how methods in LITERAL_LIBRARIES are exported.
    literal_libraries are libraries that are used for plugins,
    and are dynamically loaded by code. They break the rules of
    system prefix and suffix extensions. LITERAL_LIBRARIES are
    always dynamic, and never static.                           */
-#    define LITERAL_LIB_EXPORT_METHOD __declspec(dllexport)
+#      define LITERAL_LIB_EXPORT_METHOD __declspec(dllexport)
 /* Define how methods in LITERAL_LIBRARIES are imported.
    literal_libraries are libraries that are used for plugins,
    and are dynamically loaded by code. They break the rules of
    system prefix and suffix extensions. LITERAL_LIBRARIES are
    always dynamic, and never static.                           */
-#    define LITERAL_LIB_IMPORT_METHOD __declspec(dllimport)
+#      define LITERAL_LIB_IMPORT_METHOD __declspec(dllimport)
+#    endif
 #  endif
-# endif
 #endif
 // used when the keword specifying a structure is packed
 // needs to prefix the struct keyword.
@@ -8502,25 +8450,29 @@ SACK_NAMESPACE
 // threads and processes.
 typedef uint64_t THREAD_ID;
 #define GetMyThreadIDNL GetMyThreadID
-#if defined( _WIN32 ) || defined( __CYGWIN__ )
+#if defined( _WIN32 )
 #  define _GetMyThreadID()  ( (( ((uint64_t)GetCurrentProcessId()) << 32 ) | ( (uint64_t)GetCurrentThreadId() ) ) )
 #  define GetMyThreadID()  (GetThisThreadID())
 #else
 // this is now always the case
 // it's a safer solution anyhow...
-#  ifndef GETPID_RETURNS_PPID
-#    define GETPID_RETURNS_PPID
-#  endif
-#  ifdef GETPID_RETURNS_PPID
-#    ifdef __ANDROID__
-#      define GetMyThreadID()  (( ((uint64_t)getpid()) << 32 ) | ( (uint64_t)(gettid()) ) )
-#    else
-#      define GetMyThreadID()  (( ((uint64_t)getpid()) << 32 ) | ( (uint64_t)(pthread_self()) ) )
-#    endif
+#  ifdef __MAC__
+#    define GetMyThreadID()  (( ((uint64_t)getpid()) << 32 ) | ( (uint64_t)( syscall(SYS_thread_selfid) ) ) )
 #  else
-#    define GetMyThreadID()  (( ((uint64_t)getppid()) << 32 ) | ( (uint64_t)(getpid()|0x40000000)) )
+#    ifndef GETPID_RETURNS_PPID
+#      define GETPID_RETURNS_PPID
+#    endif
+#    ifdef GETPID_RETURNS_PPID
+#      ifdef __ANDROID__
+#        define GetMyThreadID()  (( ((uint64_t)getpid()) << 32 ) | ( (uint64_t)(gettid()) ) )
+#      else
+#        define GetMyThreadID()  (( ((uint64_t)getpid()) << 32 ) | ( (uint64_t)(syscall(SYS_gettid)) ) )
+#      endif
+#    else
+#      define GetMyThreadID()  (( ((uint64_t)getppid()) << 32 ) | ( (uint64_t)(getpid()|0x40000000)) )
+#    endif
 #  endif
-#    define _GetMyThreadID GetMyThreadID
+#  define _GetMyThreadID GetMyThreadID
 #endif
 //---------------------- Declare Link; 'single and a half'ly-linked lists -----------------------
 // Thse macros are for linking and unlininking things in a linked list.
@@ -10611,7 +10563,7 @@ TYPELIB_PROC  void TYPELIB_CALLTYPE  SegReleaseEx( PTEXT seg DBG_PASS );
    DBG_PASS :  \file and line debugging information               */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegConcatEx   (PTEXT output,PTEXT input,int32_t offset,size_t length DBG_PASS);
 /* <combine sack::containers::text::SegConcatEx@PTEXT@PTEXT@int32_t@size_t length>
-   looks like it takes a peice of one segment and appends it to
+   looks like it takes a piece of one segment and appends it to
    another....
    Needs More research to document correctly and exemplify.                     */
 #define SegConcat(out,in,ofs,len) SegConcatEx(out,in,ofs,len DBG_SRC)
@@ -11705,73 +11657,7 @@ IMPORT_METHOD
  // namespace sack {
 SACK_NAMESPACE_END
 // this should become common to all libraries and programs...
- // pronounced 'kahn-struct'
-/* Defines interface for Construct API.
-   Description
-   This API is for distributed process tracking. A launching
-   program will receive notifications to cause certain events to
-   happen. Applications built for use by this execution tracking
-   program will register that they are loading while they are
-   loading, and before the application Main() is invoked. the
-   application should then call LoadComplete() once they have
-   initialized and are ready to process. This allows a
-   quick-wait to wait for the process to register that it is
-   loading, and a longer wait for process completion. Certain
-   processes may not require others to be completely loaded, but
-   maybe just loading. (Two peer processes that have to
-   coordinate together to have either one complete
-   initialization).                                              */
-/* Define the procedure call type for construct API methods. */
-#define CONSTRUCT_API CPROC
-#ifdef CONSTRUCT_SOURCE
-#define CONSTRUCT_PROC EXPORT_METHOD
-#else
-/* Library linkage specification. */
-#define CONSTRUCT_PROC IMPORT_METHOD
-#endif
-#ifdef __cplusplus
-/* Defines TASK namespace (unused?) */
-#define _TASK_NAMESPACE namespace task {
-/* Define Construct namespace. Construct is for distributed
-   process tracking project. Applications will register on-load
-   that they are loading, and should register load completed
-   when they are done loading, or exit.                         */
-#define _CONSTRUCT_NAMESPACE namespace construct {
-/* Defines TASK namespace ending.(unused?) */
-#define _TASK_NAMESPACE_END }
-/* Define Construct namespace end. Construct is for distributed
-   process tracking project. Applications will register on-load
-   that they are loading, and should register load completed
-   when they are done loading, or exit.                         */
-#define _CONSTRUCT_NAMESPACE_END }
-#else
-#define _TASK_NAMESPACE
-#define _CONSTRUCT_NAMESPACE
-#define _TASK_NAMESPACE_END
-#define _CONSTRUCT_NAMESPACE_END
-#endif
-/* Define a symbol to specify full sack::task::construct
-   namespace.                                            */
-#define CONSTRUCT_NAMESPACE SACK_NAMESPACE _TASK_NAMESPACE _CONSTRUCT_NAMESPACE
-/* Define a symbol to specify full sack::task::construct
-   namespace ending.                                     */
-#define CONSTRUCT_NAMESPACE_END _CONSTRUCT_NAMESPACE_END _TASK_NAMESPACE_END SACK_NAMESPACE_END
-	SACK_NAMESPACE
-	_TASK_NAMESPACE
-	/* Registers with message service, assuming the summoner message service is active.
-	 Provides communication methods with a task manager, so the application can notify,
-	 start has completed.   The service is ready to work.*/
-_CONSTRUCT_NAMESPACE
-/* Called to indicate that a process is done initializing and is
-   ready to process. Notifies summoner service of Loading
-   completed. If enabled, there is also a library component that
-   will run at deadstart to just confirm initializing, this
-   would actually indicate the service is now ready to serve.    */
-CONSTRUCT_PROC void CONSTRUCT_API LoadComplete( void );
-CONSTRUCT_NAMESPACE_END
-#ifdef __cplusplus
-	using namespace sack::task::construct;
-#endif
+//#include <construct.h> // pronounced 'kahn-struct'
 /*
  *  Crafted by James Buckeyne
  *  Part of SACK github.com/d3x0r/SACK
@@ -17567,7 +17453,7 @@ PTEXT TextParse( PTEXT input, CTEXTSTR punctuation, CTEXTSTR filter_space, int b
 //#define DBG_OVERRIDE DBG_SRC
 #define DBG_OVERRIDE DBG_RELAY
 	/* takes a line of input and creates a line equivalent to it, but
-	   burst into its block peices.*/
+	   burst into its block pieces.*/
 	VARTEXT out;
 	PTEXT outdata=(PTEXT)NULL,
 	      word;
@@ -17759,14 +17645,14 @@ PTEXT TextParse( PTEXT input, CTEXTSTR punctuation, CTEXTSTR filter_space, int b
 				{
 					int c;
 					if( has_plus == -1 ) {
-						if( !punctuation || StrChr( punctuation, '-' ) )
+						if( !punctuation || StrChr( punctuation, '+' ) )
 							has_plus = 1;
 						else
 							has_plus = 0;
 					}
 					if( !has_plus )
 					{
-						VarTextAddCharacterEx( &out, '-' DBG_OVERRIDE );
+						VarTextAddCharacterEx( &out, '+' DBG_OVERRIDE );
 						break;
 					}
 					if( ( c = NextChar() ) &&
@@ -17832,7 +17718,7 @@ PTEXT burstEx( PTEXT input DBG_PASS )
 //#define DBG_OVERRIDE DBG_SRC
 //#define DBG_OVERRIDE DBG_RELAY
 	/* takes a line of input and creates a line equivalent to it, but
-		burst into its block peices.*/
+		burst into its block pieces.*/
 	VARTEXT out;
 	PTEXT outdata=(PTEXT)NULL,
 			word;
@@ -18159,7 +18045,7 @@ INDEX LineLengthEx( PTEXT pt, LOGICAL bSingle )
 //---------------------------------------------------------------------------
 // attempts to build a solitary line segment from the text passed
 // however, if there are color changes, or absolute position changes
-// this cannot work... and it must provide multiple peices...
+// this cannot work... and it must provide multiple pieces...
 #undef BuildLineExx
 PTEXT BuildLineExx( PTEXT pt, LOGICAL bSingle, PTEXT pEOL DBG_PASS )
 {
@@ -24177,6 +24063,22 @@ typedef void (CPROC*cppCloseCallback)(uintptr_t);
 typedef void (CPROC*cppWriteComplete)(uintptr_t );
 typedef void (CPROC*cppNotifyCallback)(uintptr_t, PCLIENT newClient);
 typedef void (CPROC*cppConnectCallback)(uintptr_t, int);
+enum SackNetworkErrorIdentifier {
+	SACK_NETWORK_ERROR_,
+ // error during control information exchange over TLS
+	SACK_NETWORK_ERROR_SSL_HANDSHAKE,
+ // error after first packet.
+	SACK_NETWORK_ERROR_SSL_HANDSHAKE_2,
+ // error verifying validity of certificate chain from server.
+	SACK_NETWORK_ERROR_SSL_CERTCHAIN_FAIL,
+ // other ssl error
+	SACK_NETWORK_ERROR_SSL_FAIL,
+ //
+	SACK_NETWORK_ERROR_HTTP_CHUNK,
+ // command parsing resulted in invalid command.  (HTTPS request to HTTP)
+	SACK_NETWORK_ERROR_HTTP_UNSUPPORTED,
+};
+typedef void (CPROC*cErrorCallback)(uintptr_t psvError, PCLIENT pc, enum SackNetworkErrorIdentifier error, ... );
 NETWORK_PROC( void, SetNetworkWriteComplete )( PCLIENT, cWriteComplete );
 #ifdef __cplusplus
 /* <combine sack::network::SetNetworkWriteComplete@PCLIENT@cWriteComplete>
@@ -24204,6 +24106,21 @@ NETWORK_PROC( void, SetCPPNetworkCloseCallback )( PCLIENT, cppCloseCallback, uin
 /* <combine sack::network::SetNetworkCloseCallback@PCLIENT@cCloseCallback>
    \ \                                                                     */
 #define SetCloseCallback SetNetworkCloseCallback
+/* Sets an error event callback which is triggered during low level (SSL)
+   operations.  Error code passed to callback will give more information.
+   Parameters
+   pc :              socket to set event handler on
+   callback :        Address of error handling callback.
+   psvUser :         data passed to callback for application purposes.
+*/
+NETWORK_PROC( void, SetNetworkErrorCallback )(PCLIENT pc, cErrorCallback callback, uintptr_t psvUser );
+/*
+   Trigger error callback with specified error code (meta code like http.c can trigger this(?))
+   Parameters
+   pc :              socket to set event handler on
+   code :        Address of error handling callback.
+ */
+NETWORK_PROC( void, TriggerNetworkErrorCallback )(PCLIENT pc, enum SackNetworkErrorIdentifier error );
  // wwords is BYTES and wClients=16 is defaulted to 16
 #ifdef __LINUX__
 NETWORK_PROC( LOGICAL, NetworkWait )(POINTER unused,uint32_t wClients,int wUserData);
@@ -24229,8 +24146,11 @@ NETWORK_PROC( SOCKADDR *, CreateAddress_hton )( uint32_t dwIP,uint16_t nHisPort)
 #ifndef WIN32
 NETWORK_PROC( SOCKADDR *, CreateUnixAddress )( CTEXTSTR path );
 #endif
+/* obsolete */
 NETWORK_PROC( SOCKADDR *, CreateAddress )( uint32_t dwIP,uint16_t nHisPort);
+/* obsolete */
 NETWORK_PROC( SOCKADDR *, SetAddressPort )( SOCKADDR *pAddr, uint16_t nDefaultPort );
+/* obsolete */
 NETWORK_PROC( SOCKADDR *, SetNonDefaultPort )( SOCKADDR *pAddr, uint16_t nDefaultPort );
 /*
  * this is the preferred method to create an address
@@ -24286,8 +24206,6 @@ NETWORK_PROC( LOGICAL, IsAddressV6 )( SOCKADDR *addr );
  // return a copy of this address...
 NETWORK_PROC( SOCKADDR *, DuplicateAddressEx )( SOCKADDR *pAddr DBG_PASS );
 #define DuplicateAddress(a) DuplicateAddressEx( a DBG_SRC )
-NETWORK_PROC( void, SackNetwork_SetSocketSecure )( PCLIENT lpClient );
-NETWORK_PROC( void, SackNetwork_AllowSecurityDowngrade )( PCLIENT lpClient );
 /* Transmission Control Protocol connection methods. This
    controls opening sockets that are based on TCP.        */
 _TCP_NAMESPACE
@@ -24319,9 +24237,11 @@ NETWORK_PROC( PCLIENT, CPPOpenTCPListenerAddrExx )( SOCKADDR *, cppNotifyCallbac
    with a NULL pointer and 0 size, before the connect complete.   */
 NETWORK_PROC( PCLIENT, OpenTCPListenerAddrExx )( SOCKADDR *, cNotifyCallback NotifyCallback DBG_PASS );
 #define OpenTCPListenerAddrEx(sa,ca) OpenTCPListenerAddrExx( sa, ca DBG_SRC )
+NETWORK_PROC( PCLIENT, OpenTCPListenerAddr_v2d )(SOCKADDR *, cNotifyCallback NotifyCallback, LOGICAL ready DBG_PASS);
+#define OpenTCPListenerAddr_v2(sa,ca,ready) OpenTCPListenerAddr_v2d( sa, ca,ready DBG_SRC )
 /* <combine sack::network::tcp::OpenTCPListenerAddrEx@SOCKADDR *@cNotifyCallback>
    \ \                                                                            */
-#define OpenTCPListenerAddr( pAddr ) OpenTCPListenerAddrEx( paddr, NULL );
+#define OpenTCPListenerAddr( pAddr ) OpenTCPListenerAddrExxx( paddr, NULL, FALSE DBG_SRC );
 #ifdef __cplusplus
 /* <combine sack::network::tcp::OpenTCPListenerEx@uint16_t@cNotifyCallback>
    \ \                                                                 */
@@ -24330,11 +24250,27 @@ NETWORK_PROC( PCLIENT, CPPOpenTCPListenerExx )( uint16_t wPort, cppNotifyCallbac
 #endif
 /* <combine sack::network::tcp::OpenTCPListenerAddrEx@SOCKADDR *@cNotifyCallback>
    \ \                                                                            */
+NETWORK_PROC( PCLIENT, OpenTCPListener_v2d )(uint16_t wPort, cNotifyCallback NotifyCallback, LOGICAL waitForReady DBG_PASS);
+#define OpenTCPListener_v2(a,b) OpenTCPListener_v2d(a,b,FALSE DBG_SRC )
+NETWORK_PROC( PCLIENT, CPPOpenTCPListenerAddr_v2d )(SOCKADDR *pAddr
+	, cppNotifyCallback NotifyCallback
+	, uintptr_t psvConnect
+	, LOGICAL waitForReady
+	DBG_PASS);
+#define CPPOpenTCPListenerAddr_v2(a,b,c,d)  CPPOpenTCPListenerAddr_v2d(a,b,c,d DBG_SRC )
+/* <combine sack::network::tcp::OpenTCPListenerAddrEx@SOCKADDR *@cNotifyCallback>
+   \ \                                                                            */
 NETWORK_PROC( PCLIENT, OpenTCPListenerExx )( uint16_t wPort, cNotifyCallback NotifyCallback DBG_PASS );
 #define OpenTCPListenerEx(a,b) OpenTCPListenerExx(a,b DBG_SRC )
 /* <combine sack::network::tcp::OpenTCPListenerEx@uint16_t@cNotifyCallback>
    \ \                                                                 */
 #define OpenTCPListener( wPort )    OpenTCPListenerEx( wPort, NULL )
+/*
+  When opening a tcp listener socket, the socket ends up 'ready' and
+  able to send events before the application may be finished.
+  Adding an option to
+ */
+NETWORK_PROC( void, SetNetworkListenerReady )( PCLIENT pListen );
 /* <combine sack::network::tcp::OpenTCPListener>
    \ \                                           */
 #define OpenTCPServer OpenTCPListener
@@ -24634,11 +24570,11 @@ NETWORK_PROC( LOGICAL, doTCPWriteExx )( PCLIENT lpClient
 #define SendTCPLong(c,b,l) doTCPWriteExx(c,b,l, TRUE, FALSE DBG_SRC)
 _TCP_NAMESPACE_END
 NETWORK_PROC( void, SetNetworkLong )(PCLIENT lpClient,int nLong,uintptr_t dwValue);
-NETWORK_PROC( void, SetNetworkInt )(PCLIENT lpClient,int nLong, int value);
+NETWORK_PROC( uintptr_t, GetNetworkLong )(PCLIENT lpClient, int nLong);
 /* Obsolete. See SetNetworkLong. */
+NETWORK_PROC( void, SetNetworkInt )(PCLIENT lpClient,int nLong, int value);
+NETWORK_PROC( int, GetNetworkInt )(PCLIENT lpClient, int nLong);
 NETWORK_PROC( void, SetNetworkWord )(PCLIENT lpClient,int nLong,uint16_t wValue);
-NETWORK_PROC( uintptr_t, GetNetworkLong )(PCLIENT lpClient,int nLong);
-NETWORK_PROC( int, GetNetworkInt )(PCLIENT lpClient,int nLong);
 NETWORK_PROC( uint16_t, GetNetworkWord )(PCLIENT lpClient,int nLong);
 /* Symbols which may be passed to GetNetworkLong to get internal
    parts of the client.                                          */
@@ -24666,6 +24602,7 @@ NETWORK_PROC( int, GetMacAddress)(PCLIENT pc, uint8_t* buf, size_t *buflen );
 //NETWORK_PROC( int, GetMacAddress)(PCLIENT pc );
 //int get_mac_addr (char *device, unsigned char *buffer)
 NETWORK_PROC( PLIST, GetMacAddresses)( void );
+NETWORK_PROC( LOGICAL, sack_network_is_active )( PCLIENT pc );
 NETWORK_PROC( void, RemoveClientExx )(PCLIENT lpClient, LOGICAL bBlockNofity, LOGICAL bLinger DBG_PASS );
 /* <combine sack::network::RemoveClientExx@PCLIENT@LOGICAL@LOGICAL bLinger>
    \ \                                                                      */
@@ -24679,6 +24616,14 @@ NETWORK_PROC( LOGICAL, ssl_BeginServer )( PCLIENT pc, CPOINTER cert, size_t cert
 NETWORK_PROC( LOGICAL, ssl_GetPrivateKey )(PCLIENT pc, POINTER *keydata, size_t *keysize);
 NETWORK_PROC( LOGICAL, ssl_IsClientSecure )(PCLIENT pc);
 NETWORK_PROC( void, ssl_SetIgnoreVerification )(PCLIENT pc);
+// during ssl error callback, this can be used to revert (server) sockets to
+// non SSL.
+// a CLient socket will have already sent SSL Data on the socket, and it would
+// be unclean to try to change protocol.
+// the Server, however, fails the handshake on the first receive, and previously
+// just closed, but new error handling allows fallback to HTTP in order to send
+// a redirect to the HTTPS address proper.
+NETWORK_PROC( void, ssl_EndSecure )(PCLIENT pc, POINTER buffer, size_t buflen );
 /* use this to send on SSL Connection instead of SendTCP. */
 NETWORK_PROC( LOGICAL, ssl_Send )( PCLIENT pc, CPOINTER buffer, size_t length );
 /* User Datagram Packet connection methods. This controls
@@ -25237,7 +25182,7 @@ enum ProcessHttpResult{
 HTTP_EXPORT
  /* Creates an empty http state, the next operation should be
    AddHttpData.                                              */
-HTTPState  HTTPAPI CreateHttpState( void );
+HTTPState  HTTPAPI CreateHttpState( PCLIENT *pc );
 HTTP_EXPORT
  /* Destroys a http state, releasing all resources associated
    with it.                                                  */
@@ -25523,7 +25468,9 @@ void GatherHttpData( struct HttpState *pHttpState )
 	}
 }
 static PTEXT  resolvePercents( PTEXT urlword ) {
-	PTEXT  url = SegDuplicate( urlword );
+	PTEXT  url = BuildLine( urlword );
+	LineRelease( urlword );
+	//while( url = urlword )
 	{
 		char *_url = GetText(url);
 		TEXTRUNE ch;
@@ -25562,23 +25509,36 @@ static PTEXT  resolvePercents( PTEXT urlword ) {
 		}
 		newUrl[0] = _url[0];
 		SetTextSize( url, _url - GetText( url ) );
-		return url;
+		urlword = NEXTLINE( url );
 	}
+	return url;
 }
 void ProcessURL_CGI( struct HttpState *pHttpState, PTEXT params )
 {
 	PTEXT start = TextParse( params, WIDE( "&=" ), NULL, 1, 1 DBG_SRC );
 	PTEXT next = start;
 	PTEXT tmp;
+	for( tmp = start; tmp; tmp = NEXTLINE( tmp ) ) {
+		if( tmp->format.position.offset.spaces ) {
+			SegBreak( tmp );
+			LineRelease( tmp );
+			if( tmp == start )
+				return;
+		}
+	}
 	//lprintf( "Input was %s", GetText( params ) );
 	while( ( tmp = next ) )
 	{
 		PTEXT name = tmp;
 		/*PTEXT equals = */
-( next = NEXTLINE( tmp ) );
+(next = NEXTLINE( tmp ));
+		while( next && GetText( next )[0] != '=' )
+			next = NEXTLINE( next );
+		SegBreak( next );
 		PTEXT value = ( next = NEXTLINE( next ) );
-		/*PTEXT ampersand = */
-( next = NEXTLINE( next ) );
+		while( next && GetText( next )[0] != '&' )
+			next = NEXTLINE( next );
+		if( next ) SegBreak( next );
 		struct HttpField *field = New( struct HttpField );
 		field->name = name?resolvePercents( name ):NULL;
 		field->value = value?resolvePercents( value ):NULL;
@@ -25586,7 +25546,9 @@ void ProcessURL_CGI( struct HttpState *pHttpState, PTEXT params )
 		AddLink( &pHttpState->cgi_fields, field );
 		next = NEXTLINE( next );
 	}
-	LineRelease( start );
+ // otherwise it will have been relesaed with the assignment.
+	if( !GetLinkCount( pHttpState->cgi_fields ) )
+		LineRelease( start );
 }
 //int ProcessHttp( struct HttpState *pHttpState )
 int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
@@ -25598,6 +25560,7 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
 			//lprintf( "Reading more, after returning a packet before... %d", pHttpState->response_version );
 			if( pHttpState->response_version ) {
 				GatherHttpData( pHttpState );
+				//lprintf( "return http nothing  %d", pHttpState->flags.success );
 				if( pHttpState->flags.success && !pHttpState->returned_status ) {
 					unlockHttp( pHttpState );
 					pHttpState->returned_status = 1;
@@ -25776,9 +25739,14 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
 											}
 										}
 										else {
-											lprintf( "Unsupported Command:%s", GetText( request ) );
-											request = NEXTLINE( request );
-											pHttpState->method = SegBreak( request );
+											//lprintf( "Unsupported Command:%s", GetText( request ) );
+											if( pHttpState->pc )
+												TriggerNetworkErrorCallback( *pHttpState->pc, SACK_NETWORK_ERROR_HTTP_UNSUPPORTED );
+											LineRelease( request );
+											unlockHttp( pHttpState );
+											if( pHttpState->pc )
+												RemoveClient( *pHttpState->pc );
+											return HTTP_STATE_RESULT_NOTHING;
 										}
 										for( tmp = request; tmp; tmp = next )
 										{
@@ -25789,6 +25757,18 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
 											{
 												TEXTCHAR *tmp2 = (TEXTCHAR*)StrChr( GetText( tmp ), '.' );
 												pHttpState->response_version = (int)(( IntCreateFromText( GetText( tmp ) + 5 ) * 100 ) + IntCreateFromText( tmp2 + 1 ));
+												if( pHttpState->response_version >= 101 ) {
+													pHttpState->flags.close = 0;
+													pHttpState->flags.keep_alive = 1;
+												}
+												else if( pHttpState->response_version = 100 ) {
+													pHttpState->flags.close = 1;
+													pHttpState->flags.keep_alive = 0;
+												}
+												else {
+													pHttpState->flags.close = 1;
+													pHttpState->flags.keep_alive = 0;
+												}
 											}
 											else if( GetText(tmp)[0] == '?' )
 											{
@@ -25797,7 +25777,9 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
 											}
 											else if( GetText(tmp)[0] == '#' )
 											{
-												lprintf( WIDE("Page anchor of URL is lost(not saved)... %s"), GetText( next ) );
+												lprintf( WIDE("Page anchor of URL is lost(not saved)...%s %s")
+													, GetText( tmp )
+													, GetText( next ) );
 												next = NEXTLINE( next );
 											}
 											else
@@ -25929,6 +25911,7 @@ SegSplit( &pCurrent, start );
 			) )
 	{
 		pHttpState->returned_status = 1;
+		//lprintf( "return http %d",pHttpState->numeric_code );
 		if( pHttpState->numeric_code == 500 )
 			return HTTP_STATE_INTERNAL_SERVER_ERROR;
 		if( pHttpState->content && (pHttpState->numeric_code == 200) ) {
@@ -25942,6 +25925,7 @@ SegSplit( &pCurrent, start );
 			return HTTP_STATE_BAD_REQUEST;
 		return pHttpState->numeric_code;
 	}
+	//lprintf( "return http nothing" );
 	return HTTP_STATE_RESULT_NOTHING;
 }
 LOGICAL AddHttpData( struct HttpState *pHttpState, POINTER buffer, size_t size )
@@ -25981,6 +25965,7 @@ LOGICAL AddHttpData( struct HttpState *pHttpState, POINTER buffer, size_t size )
 				else
 				{
 					lprintf( "Chunk Processing Error expected \\n, found %d(%c)", buf[0], buf[0] );
+					TriggerNetworkErrorCallback( pHttpState->request_socket, SACK_NETWORK_ERROR_HTTP_CHUNK );
 					unlockHttp( pHttpState );
 					RemoveClient( pHttpState->request_socket );
 					return FALSE;
@@ -26000,6 +25985,7 @@ LOGICAL AddHttpData( struct HttpState *pHttpState, POINTER buffer, size_t size )
 				else
 				{
 					lprintf( "Chunk Processing Error expected \\n, found %d(%c)", buf[0], buf[0] );
+					TriggerNetworkErrorCallback( pHttpState->request_socket, SACK_NETWORK_ERROR_HTTP_CHUNK );
 					unlockHttp( pHttpState );
 					RemoveClient( pHttpState->request_socket );
 					return FALSE;
@@ -26013,6 +25999,7 @@ LOGICAL AddHttpData( struct HttpState *pHttpState, POINTER buffer, size_t size )
 				else
 				{
 					lprintf( "Chunk Processing Error expected \\r, found %d(%c)", buf[0], buf[0] );
+					TriggerNetworkErrorCallback( pHttpState->request_socket, SACK_NETWORK_ERROR_HTTP_CHUNK );
 					unlockHttp( pHttpState );
 					RemoveClient( pHttpState->request_socket );
 					return FALSE;
@@ -26040,6 +26027,7 @@ LOGICAL AddHttpData( struct HttpState *pHttpState, POINTER buffer, size_t size )
 				else
 				{
 					lprintf( "Chunk Processing Error expected \\n, found %d(%c)", buf[0], buf[0] );
+					TriggerNetworkErrorCallback( pHttpState->request_socket, SACK_NETWORK_ERROR_HTTP_CHUNK );
 					unlockHttp( pHttpState );
 					RemoveClient( pHttpState->request_socket );
 					return FALSE;
@@ -26071,12 +26059,13 @@ LOGICAL AddHttpData( struct HttpState *pHttpState, POINTER buffer, size_t size )
 		return TRUE;
 	}
 }
-struct HttpState *CreateHttpState( void )
+struct HttpState *CreateHttpState( PCLIENT *pc )
 {
 	struct HttpState *pHttpState;
 	pHttpState = New( struct HttpState );
 	MemSet( pHttpState, 0, sizeof( struct HttpState ) );
 	pHttpState->pvt_collector = VarTextCreate();
+	pHttpState->pc = pc;
 	return pHttpState;
 }
 void EndHttp( struct HttpState *pHttpState )
@@ -26296,16 +26285,23 @@ static void CPROC HttpReader( PCLIENT pc, POINTER buffer, size_t size )
 	}
 	else
 	{
+#ifdef _DEBUG
 		if( l.flags.bLogReceived )
 		{
 			lprintf( WIDE("Received web request... %zu"), size );
-			//LogBinary( buffer, size );
+			LogBinary( (const uint8_t*) buffer, size );
 		}
+#endif
+		//lprintf( "adding data:%d", size );
 		if( AddHttpData( state, buffer, size ) )
 			if( ProcessHttp( pc, state ) )
 			{
-				RemoveClient( pc );
-				return;
+				//lprintf( "this is where we should close and not end... %d %d",state->flags.close , !state->flags.keep_alive );
+				if( state->flags.close || !state->flags.keep_alive) {
+					RemoveClient( pc );
+					return;
+				} else
+					EndHttp( state );
 			}
 	}
 	// read is handled by the SSL layer instead of here.  Just trust that someone will give us data later
@@ -26319,9 +26315,11 @@ static void CPROC HttpReaderClose( PCLIENT pc )
 	struct HttpState *data = (struct HttpState *)GetNetworkLong( pc, 0 );
 // (PCLIENT*)GetNetworkLong( pc, 0 );
 	PCLIENT *ppc = data->pc;
+	//lprintf( "Closing http: %p ", pc );
 	if( ppc[0] == pc ) {
 		if( ppc )
 			ppc[0] = NULL;
+		//lprintf( "So now i's null?" );
 		if( data->waiter ) {
 			//lprintf( "(on close) Waking waiting to return with result." );
 			WakeThread( data->waiter );
@@ -26349,12 +26347,13 @@ static void CPROC HttpConnected( PCLIENT pc, int error ) {
 	}
 	SetNetworkLong( pc, 0, (uintptr_t)connect->state );
 	Release( connect );
+	//lprintf( "Got connected... so connect gets released?");
 }
 HTTPState PostHttpQuery( PTEXT address, PTEXT url, PTEXT content )
 {
-	struct HttpState *state = CreateHttpState();
 	PCLIENT pc;
 	struct pendingConnect *connect = New( struct pendingConnect );
+	struct HttpState *state = CreateHttpState(&connect->pc);
 	connect->state = state;
 	AddLink( &l.pendingConnects, connect );
 	pc = OpenTCPClientExx( GetText( address ), 80, HttpReader, NULL, NULL, HttpConnected );
@@ -26367,7 +26366,8 @@ HTTPState PostHttpQuery( PTEXT address, PTEXT url, PTEXT content )
 	if( pc )
 	{
 		PTEXT send = VarTextGet( pvtOut );
-		state->pc = &pc;
+		state->request_socket = pc;
+		state->pc = &state->request_socket;
 		state->waiter = MakeThread();
 		SetNetworkLong( pc, 0, (uintptr_t)state );
 		SetNetworkCloseCallback( pc, HttpReaderClose );
@@ -26376,9 +26376,9 @@ HTTPState PostHttpQuery( PTEXT address, PTEXT url, PTEXT content )
 			lprintf( WIDE("Sending POST...") );
 			LogBinary( (uint8_t*)GetText( send ), GetTextSize( send ) );
 		}
-		SendTCP( pc, GetText( send ), GetTextSize( send ) );
+		SendTCP( state->request_socket, GetText( send ), GetTextSize( send ) );
 		LineRelease( send );
-		while( pc )
+		while( state->request_socket )
 		{
 			WakeableSleep( 100 );
 		}
@@ -26432,8 +26432,8 @@ HTTPState GetHttpQuery( PTEXT address, PTEXT url )
 	{
 		PCLIENT pc;
 		SOCKADDR *addr = CreateSockAddress( GetText( address ), 443 );
-		struct HttpState *state = CreateHttpState();
 		struct pendingConnect *connect = New( struct pendingConnect );
+		struct HttpState *state = CreateHttpState( &connect->pc );
 		connect->state = state;
 		AddLink( &l.pendingConnects, connect );
 		pc = OpenTCPClientAddrExxx( addr, HttpReader, HttpReaderClose, NULL, httpConnected, 0 DBG_SRC );
@@ -26442,16 +26442,17 @@ HTTPState GetHttpQuery( PTEXT address, PTEXT url )
 		if( pc ) {
 			PVARTEXT pvtOut = VarTextCreate();
 			SetTCPNoDelay( pc, TRUE );
-			vtprintf( pvtOut, WIDE( "GET %s HTTP/1.1\r\n" ), GetText( url ) );
+			vtprintf( pvtOut, WIDE( "GET %s HTTP/1.0\r\n" ), GetText( url ) );
 			vtprintf( pvtOut, WIDE( "Host: %s\r\n" ), GetText( address ) );
+			//vtprintf( pvtOut, "connection: close\r\n" );
 			vtprintf( pvtOut, WIDE( "\r\n" ) );
 			if( pc )
 			{
 				PTEXT send = VarTextGet( pvtOut );
 				state->waiter = MakeThread();
-				state->pc = &pc;
-				SetNetworkLong( pc, 0, (uintptr_t)state );
-				SetNetworkCloseCallback( pc, HttpReaderClose );
+				state->pc = &connect->pc;
+				SetNetworkLong( connect->pc, 0, (uintptr_t)state );
+				SetNetworkCloseCallback( connect->pc, HttpReaderClose );
 				if( l.flags.bLogReceived )
 				{
 					lprintf( WIDE( "Sending POST..." ) );
@@ -26459,7 +26460,7 @@ HTTPState GetHttpQuery( PTEXT address, PTEXT url )
 				}
 				SendTCP( pc, GetText( send ), GetTextSize( send ) );
 				LineRelease( send );
-				while( pc )
+				while( connect->pc )
 				{
 					WakeableSleep( 100 );
 				}
@@ -26477,10 +26478,10 @@ HTTPState GetHttpsQuery( PTEXT address, PTEXT url, const char *certChain )
 		return NULL;
 	for( retries = 0; retries < 3; retries++ )
 	{
-		struct HttpState *state = CreateHttpState();
-		static PCLIENT pc;
+		PCLIENT pc;
 		SOCKADDR *addr = CreateSockAddress( GetText( address ), 443 );
 		struct pendingConnect *connect = New( struct pendingConnect );
+		struct HttpState *state = CreateHttpState( &connect->pc );
 		connect->state = state;
 		AddLink( &l.pendingConnects, connect );
 		if( retries ) {
@@ -26495,14 +26496,16 @@ HTTPState GetHttpsQuery( PTEXT address, PTEXT url, const char *certChain )
 		{
 			state->last_read_tick = GetTickCount();
 			state->waiter = MakeThread();
-			state->pc = &pc;
+			state->request_socket = connect->pc;
+			state->pc = &state->request_socket;
 			SetNetworkLong( pc, 0, (uintptr_t)state );
 			//SetNetworkConn
 			state->ssl = TRUE;
 			state->pvtOut = VarTextCreate();
-			vtprintf( state->pvtOut, WIDE( "GET %s HTTP/1.1\r\n" ), GetText( url ) );
+			vtprintf( state->pvtOut, WIDE( "GET %s HTTP/1.0\r\n" ), GetText( url ) );
 			vtprintf( state->pvtOut, WIDE( "Host: %s\r\n" ), GetText( address ) );
 			vtprintf( state->pvtOut, "User-Agent: SACK(%s)\r\n", "System" );
+			//vtprintf( state->pvtOut, "connection: close\r\n" );
 			vtprintf( state->pvtOut, WIDE( "\r\n" ) );
 #ifndef NO_SSL
 			if( ssl_BeginClientSession( pc, NULL, 0, NULL, 0, certChain, certChain ? strlen( certChain ) : 0 ) )
@@ -26514,24 +26517,26 @@ HTTPState GetHttpsQuery( PTEXT address, PTEXT url, const char *certChain )
 					return NULL;
 				}
 				state->waiter = MakeThread();
-				while( pc && ( state->last_read_tick > ( GetTickCount() - 3000 ) ) )
+				// wait for response.
+				while( state->request_socket && ( state->last_read_tick > ( GetTickCount() - 3000 ) ) )
 				{
 					WakeableSleep( 1000 );
 				}
 				//lprintf( "Request has completed.... %p %p", pc, state->content );
-				if( pc )
-					RemoveClient( pc );
+				if( state->request_socket )
+ // this shouldn't happen... it should have ben closed already.
+					RemoveClient( state->request_socket );
 			}
 			else
-				RemoveClient( pc );
+ // ssl begin failed to start.
+				RemoveClient( state->request_socket );
 #endif
 			VarTextDestroy( &state->pvtOut );
-			if( !pc )
+			if( !state->request_socket )
 				return state;
 		}
 		else
 		{
-			RemoveClient( pc );
 			DestroyHttpState( state );
 		}
 	}
@@ -26602,10 +26607,12 @@ static void CPROC HandleRequest( PCLIENT pc, POINTER buffer, size_t length )
 	if( !buffer )
 	{
 		struct HttpState *pHttpStateServer = (struct HttpState *)GetNetworkLong( pc, 0 );
-		struct HttpState *pHttpState = CreateHttpState();
+		struct HttpState *pHttpState = CreateHttpState( NULL );
 		pHttpState->ssl = pHttpStateServer->ssl;
 		buffer = pHttpState->buffer = Allocate( 4096 );
 		pHttpState->request_socket = pc;
+		//lprintf( "update pc here?" );
+		pHttpState->pc = &pHttpState->request_socket;
 		SetNetworkLong( pc, 1, (uintptr_t)pHttpState );
 	}
 	else
@@ -26766,8 +26773,8 @@ static struct default_port default_ports[] = { { WIDE("http"), 80 }
 															, { WIDE("file"), 0 }
 															};
 // TEXTSTR result = ConvertURIText( addr, length )
-// SACK_ParseURL takes a URL string and gets the peices it can identify
-// if a peice is not specified, the result will be NULL.
+// SACK_ParseURL takes a URL string and gets the pieces it can identify
+// if a piece is not specified, the result will be NULL.
 enum URLParseState
 {
   // find ':', store characters in buffer
@@ -28211,7 +28218,7 @@ FILESYS_PROC  CTEXTSTR FILESYS_API  pathchr ( CTEXTSTR path );
 // returns pointer passed (if it worked?)
 FILESYS_PROC  TEXTSTR FILESYS_API  GetCurrentPath ( TEXTSTR path, int buffer_len );
 FILESYS_PROC  int FILESYS_API  SetCurrentPath ( CTEXTSTR path );
-/* Creates a directory. If parent peices of the directory do not
+/* Creates a directory. If parent pieces of the directory do not
    exist, those parts are created also.
    Example
    <code lang="c#">
@@ -29809,8 +29816,9 @@ uintptr_t GetFileSize( int fd )
 		 }
 		else if( pWhat )
 		{
+#ifndef __STATIC_GLOBALS__
 			int len;
-         char tmpbuf[256];
+		         char tmpbuf[256];
 #ifdef __ANDROID__
 			//if( !IsPath( "./tmp" ) )
 			//	if( !MakePath( "./tmp" ) )
@@ -29822,6 +29830,7 @@ uintptr_t GetFileSize( int fd )
 			snprintf( tmpbuf, 256, WIDE("/tmp/.shared.%s"), pWhat );
 #endif
 			bTemp = TRUE;
+#endif
 		}
 		//ll_lprintf( "Open Space: %s", filename?filename:"anonymous" );
 		if( !pMem && filename )
@@ -33587,7 +33596,7 @@ RENDER_NAMESPACE_END
    are not exactly the same. If the OpenGL driver is specified
    as the output device, the entire code would need to be
    rebuilt for specifying colors correctly for opengl. While
-   otherwise they are both 32 bits, and peices work, they get
+   otherwise they are both 32 bits, and pieces work, they get
    very ugly colors output.
    See Also
    <link Colors>                                                */
@@ -35515,23 +35524,23 @@ ALPHA_TRANSPARENT_MAX = 0x2FF
       Example
       Use 1: An image might contain a grid of symbols or
       characters, each exactly the same size. These may be token
-      peices used in a game or a special graphic font.
+      pieces used in a game or a special graphic font.
       <code lang="c++">
-      Image peices_image = LoadImageFile( "Game Peices.image" );
-      PLIST peices = NULL;
+      Image pieces_image = LoadImageFile( "Game Pieces.image" );
+      PLIST pieces = NULL;
       int x, y;
-      \#define PEICE_WIDTH 32
-      \#define PEICE_HEIGHT 32
+      \#define PIECE_WIDTH 32
+      \#define PIECE_HEIGHT 32
       for( x = 0; x \< 10; x++ )
          for( y = 0; y \< 2; y++ )
          {
-             AddLink( &amp;peices, MakeSubImage( peices_image
-                                           , x * PEICE_WIDTH, y * PEICE_HEIGHT
-                                           , PEICE_WIDTH, PEICE_HEIGHT );
+             AddLink( &amp;pieces, MakeSubImage( pieces_image
+                                           , x * PIECE_WIDTH, y * PIECE_HEIGHT
+                                           , PIECE_WIDTH, PIECE_HEIGHT );
          }
       // at this point there we have a list with all the tokens,
       // which were 32x32 pixels each.
-      // Any of these peice images may be output using a scaled or direct blot.
+      // Any of these piece images may be output using a scaled or direct blot.
       </code>
       Use 2: Partitioning views on an image for things like
       controls and other clipped regions.
@@ -39430,7 +39439,7 @@ struct thread_event
 	HANDLE hEvent;
 #endif
 };
-static struct {
+struct timer_local_data {
 	uint32_t timerID;
 	PTIMERSET timer_pool;
 	PTIMER timers;
@@ -39477,8 +39486,17 @@ static struct {
 #elif defined( __LINUX__ )
 	pthread_key_t my_thread_info_tls;
 #endif
+}
+#ifdef __STATIC_GLOBALS__
+  global_timer_structure__
+#endif
+;
+struct timer_local_data *global_timer_structure
+#ifdef __STATIC_GLOBALS__
+    = &global_timer_structure__;
+#endif
 // = { 1000 };
-} *global_timer_structure;
+;
 #if HAS_TLS
 struct my_thread_info {
 	PTHREAD pThread;
@@ -42213,6 +42231,8 @@ struct NetworkClient
 		void (CPROC*CPPWriteComplete)( uintptr_t psv );
 	}write;
 	uintptr_t psvWrite;
+	cErrorCallback errorCallback;
+	uintptr_t psvErrorCallback;
  // set during bWriteComplete Notify...
 	LOGICAL        bWriteComplete;
     // byte sink functions.... JAB:980202
@@ -42243,6 +42263,8 @@ struct NetworkClient
 		BIT_FIELD bRemoveFromEvents : 1;
 		BIT_FIELD bSecure : 1;
 		BIT_FIELD bAllowDowngrade : 1;
+ // waiting is a accept() flag to prevent accepting sockets before really setup.
+		BIT_FIELD bWaiting : 1;
 	} flags;
 	// this is set to what the thread that's waiting for this event is.
 	struct peer_thread_info * volatile this_thread;
@@ -42263,7 +42285,7 @@ typedef struct client_slab_tag {
 	CLIENT client[1];
 } CLIENT_SLAB, *PCLIENT_SLAB;
 // global network data goes here...
-LOCATION struct network_global_data{
+struct network_global_data{
 	uint32_t     nMaxClients;
      // number of longs.
 	int     nUserData;
@@ -42318,8 +42340,16 @@ LOCATION struct network_global_data{
 	WNDCLASS wc;
 #endif
 }
+#ifdef __STATIC_GLOBALS__
+    global_network_data__
+#endif
+;
+LOCATION struct network_global_data *global_network_data
+#ifdef __STATIC_GLOBALS__
+   = &global_network_data__;
+#endif
  // aka 'globalNetworkData'
-*global_network_data;
+;
 #define globalNetworkData (*global_network_data)
 #ifdef _WIN32
 #ifndef errno
@@ -42469,9 +42499,9 @@ static void LowLevelNetworkInit( void )
 {
 	if( !global_network_data ) {
 		SimpleRegisterAndCreateGlobal( global_network_data );
-		if( !globalNetworkData.ClientSlabs )
-			InitializeCriticalSec( &globalNetworkData.csNetwork );
 	}
+	if( !globalNetworkData.ClientSlabs )
+		InitializeCriticalSec( &globalNetworkData.csNetwork );
 }
 PRIORITY_PRELOAD( InitNetworkGlobal, CONFIG_SCRIPT_PRELOAD_PRIORITY - 1 )
 {
@@ -42727,19 +42757,19 @@ const char * GetAddrString( SOCKADDR *addr )
 		int after0 = 0;
 		int n;
 		int ofs = 0;
-		uint32_t peice;
+		uint32_t piece;
 		for( n = 0; n < 8; n++ ) {
-			peice = (*(((unsigned short *)((unsigned char*)addr + 8 + (n * 2)))));
-			if( peice ) {
+			piece = (*(((unsigned short *)((unsigned char*)addr + 8 + (n * 2)))));
+			if( piece ) {
 				if( first0 < 8 )
 					after0 = 1;
 				if( !ofs ) {
-					ofs += snprintf( buf + ofs, 256 - ofs, "%x", ntohs( peice ) );
+					ofs += snprintf( buf + ofs, 256 - ofs, "%x", ntohs( piece ) );
 				}
 				else {
 					//console.log( last0, n );
 					if( last0 == 4 && first0 == 0 )
-						if( peice == 0xFFFF ) {
+						if( piece == 0xFFFF ) {
 							snprintf( buf, 256, "::ffff:%d.%d.%d.%d",
 								(*((unsigned char*)addr + 20)),
 								(*((unsigned char*)addr + 21)),
@@ -42747,7 +42777,7 @@ const char * GetAddrString( SOCKADDR *addr )
 								(*((unsigned char*)addr + 23)) );
 							break;
 						}
-					ofs += snprintf( buf + ofs, 256 - ofs, ":%x", ntohs( peice ) );
+					ofs += snprintf( buf + ofs, 256 - ofs, ":%x", ntohs( piece ) );
 				}
 			}
 			else {
@@ -42760,7 +42790,7 @@ const char * GetAddrString( SOCKADDR *addr )
 						last0 = n;
 				}
 				if( last0 < n )
-					ofs += snprintf( buf + ofs, 256 - ofs, ":%x", ntohs( peice ) );
+					ofs += snprintf( buf + ofs, 256 - ofs, ":%x", ntohs( piece ) );
 			}
 		}
 		if( !after0 )
@@ -42857,6 +42887,10 @@ PCLIENT AddActive( PCLIENT pClient )
 		globalNetworkData.ActiveClients = pClient;
 	}
 	return pClient;
+}
+LOGICAL sack_network_is_active( PCLIENT pc ) {
+	if( pc && ( pc->dwFlags & ( CF_ACTIVE )) && !( pc->dwFlags & (CF_CLOSED)) ) return TRUE;
+	return FALSE;
 }
 //----------------------------------------------------------------------------
 static PCLIENT AddClosed( PCLIENT pClient )
@@ -43458,6 +43492,18 @@ void SetCPPNetworkReadComplete( PCLIENT pClient
 		pClient->psvRead = psv;
 		pClient->dwFlags |= CF_CPPREAD;
 	}
+}
+//----------------------------------------------------------------------------
+void SetNetworkErrorCallback( PCLIENT pc, cErrorCallback callback, uintptr_t psvUser ) {
+	if( pc ) {
+		pc->errorCallback = callback;
+		pc->psvErrorCallback = psvUser;
+	}
+}
+//----------------------------------------------------------------------------
+void TriggerNetworkErrorCallback( PCLIENT pc, enum SackNetworkErrorIdentifier error ) {
+	if( pc && pc->errorCallback )
+		pc->errorCallback( pc->psvErrorCallback, pc, error );
 }
 //----------------------------------------------------------------------------
 #if defined( _WIN32 )
@@ -44339,8 +44385,13 @@ int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t unu
 							if( globalNetworkData.flags.bLogNotices )
 								lprintf( WIDE( "TCP Write Event..." ) );
 #endif
-							event_data->pc->dwFlags &= ~CF_WRITEISPENDED;
-							TCPWrite( event_data->pc );
+							// if write did not get locked, a write is in progress
+							// wait until it finished there?
+							// did this wake up because that wrote?
+							if( locked ) {
+								event_data->pc->dwFlags &= ~CF_WRITEISPENDED;
+								TCPWrite( event_data->pc );
+							}
 						}
 						if( locked )
 							NetworkUnlock( event_data->pc, 0 );
@@ -46179,6 +46230,9 @@ _TCP_NAMESPACE
 //----------------------------------------------------------------------------
 LOGICAL TCPDrainRead( PCLIENT pClient );
 //----------------------------------------------------------------------------
+void SetNetworkListenerReady( PCLIENT pListen ) {
+	pListen->flags.bWaiting = 0;
+}
 void AcceptClient(PCLIENT pListen)
 {
 #ifdef __LINUX__
@@ -46191,7 +46245,7 @@ void AcceptClient(PCLIENT pListen)
 	PCLIENT pNewClient = NULL;
 	pNewClient = GetFreeNetworkClient();
 	// new client will be locked...
-	if( !pNewClient )
+	if( !pNewClient || !pListen || pListen->flags.bWaiting )
 	{
 		SOCKADDR *junk = AllocAddr();
 		nTemp = MAGIC_SOCKADDR_LENGTH;
@@ -46240,13 +46294,15 @@ void AcceptClient(PCLIENT pListen)
 		else
 			SET_SOCKADDR_LENGTH( pNewClient->saSource, nLen );
 	}
-	pNewClient->read.ReadComplete = pListen->read.ReadComplete;
-	pNewClient->psvRead = pListen->psvRead;
+	pNewClient->errorCallback           = pListen->errorCallback;
+	pNewClient->psvErrorCallback        = pListen->psvErrorCallback;
+	pNewClient->read.ReadComplete       = pListen->read.ReadComplete;
+	pNewClient->psvRead                 = pListen->psvRead;
 	pNewClient->close.CloseCallback     = pListen->close.CloseCallback;
-	pNewClient->psvClose = pListen->psvClose;
+	pNewClient->psvClose                = pListen->psvClose;
 	pNewClient->write.WriteComplete     = pListen->write.WriteComplete;
-	pNewClient->psvWrite = pListen->psvWrite;
-	pNewClient->dwFlags |= CF_CONNECTED | ( pListen->dwFlags & CF_CALLBACKTYPES );
+	pNewClient->psvWrite                = pListen->psvWrite;
+	pNewClient->dwFlags                |= CF_CONNECTED | ( pListen->dwFlags & CF_CALLBACKTYPES );
 	if( IsValid(pNewClient->Socket) )
  // and we get one from the accept...
 	{
@@ -46343,9 +46399,10 @@ void AcceptClient(PCLIENT pListen)
 	}
 }
 //----------------------------------------------------------------------------
-PCLIENT CPPOpenTCPListenerAddrExx( SOCKADDR *pAddr
+PCLIENT CPPOpenTCPListenerAddr_v2d( SOCKADDR *pAddr
                                  , cppNotifyCallback NotifyCallback
                                  , uintptr_t psvConnect
+                                 , LOGICAL waitForReady
                                  DBG_PASS )
 {
 	PCLIENT pListen;
@@ -46380,6 +46437,7 @@ PCLIENT CPPOpenTCPListenerAddrExx( SOCKADDR *pAddr
  // make sure this flag is clear!
 	pListen->dwFlags &= ~CF_UDP;
 	pListen->dwFlags |= CF_LISTEN;
+	pListen->flags.bWaiting = waitForReady;
 	if( pListen->Socket == INVALID_SOCKET )
 	{
 		lprintf( WIDE(" Open Listen Socket Fail... %d"), errno);
@@ -46473,11 +46531,28 @@ PCLIENT CPPOpenTCPListenerAddrExx( SOCKADDR *pAddr
 #endif
 	return pListen;
 }
+PCLIENT CPPOpenTCPListenerAddrExx( SOCKADDR *pAddr
+	, cppNotifyCallback NotifyCallback
+	, uintptr_t psvConnect
+	DBG_PASS )
+{
+	return CPPOpenTCPListenerAddr_v2d( pAddr, NotifyCallback, psvConnect, FALSE DBG_RELAY );
+}
+//----------------------------------------------------------------------------
+PCLIENT OpenTCPListenerAddr_v2d( SOCKADDR *pAddr
+                              , cNotifyCallback NotifyCallback
+                              , LOGICAL waitForReady DBG_PASS )
+{
+	PCLIENT result = CPPOpenTCPListenerAddr_v2d( pAddr, (cppNotifyCallback)NotifyCallback, 0, waitForReady DBG_RELAY );
+	if( result )
+		result->dwFlags &= ~CF_CPPCONNECT;
+	return result;
+}
 //----------------------------------------------------------------------------
 PCLIENT OpenTCPListenerAddrExx( SOCKADDR *pAddr
                               , cNotifyCallback NotifyCallback DBG_PASS )
 {
-	PCLIENT result = CPPOpenTCPListenerAddrExx( pAddr, (cppNotifyCallback)NotifyCallback, 0 DBG_RELAY );
+	PCLIENT result = CPPOpenTCPListenerAddr_v2d( pAddr, (cppNotifyCallback)NotifyCallback, 0, FALSE DBG_RELAY );
 	if( result )
 		result->dwFlags &= ~CF_CPPCONNECT;
 	return result;
@@ -47216,9 +47291,6 @@ size_t doReadExx2(PCLIENT lpClient,POINTER lpBuffer,size_t nBytes, LOGICAL bIsSt
 		// if the pending finishes it will call the ReadComplete Callback.
 		// otherwise there will be more data to read...
 		//lprintf( WIDE("Ok ... buffers set up - now we can handle read events") );
-#ifdef LOG_PENDING
-		lprintf( WIDE( "Setup read pending %08x" ), lpClient->dwFlags );
-#endif
 		lpClient->dwFlags |= CF_READPENDING;
 #ifdef LOG_PENDING
 		lprintf( WIDE( "Setup read pending %p %08x" ), lpClient, lpClient->dwFlags );
@@ -47377,7 +47449,9 @@ int TCPWriteEx(PCLIENT pc DBG_PASS)
 							 (int)pc->lpFirstPending->dwAvail,
 							 0);
 			  dwError = WSAGetLastError();
-			//lprintf( "sent result: %d %d %d", nSent, pc->lpFirstPending->dwUsed, pc->lpFirstPending->dwAvail );
+#ifdef DEBUG_SOCK_IO
+			lprintf( "sent result: %d %d %d", nSent, pc->lpFirstPending->dwUsed, pc->lpFirstPending->dwAvail );
+#endif
 			if (nSent == SOCKET_ERROR) {
   // this is alright.
 				if( dwError == WSAEWOULDBLOCK )
@@ -47435,7 +47509,7 @@ int TCPWriteEx(PCLIENT pc DBG_PASS)
 		else
 			nSent = 0;
 #ifdef DEBUG_SOCK_IO
-		lprintf( "sent... %d %d %d", nSent, pc->lpFirstPending->dwUsed, pc->lpFirstPending->dwAvail );
+		lprintf( "sent... %d %d %d", nSent, pc->lpFirstPending?pc->lpFirstPending->dwUsed:0, pc->lpFirstPending?pc->lpFirstPending->dwAvail:0 );
 #endif
   // sent some data - update pending buffer status.
 		{
@@ -49104,6 +49178,9 @@ SACK_NETWORK_NAMESPACE_END
 #  include <cryptuiapi.h>
 #endif
 //#define DEBUG_SSL_IO
+//#define DEBUG_SSL_IO_BUFFERS
+//#define DEBUG_SSL_IO_RAW
+//#define DEBUG_SSL_IO_VERBOSE
 #if defined ( NO_SSL )
 SACK_NETWORK_NAMESPACE
 LOGICAL ssl_Send( PCLIENT pc, CPOINTER buffer, size_t length ) {
@@ -49168,6 +49245,7 @@ EVP_PKEY *genKey() {
 struct ssl_session {
 	SSL_CTX        *ctx;
 	LOGICAL ignoreVerification;
+	LOGICAL firstPacket;
 	BIO *rbio;
 	BIO *wbio;
 	//EVP_PKEY *privkey;
@@ -49225,12 +49303,15 @@ static int handshake( PCLIENT pc ) {
 	struct ssl_session *ses = pc->ssl_session;
 	if (!SSL_is_init_finished(ses->ssl)) {
 		int r;
-#ifdef DEBUG_SSL_IO
+#ifdef DEBUG_SSL_IO_VERBOSE
 		lprintf( "doing handshake...." );
 #endif
 		/* NOT INITIALISED */
-		r = SSL_do_handshake(ses->ssl);
 #ifdef DEBUG_SSL_IO
+		lprintf(" Handshake is not finished? %p", pc );
+#endif
+		r = SSL_do_handshake(ses->ssl);
+#ifdef DEBUG_SSL_IO_VERBOSE
 		lprintf( "handle data posted to SSL? %d", r );
 #endif
 		if( r == 0 ) {
@@ -49254,7 +49335,7 @@ static int handshake( PCLIENT pc ) {
 						//lprintf( "making obuffer bigger %d %d", pending, pending * 2 );
 					}
 					read = BIO_read(ses->wbio, ses->obuffer, (int)pending);
-#ifdef DEBUG_SSL_IO
+#ifdef DEBUG_SSL_IO_VERBOSE
 					  lprintf( "send %d %d for handshake", pending, read );
 #endif
 					  if( read > 0 ) {
@@ -49272,7 +49353,8 @@ static int handshake( PCLIENT pc ) {
 #ifdef DEBUG_SSL_IO
 				lprintf( "SSL_Read failed... %d", r );
 #endif
-				ERR_print_errors_cb( logerr, (void*)__LINE__ );
+				if( !pc->errorCallback )
+					ERR_print_errors_cb( logerr, (void*)__LINE__ );
 				return -1;
 			}
 			if (SSL_ERROR_WANT_READ == r)
@@ -49280,6 +49362,7 @@ static int handshake( PCLIENT pc ) {
 			}
 			else {
 				ERR_print_errors_cb( logerr, (void*)__LINE__ );
+				return -1;
 			}
 			return 0;
 		}
@@ -49287,13 +49370,19 @@ static int handshake( PCLIENT pc ) {
 	}
 	else {
 		/* SSL IS INITIALISED */
+#ifdef DEBUG_SSL_IO
+		lprintf(" Handshake is and has been finished?");
+#endif
 		return 1;
 	}
 }
 static void ssl_ReadComplete( PCLIENT pc, POINTER buffer, size_t length )
 {
-#ifdef DEBUG_SSL_IO
-	lprintf( "SSL Read complete %p %zd", buffer, length );
+#if defined( DEBUG_SSL_IO ) || defined( DEBUG_SSL_IO_RAW )
+	lprintf( "SSL Read complete %p %p %zd", pc, buffer, length );
+#  if defined( DEBUG_SSL_IO_RAW )
+	LogBinary( (const uint8_t*)buffer, length );
+#  endif
 #endif
 	if( pc->ssl_session )
 	{
@@ -49305,11 +49394,11 @@ static void ssl_ReadComplete( PCLIENT pc, POINTER buffer, size_t length )
 			//LogBinary( (const uint8_t*)buffer, length );
 			EnterCriticalSec( &pc->ssl_session->csReadWrite );
 			len = BIO_write( pc->ssl_session->rbio, buffer, (int)length );
-#ifdef DEBUG_SSL_IO
+#ifdef DEBUG_SSL_IO_VERBOSE
 			lprintf( "Wrote %zd", len );
 #endif
 			if( len < (int)length ) {
-				lprintf( "Protocol failure?" );
+				lprintf( "Internal buffer error; wrote less to buffer than specified?" );
 				LeaveCriticalSec( &pc->ssl_session->csReadWrite );
 				Release( pc->ssl_session );
 				RemoveClient( pc );
@@ -49321,7 +49410,7 @@ static void ssl_ReadComplete( PCLIENT pc, POINTER buffer, size_t length )
 					LeaveCriticalSec( &pc->ssl_session->csReadWrite );
 					return;
 				}
-#ifdef DEBUG_SSL_IO
+#ifdef DEBUG_SSL_IO_VERBOSE
 				// normal condition...
 				lprintf( "Receive handshake not complete iBuffer" );
 #endif
@@ -49340,6 +49429,8 @@ static void ssl_ReadComplete( PCLIENT pc, POINTER buffer, size_t length )
 					if( !pc->ssl_session->ignoreVerification && SSL_get_peer_certificate( pc->ssl_session->ssl ) ) {
 						int r;
 						if( ( r = SSL_get_verify_result( pc->ssl_session->ssl ) ) != X509_V_OK ) {
+							if( pc->errorCallback )
+								pc->errorCallback( pc->psvErrorCallback, pc, SACK_NETWORK_ERROR_SSL_CERTCHAIN_FAIL );
 							lprintf( "Certificate verification failed. %d", r );
 							LeaveCriticalSec( &pc->ssl_session->csReadWrite );
 							RemoveClientEx( pc, 0, 1 );
@@ -49377,7 +49468,7 @@ static void ssl_ReadComplete( PCLIENT pc, POINTER buffer, size_t length )
 						pc->ssl_session->dbuffer = NewArray( uint8_t, pc->ssl_session->dbuflen );
 					}
 					len = SSL_read( pc->ssl_session->ssl, pc->ssl_session->dbuffer, (int)pc->ssl_session->dbuflen );
-#ifdef DEBUG_SSL_IO
+#ifdef DEBUG_SSL_IO_VERBOSE
 					lprintf( "normal read - just get the data from the other buffer : %d", len );
 #endif
 					if( len < 0 ) {
@@ -49386,6 +49477,8 @@ static void ssl_ReadComplete( PCLIENT pc, POINTER buffer, size_t length )
 							lprintf( "want more data?" );
 						} else
 							lprintf( "SSL_Read failed. %d", error );
+						if( pc->errorCallback )
+							pc->errorCallback( pc->psvErrorCallback, pc, SACK_NETWORK_ERROR_SSL_FAIL );
 						//ERR_print_errors_cb( logerr, (void*)__LINE__ );
 						//RemoveClient( pc );
 						//return;
@@ -49393,9 +49486,16 @@ static void ssl_ReadComplete( PCLIENT pc, POINTER buffer, size_t length )
 				}
 			}
 			else if( hs_rc == -1 ) {
-				LeaveCriticalSec( &pc->ssl_session->csReadWrite );
-				  RemoveClient( pc );
-				  return;
+				if( pc->errorCallback )
+					pc->errorCallback( pc->psvErrorCallback, pc, pc->ssl_session->firstPacket
+						? SACK_NETWORK_ERROR_SSL_HANDSHAKE
+						: SACK_NETWORK_ERROR_SSL_HANDSHAKE_2
+						, buffer, length );
+				if( pc->ssl_session ) {
+					LeaveCriticalSec( &pc->ssl_session->csReadWrite );
+					RemoveClient( pc );
+				}
+				return;
 			}
 			else
 				len = 0;
@@ -49407,7 +49507,7 @@ static void ssl_ReadComplete( PCLIENT pc, POINTER buffer, size_t length )
 				}
 				if( pending > 0 ) {
 					int read;
-#ifdef DEBUG_SSL_IO
+#ifdef DEBUG_SSL_IO_VERBOSE
 					lprintf( "pending to send is %zd into %zd %p " , pending, pc->ssl_session->obuflen, pc->ssl_session->obuffer );
 #endif
 					if( pending > pc->ssl_session->obuflen ) {
@@ -49435,7 +49535,7 @@ static void ssl_ReadComplete( PCLIENT pc, POINTER buffer, size_t length )
 			LeaveCriticalSec( &pc->ssl_session->csReadWrite );
 			// do was have any decrypted data to give to the application?
 			if( len > 0 ) {
-#ifdef DEBUG_SSL_IO
+#ifdef DEBUG_SSL_IO_BUFFERS
 				lprintf( "READ BUFFER:" );
 				LogBinary( pc->ssl_session->dbuffer, 256 > len ? len : 256 );
 #endif
@@ -49450,7 +49550,7 @@ static void ssl_ReadComplete( PCLIENT pc, POINTER buffer, size_t length )
 				}
 			}
 			else if( len == 0 ) {
-#ifdef DEBUG_SSL_IO
+#ifdef DEBUG_SSL_IO_VERBOSE
 				lprintf( "incomplete read" );
 #endif
 			}
@@ -49494,6 +49594,10 @@ static void ssl_ReadComplete( PCLIENT pc, POINTER buffer, size_t length )
 			LeaveCriticalSec( &pc->ssl_session->csReadWrite );
 		}
 		//lprintf( "Read more data..." );
+		if( !buffer )
+			pc->ssl_session->firstPacket = 1;
+		else
+			pc->ssl_session->firstPacket = 0;
 		if( pc->ssl_session ) {
 			ReadTCP( pc, pc->ssl_session->ibuffer, pc->ssl_session->ibuflen );
 		}
@@ -49508,14 +49612,17 @@ LOGICAL ssl_Send( PCLIENT pc, CPOINTER buffer, size_t length )
 	struct ssl_session *ses = pc->ssl_session;
 	if( !ses )
 		return FALSE;
-#ifdef DEBUG_SSL_IO
-	lprintf( "SSL SEND...." );
+#if defined( DEBUG_SSL_IO ) || defined( DEBUG_SSL_IO_VERBOSE)
+	lprintf( "SSL SEND....%d ", length );
+#endif
+#ifdef DEBUG_SSL_IO_BUFFERS
+	lprintf( "SSL SEND....%d ", length );
 	LogBinary( (((uint8_t*)buffer) + offset), 256 > length ? length : 256 );
 #endif
 	while( length ) {
 		if( pending_out > 4327 )
 			pending_out = 4327;
-#ifdef DEBUG_SSL_IO
+#ifdef DEBUG_SSL_IO_VERBOSE
 		lprintf( "Sending %d of %d at %d", pending_out, length, offset );
 #endif
 		EnterCriticalSec( &pc->ssl_session->csReadWrite );
@@ -49546,7 +49653,7 @@ LOGICAL ssl_Send( PCLIENT pc, CPOINTER buffer, size_t length )
 		len_out = BIO_read( pc->ssl_session->wbio, ses->obuffer, (int)ses->obuflen );
 		if( pc->ssl_session )
 			LeaveCriticalSec( &pc->ssl_session->csReadWrite );
-#ifdef DEBUG_SSL_IO
+#ifdef DEBUG_SSL_IO_VERBOSE
 		lprintf( "ssl_Send  %d", len_out );
 #endif
 		SendTCP( pc, ses->obuffer, len_out );
@@ -49597,11 +49704,11 @@ static void ssl_CloseCallback( PCLIENT pc ) {
 		return;
 	}
 	pc->ssl_session = NULL;
-	//lprintf( "Socket got close event... notify application..." );
-	if( ses->dwOriginalFlags & CF_CPPCLOSE )
-		ses->cpp_user_close( pc->psvClose );
-	else
-		ses->user_close( pc );
+	if( ses->dwOriginalFlags & CF_CPPCLOSE ){
+		if( ses->cpp_user_close ) ses->cpp_user_close( pc->psvClose );
+	}else{
+		if( ses->user_close ) ses->user_close( pc );
+	}
 	DeleteCriticalSec( &ses->csReadWrite );
 	//DeleteCriticalSec( &ses->csWrite );
 	Release( ses->dbuffer );
@@ -49619,6 +49726,18 @@ static void ssl_CloseCallback( PCLIENT pc ) {
 	//BIO_free( ses->wbio );
 	Release( ses );
 }
+#ifdef DEBUG_SSL_IO_VERBOSE
+static void infoCallback( const SSL *ssl, int where, int ret ){
+	if( !ret )
+		lprintf( "ERROR : SSL Info Event %p %s %x %x", ssl, SSL_state_string(ssl), where, ret );
+	else if( ret & SSL_CB_ALERT ) {
+		lprintf( "ALERT : SSL Alert Event %p %s %s %s", ssl, SSL_state_string(ssl), SSL_alert_type_string_long(ret), SSL_alert_desc_string_long(ret) );
+	}
+	else
+		lprintf( "INFO : SSL Info Event %p %s %x %x %s %s", ssl, SSL_state_string(ssl)
+			, where, ret, SSL_alert_type_string_long(ret), SSL_alert_desc_string_long(ret) );
+}
+#endif
 static void ssl_ClientConnected( PCLIENT pcServer, PCLIENT pcNew ) {
 	struct ssl_session *ses;
 	ses = New( struct ssl_session );
@@ -49633,6 +49752,9 @@ static void ssl_ClientConnected( PCLIENT pcServer, PCLIENT pcNew ) {
 	ssl_InitSession( ses );
 	SSL_set_accept_state( ses->ssl );
 	pcNew->ssl_session = ses;
+#ifdef DEBUG_SSL_IO_VERBOSE
+	SSL_set_info_callback( pcNew->ssl_session->ssl, infoCallback );
+#endif
 	if( pcServer->ssl_session->dwOriginalFlags & CF_CPPCONNECT )
 		pcServer->ssl_session->cpp_user_connected( pcServer->psvConnect, pcNew );
 	else
@@ -49837,10 +49959,44 @@ LOGICAL ssl_BeginClientSession( PCLIENT pc, CPOINTER client_keypair, size_t clie
 	pc->read.ReadComplete = ssl_ReadComplete;
 	pc->dwFlags &= ~CF_CPPREAD;
 	pc->ssl_session = ses;
+#ifdef DEBUG_SSL_IO_VERBOSE
+	SSL_set_info_callback( pc->ssl_session->ssl, infoCallback );
+#endif
 	return TRUE;
 }
-LOGICAL ssl_IsClientSecure(PCLIENT pc) {
+LOGICAL ssl_IsClientSecure( PCLIENT pc ) {
 	return pc->ssl_session != NULL;
+}
+void ssl_EndSecure(PCLIENT pc, POINTER buffer, size_t length ) {
+	if( pc && pc->ssl_session ) {
+		// revert native socket methods.
+		pc->read.ReadComplete = pc->ssl_session->user_read;
+		pc->close.CloseCallback = pc->ssl_session->user_close;
+		pc->connect.ClientConnected = pc->ssl_session->user_connected;
+		// restore all the native specified options for callbacks.
+		(*(uint32_t*)&pc->dwFlags) |= (pc->ssl_session->dwOriginalFlags & (CF_CPPCONNECT | CF_CPPREAD | CF_CPPWRITE | CF_CPPCLOSE));
+		// prevent close event...
+		POINTER tmp;
+		pc->ssl_session->user_close = NULL;
+		pc->ssl_session->cpp_user_close = NULL;
+		tmp = pc->ssl_session->ibuffer;
+		pc->ssl_session->ibuffer = NULL;
+		ssl_CloseCallback( pc );
+		// SSL callback failed, but it may be possible to connect direct.
+		// and if so; setup to return a redirect.
+		if( buffer ) {
+			if( pc->dwFlags & CF_CPPREAD ) {
+  // process read to get data already pending...
+				pc->read.CPPReadComplete( pc->psvRead, NULL, 0 );
+				pc->read.CPPReadComplete( pc->psvRead, buffer, length );
+			}
+			else {
+				pc->read.ReadComplete( pc, NULL, 0 );
+				pc->read.ReadComplete( pc, buffer, length );
+			}
+		}
+		Release( tmp );
+	}
 }
 void ssl_SetIgnoreVerification( PCLIENT pc ) {
 	if( pc->ssl_session )
@@ -50882,15 +51038,17 @@ void ProcessWebSockProtocol( WebSocketInputState websock, PCLIENT pc, const uint
 }
 void WebSocketPing( PCLIENT pc, uint32_t timeout )
 {
-	uint32_t start_at = timeGetTime();
-	uint32_t target = start_at + timeout;
-	uint32_t now;
 	struct web_socket_input_state *input_state = (struct web_socket_input_state*)GetNetworkLong( pc, 1 );
 	SendWebSocketMessage( pc, 9, 1, input_state->flags.expect_masking, NULL, 0, input_state->flags.use_ssl );
-	while( !input_state->flags.received_pong
-			&& ( ( ( now=timeGetTime() ) - start_at ) < timeout ) )
-		IdleFor( target-now );
-	input_state->flags.received_pong = 0;
+	if( timeout ) {
+		uint32_t start_at = timeGetTime();
+		uint32_t target = start_at + timeout;
+		uint32_t now;
+		while( !input_state->flags.received_pong
+			&& (((now = timeGetTime()) - start_at) < timeout) )
+			IdleFor( target - now );
+		input_state->flags.received_pong = 0;
+	}
 }
 // there is a control bit for whether the content is text or binary or a continuation
  // UTF8 RFC3629
@@ -51304,6 +51462,15 @@ HTML5_WEBSOCKET_NAMESPACE
 #endif
 // need some sort of other methods to work with an HTML5WebSocket...
 // server side.
+HTML5_WEBSOCKET_PROC( PCLIENT, WebSocketCreate_v2 )(CTEXTSTR hosturl
+	, web_socket_opened on_open
+	, web_socket_event on_event
+	, web_socket_closed on_closed
+	, web_socket_error on_error
+	, uintptr_t psv
+	, int webSocketOptions
+);
+#define WEBSOCK_SERVER_OPTION_WAIT 1
 	HTML5_WEBSOCKET_PROC( PCLIENT, WebSocketCreate )( CTEXTSTR server_url
 																	, web_socket_opened on_open
 																	, web_socket_event on_event
@@ -51823,22 +51990,34 @@ static void CPROC read_complete( PCLIENT pc, POINTER buffer, size_t length )
 		}
 		else
 		{
-			//lprintf( WIDE("Okay then hand this as data to process... within protocol") );
 			if( socket->flags.rfc6455 )
-			{
 				ProcessWebSockProtocol( &socket->input_state, pc, (uint8_t*)buffer, length );
-			}
 			else
 				HandleData( socket, pc, buffer, length );
 		}
+		if( !socket->input_state.flags.use_ssl )
+			ReadTCP( pc, socket->buffer, WSS_DEFAULT_BUFFER_SIZE );
 	}
 	else
 	{
-		//HTML5WebSocket socket = (HTML5WebSocket)GetNetworkLong( pc, 0 );
-		buffer = socket->buffer = Allocate( WSS_DEFAULT_BUFFER_SIZE );
+		// it's possible that we ended SSL on first read and are falling back...
+		// re-check here to see if it's still SSL.
+		// this has to be complicated, because otherwise we can get partial out of order reads.
+		// first read after is no-long SSL needs to not generate a real read because there's
+		// already pending data to receive.
+		if( socket->input_state.flags.use_ssl ) {
+			socket->input_state.flags.use_ssl = ssl_IsClientSecure( pc );
+			if( !socket->input_state.flags.use_ssl )
+				buffer = socket->buffer = Allocate( WSS_DEFAULT_BUFFER_SIZE );
+		}
+		else {
+			socket->input_state.flags.use_ssl = ssl_IsClientSecure( pc );
+			if( !socket->input_state.flags.use_ssl ) {
+				buffer = socket->buffer = Allocate( WSS_DEFAULT_BUFFER_SIZE );
+				ReadTCP( pc, socket->buffer, WSS_DEFAULT_BUFFER_SIZE );
+			}
+		}
 	}
-	if( !socket->input_state.flags.use_ssl )
-		ReadTCP( pc, buffer, WSS_DEFAULT_BUFFER_SIZE );
 }
 static void CPROC connected( PCLIENT pc_server, PCLIENT pc_new )
 {
@@ -51853,23 +52032,21 @@ static void CPROC connected( PCLIENT pc_server, PCLIENT pc_new )
 	if( ssl_IsClientSecure( pc_new ) )
 		socket->input_state.flags.use_ssl = 1;
  // start a new http state collector
-	socket->http_state = CreateHttpState();
+	socket->http_state = CreateHttpState( &socket->pc );
 	//lprintf( "Init socket: handshake: %p %p  %d", pc_new, socket, socket->flags.initial_handshake_done );
 	SetNetworkLong( pc_new, 0, (uintptr_t)socket );
 	SetNetworkLong( pc_new, 1, (uintptr_t)&socket->input_state );
 	SetNetworkReadComplete( pc_new, read_complete );
 	SetNetworkCloseCallback( pc_new, closed );
 }
-static LOGICAL CPROC HandleWebsockRequest( uintptr_t psv, HTTPState pHttpState )
-{
-	return 0;
-}
-PCLIENT WebSocketCreate( CTEXTSTR hosturl
+PCLIENT WebSocketCreate_v2( CTEXTSTR hosturl
 							, web_socket_opened on_open
 							, web_socket_event on_event
 							, web_socket_closed on_closed
 							, web_socket_error on_error
-							, uintptr_t psv )
+							, uintptr_t psv
+							, int webSocketOptions
+						)
 {
 	struct url_data *url;
 	HTML5WebSocket socket = New( struct html5_web_socket );
@@ -51883,16 +52060,27 @@ PCLIENT WebSocketCreate( CTEXTSTR hosturl
 	socket->input_state.psv_on = psv;
 	socket->input_state.close_code = 1006;
 	url = SACK_URLParse( hosturl );
-	socket->pc = OpenTCPListenerAddrEx( CreateSockAddress( url->host, url->port?url->port:url->default_port ), connected );
+	socket->pc = OpenTCPListenerAddr_v2( CreateSockAddress( url->host, url->port?url->port:url->default_port )
+		, connected
+		, (webSocketOptions & WEBSOCK_SERVER_OPTION_WAIT)?TRUE:FALSE );
 	SACK_ReleaseURL( url );
-  if( !socket->pc ) {
-    Deallocate( HTML5WebSocket, socket );
-    return NULL;
-  }
-	socket->http_state = CreateHttpState();
+	if( !socket->pc ) {
+		Deallocate( HTML5WebSocket, socket );
+		return NULL;
+	}
+	socket->http_state = CreateHttpState( &socket->pc );
 	SetNetworkLong( socket->pc, 0, (uintptr_t)socket );
 	SetNetworkLong( socket->pc, 1, (uintptr_t)&socket->input_state );
 	return socket->pc;
+}
+PCLIENT WebSocketCreate( CTEXTSTR hosturl
+	, web_socket_opened on_open
+	, web_socket_event on_event
+	, web_socket_closed on_closed
+	, web_socket_error on_error
+	, uintptr_t psv )
+{
+	return WebSocketCreate_v2( hosturl, on_open, on_event, on_closed, on_error, psv, 0 );
 }
 PLIST GetWebSocketHeaders( PCLIENT pc ) {
 	HTML5WebSocket socket = (HTML5WebSocket)GetNetworkLong( pc, 0 );
@@ -52363,7 +52551,7 @@ PCLIENT WebSocketOpen( CTEXTSTR url_address
 	if( !wsc_local.timer )
 		wsc_local.timer = AddTimer( 2000, WebSocketTimer, 0 );
 	websock->buffer = Allocate( 4096 );
-	websock->pHttpState = CreateHttpState();
+	websock->pHttpState = CreateHttpState( &websock->pc );
 	websock->input_state.on_open = on_open;
 	websock->input_state.on_event = on_event;
 	websock->input_state.on_close = on_closed;
@@ -52453,8 +52641,12 @@ void WebSocketClose( PCLIENT pc, int code, const char *reason )
 		if( websock->Magic == 0x20130911 ) {
 			//lprintf( "send client side close?" );
 			if( websock->flags.connected ) {
-				while( !NetworkLockEx( pc, 1 DBG_SRC ) )
+				while( !NetworkLockEx( pc, 1 DBG_SRC ) ){
+					// closing closed socket....
+					if( !sack_network_is_active(pc) )
+						return;
 					Relinquish();
+				}
 				SendWebSocketMessage( pc, 8, 1, websock->input_state.flags.expect_masking, (const uint8_t*)buf, buflen, websock->input_state.flags.use_ssl );
 				websock->input_state.flags.closed = 1;
 				NetworkUnlock( pc, 1 );
@@ -56862,6 +57054,7 @@ struct jsox_input_buffer {
 	size_t       size;
   // last position in _input if context closed before end of buffer
 	char const * pos;
+	LOGICAL      tempBuf;
 };
 struct jsox_output_buffer {
       // prior input buffer
@@ -56870,6 +57063,7 @@ struct jsox_output_buffer {
 	size_t  size;
   // last position in _input if context closed before end of buffer
 	char * pos;
+	LOGICAL      unusedTempBuf;
 };
 typedef struct jsox_input_buffer JSOX_PARSE_BUFFER, *PJSOX_PARSE_BUFFER;
 #define MAXJSOX_PARSE_BUFFERSPERSET 128
@@ -57130,12 +57324,17 @@ char *jsox_escape_string_length( const char *string, size_t len, size_t *outlen 
 char *jsox_escape_string( const char *string ) {
 	return jsox_escape_string_length( string, strlen( string ), NULL );
 }
+#undef __GetUtfChar
+#undef _zero
+#define BADUTF8 0xFFFFFFF
 #define _2char(result,from) (((*from) += 2),( ( result & 0x1F ) << 6 ) | ( ( result & 0x3f00 )>>8))
-#define _zero(result,from)  ((*from)++,0)
+#define _zero(result,from)  ((*from)++,BADUTF8)
+#define _gzero(result,from)  ((*from)++,0)
 #define _3char(result,from) ( ((*from) += 3),( ( ( result & 0xF ) << 12 ) | ( ( result & 0x3F00 ) >> 2 ) | ( ( result & 0x3f0000 ) >> 16 )) )
-#define _4char(result,from)  ( ((*from) += 4), ( ( ( result & 0x7 ) << 18 )						     | ( ( result & 0x3F00 ) << 4 )						   | ( ( result & 0x3f0000 ) >> 10 )						    | ( ( result & 0x3f000000 ) >> 24 ) ) )
-#define get4Chars(p) ((((TEXTRUNE*) ((uintptr_t)(p) & ~0x3) )[0]				  >> (CHAR_BIT*((uintptr_t)(p) & 0x3)))			             | (( ((uintptr_t)(p)) & 0x3 )				                          ? (((TEXTRUNE*) ((uintptr_t)(p) & ~0x3) )[1]					      << (CHAR_BIT*(4-((uintptr_t)(p) & 0x3))))				     :(TEXTRUNE)0 ))
-#define __GetUtfChar( result, from )           ((result = get4Chars(*from)),		     ( ( !(result & 0xFF) )              ?_zero(result,from)	                                                    :( ( result & 0x80 )		                       ?( ( result & 0xE0 ) == 0xC0 )			   ?( ( ( result & 0xC000 ) == 0x8000 ) ?_2char(result,from) : _zero(result,from)  )			    :( ( ( result & 0xF0 ) == 0xE0 )				                           ?( ( ( ( result & 0xC000 ) == 0x8000 ) && ( ( result & 0xC00000 ) == 0x800000 ) ) ? _3char(result,from) : _zero(result,from)  )				   :( ( ( result & 0xF8 ) == 0xF0 )		                       ? ( ( ( ( result & 0xC000 ) == 0x8000 ) && ( ( result & 0xC00000 ) == 0x800000 ) && ( ( result & 0xC0000000 ) == 0x80000000 ) )					  ?_4char(result,from):_zero(result,from) )				                                                                                                                  :( ( ( result & 0xC0 ) == 0x80 )					                                                                                                  ?_zero(result,from)					                                                                                                                       : ( (*from)++, (result & 0x7F) ) ) ) )		                                                                                       : ( (*from)++, (result & 0x7F) ) ) ) )
+#define _4char(result,from)  ( ((*from) += 4), ( ( ( result & 0x7 ) << 18 )                             | ( ( result & 0x3F00 ) << 4 )                           | ( ( result & 0x3f0000 ) >> 10 )                            | ( ( result & 0x3f000000 ) >> 24 ) ) )
+// load 4 bytes in a little endian way; might result in a 8 byte variable, but only 4 are valid.
+#define get4Chars(p) ((((TEXTRUNE*) ((uintptr_t)(p) & ~0x3) )[0]                  >> (CHAR_BIT*((uintptr_t)(p) & 0x3)))                         | (( ((uintptr_t)(p)) & 0x3 )                                          ? (((TEXTRUNE*) ((uintptr_t)(p) & ~0x3) )[1]                          << (CHAR_BIT*(4-((uintptr_t)(p) & 0x3))))                     :(TEXTRUNE)0 ))
+#define __GetUtfChar( result, from )           ((result = get4Chars(*from)),             ( ( !(result & 0xFF) )              ?_gzero(result,from)         :( ( result & 0x80 )                               ?( ( result & 0xE0 ) == 0xC0 )               ?( ( ( result & 0xC000 ) == 0x8000 ) ?_2char(result,from) : _zero(result,from)  )                :( ( ( result & 0xF0 ) == 0xE0 )                                           ?( ( ( ( result & 0xC000 ) == 0x8000 ) && ( ( result & 0xC00000 ) == 0x800000 ) ) ? _3char(result,from) : _zero(result,from)  )                   :( ( ( result & 0xF8 ) == 0xF0 )                               ? ( ( ( ( result & 0xC000 ) == 0x8000 ) && ( ( result & 0xC00000 ) == 0x800000 ) && ( ( result & 0xC0000000 ) == 0x80000000 ) )                      ?_4char(result,from):_zero(result,from) )                                                                                                                                  :( ( ( result & 0xC0 ) == 0x80 )                                                                                                                      ?_zero(result,from)                                                                                                                                           : ( (*from)++, (result & 0x7F) ) ) ) )                                                                                               : ( (*from)++, (result & 0x7F) ) ) ) )
 #define GetUtfChar(x) __GetUtfChar(c,x)
 static int gatherStringX(struct jsox_parse_state *state, CTEXTSTR msg, CTEXTSTR *msg_input, size_t msglen, TEXTSTR *pmOut, TEXTRUNE start_c
 		//, int literalString
@@ -57144,13 +57343,21 @@ static int gatherStringX(struct jsox_parse_state *state, CTEXTSTR msg, CTEXTSTR 
 	// collect a string
 	int status = 0;
 	size_t n;
+	size_t nextN = ( *msg_input ) - msg;
 	//int escape;
 	//LOGICAL cr_escaped;
 	TEXTRUNE c;
 	//escape = 0;
 	//cr_escaped = FALSE;
-	while( ( ( n = (*msg_input) - msg ), ( n < msglen ) ) && ( ( c = GetUtfChar( msg_input ) ), ( status >= 0 ) ) )
+	while( ( ( n = nextN ), ( n < msglen ) )
+		&& ( ( ( c = GetUtfChar( msg_input ) ) != BADUTF8 )
+			&& ( status >= 0 ) ) )
 	{
+		if( (nextN = msg_input[0] - msg ) > msglen ) {
+ // restore input position.
+			(msg_input[0]) = msg + n;
+			return status;
+		}
 		(state->col)++;
 		if( c == start_c ) {
 			if( state->escape ) { ( *mOut++ ) = c; state->escape = FALSE; }
@@ -57839,10 +58046,28 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 	if( !state->status )
 		return -1;
 	if( msg && msglen ) {
-		input = GetFromSet( JSOX_PARSE_BUFFER, &jxpsd.parseBuffers );
-		input->pos = input->buf = msg;
-		input->size = msglen;
-		EnqueLinkNL( state->inBuffers, input );
+		if( input = (PJSOX_PARSE_BUFFER)PeekQueue( state->inBuffers[0] ) ) {
+			size_t used = input->pos - input->buf;
+			size_t unused = input->size - used;
+			if( input->tempBuf || ( unused < 6 ) ) {
+				const char *newBuf = NewArray( const char, unused + msglen );
+				memcpy( (char*)newBuf, input->pos, unused );
+				memcpy( (char*)newBuf + unused, msg, msglen );
+				if( input->tempBuf )
+					Deallocate( CPOINTER, input->buf );
+				input->pos = input->buf = newBuf;
+				input->tempBuf = TRUE;
+			}
+		}
+		// no input; or this buffer wasn't appended to the previous buffer...
+		if( !input || !input->tempBuf )
+		{
+			input = GetFromSet( JSOX_PARSE_BUFFER, &jxpsd.parseBuffers );
+			input->pos = input->buf = msg;
+			input->size = msglen;
+			input->tempBuf = FALSE;
+			EnqueLinkNL( state->inBuffers, input );
+		}
 		if( state->gatheringString
 			|| state->gatheringNumber
 			|| state->word == JSOX_WORD_POS_FIELD
@@ -57900,6 +58125,7 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 		}
 	}
 	while( state->status && ( input = (PJSOX_PARSE_BUFFER)DequeLinkNL( state->inBuffers ) ) ) {
+		size_t newN;
 		output = (struct jsox_output_buffer*)DequeLinkNL( state->outQueue );
 		//lprintf( "output is %p", output );
 		state->n = input->pos - input->buf;
@@ -57924,7 +58150,9 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 			}
 			else {
 				state->n = input->pos - input->buf;
-				if( state->n > input->size ) DebugBreak();
+				if( state->n > input->size ) {
+					DebugBreak();
+				}
 			}
 		}
 		if( state->gatheringNumber ) {
@@ -57932,14 +58160,19 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 			goto continueNumber;
 		}
 		//lprintf( "Completed at start?%d", state->completed );
-		while( state->status && (state->n < input->size) && (c = GetUtfChar( &input->pos )) )
+		while( state->status && (state->n < input->size) && ( (c = GetUtfChar( &input->pos ))!= BADUTF8) )
 		{
 #ifdef DEBUG_PARSING
 			lprintf( "parse character %c %d %d %d %d", c<32?'.':c, state->word, state->parse_context, state->parse_context, state->word );
 #endif
 			state->col++;
-			state->n = input->pos - input->buf;
-			if( state->n > input->size ) DebugBreak();
+			newN = input->pos - input->buf;
+			if( newN > input->size ) {
+				// partial utf8 character across buffer boundaries.
+				//DebugBreak();
+				break;
+			}
+			state->n = newN;
 			if( state->comment ) {
 				if( state->comment == 1 ) {
 					if( c == '*' ) { state->comment = 3; continue; }
@@ -58637,11 +58870,15 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 						continueNumber:
 							fromDate = state->numberFromDate;
 						}
-						while( (_msg_input = input->pos), ((state->n < input->size) && (c = GetUtfChar( &input->pos ))) )
+						while( (_msg_input = input->pos), ((state->n < input->size) && ( (c = GetUtfChar( &input->pos ))!= BADUTF8)) )
 						{
+							newN = input->pos - input->buf;
+							if( newN > input->size ) {
+								break;
+							}
+							state->n = newN;
 							//lprintf( "Number input:%c", c );
 							state->col++;
-							state->n = (input->pos - input->buf);
 							if( state->n > input->size ) DebugBreak();
 							// leading zeros should be forbidden.
 							if( c == '_' )
@@ -58814,6 +59051,8 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 		//lprintf( "at end... %d %d comp:%d", state->n, input->size, state->completed );
 		if( input ) {
 			if( state->n >= input->size ) {
+				if( input->tempBuf )
+					Deallocate( CPOINTER, input->buf );
 				DeleteFromSet( JSOX_PARSE_BUFFER, jxpsd.parseBuffers, input );
 				if( state->gatheringString
 					|| state->gatheringNumber
@@ -59130,6 +59369,8 @@ struct jsox_value_container *jsox_get_parsed_value( PDATALIST pdlMessage, const 
 	return NULL;
 }
 #undef GetUtfChar
+#undef __GetUtfChar
+#undef _zero
 #ifdef __cplusplus
 } } SACK_NAMESPACE_END
 #endif
@@ -59669,7 +59910,7 @@ struct file_system_mounted_interface
 	struct file_system_interface *fsi;
 	LOGICAL writeable;
 };
-#ifndef WINFILE_COMMON_SOURCE
+#if !defined( WINFILE_COMMON_SOURCE ) && defined( __STATIC_GLOBALS__ )
 extern
 #endif
  struct winfile_local_tag {
@@ -59692,7 +59933,19 @@ extern
 	TEXTSTR data_file_root;
 	TEXTSTR producer;
 	TEXTSTR application;
-} *winfile_local;
+ }
+#ifdef __STATIC_GLOBALS__
+winfile_local__;
+#endif
+;
+#ifndef WINFILE_COMMON_SOURCE
+extern
+#endif
+struct winfile_local_tag *winfile_local
+#ifdef __STATIC_GLOBALS__
+   = &winfile_local__;
+#endif
+	;
 //#define l (*winfile_local)
 static void UpdateLocalDataPath( void )
 {
@@ -59748,7 +60001,9 @@ static void LocalInit( void )
 {
 	if( !winfile_local )
 	{
+#ifndef __STATIC_GLOBAL__
 		SimpleRegisterAndCreateGlobal( winfile_local );
+#endif
 		if( !(*winfile_local).flags.bInitialized )
 		{
 			InitializeCriticalSec( &(*winfile_local).cs_files );
@@ -68148,9 +68403,6 @@ typedef struct loaded_library_tag
 // this is more than 1; allocation pads extra bytes for the name. prefixed iwth l.load_path
 	TEXTCHAR full_name[1];
 } LIBRARY, *PLIBRARY;
-#ifndef SYSTEM_CORE_SOURCE
-extern
-#endif
   struct local_systemlib_data {
 	CTEXTSTR load_path;
 	CTEXTSTR library_path;
@@ -68174,7 +68426,15 @@ extern
 	BOOL (WINAPI* EnumProcessModules)( HANDLE hProcess, HMODULE *lphModule
 	                                 , DWORD cb, LPDWORD lpcbNeeded );
 #endif
-} *local_systemlib;
+  }
+#ifdef __STATIC_GLOBALS__
+  local_systemlib__
+#endif
+  ;
+#ifndef SYSTEM_CORE_SOURCE
+extern
+#endif
+	  struct local_systemlib_data *local_systemlib;
 #ifdef l
 #   undef l
 #endif
@@ -68666,7 +68926,10 @@ static void CPROC SetupSystemServices( POINTER mem, uintptr_t size )
 #       ifdef __MAC__
 			loadMacLibraries( init_l );
 #       endif
+#ifndef __STATIC_GLOBALS__
+         // allow retriggering init for some reason.
 			local_systemlib = NULL;
+#endif
 			{
 				PLIBRARY library = (*init_l).libraries;
 				while( library )
@@ -68739,9 +69002,15 @@ static void CPROC SetupSystemServices( POINTER mem, uintptr_t size )
 }
 static void SystemInit( void )
 {
-	if( !local_systemlib )
+	if( !
+		local_systemlib )
 	{
+#ifdef __STATIC_GLOBALS__
+		local_systemlib = &local_systemlib__;
+		SetupSystemServices( local_systemlib, sizeof( local_systemlib[0] ) );
+#else
 		RegisterAndCreateGlobalWithInit( (POINTER*)&local_systemlib, sizeof( *local_systemlib ), WIDE("system"), SetupSystemServices );
+#endif
 #ifdef WIN32
 		if( !l.flags.bInitialized )
 		{
@@ -69632,8 +69901,6 @@ SYSTEM_PROC( generic_function, LoadFunctionExx )( CTEXTSTR libname, CTEXTSTR fun
 			tnprintf( library->name
 				, fullnameLen - (library->name-library->full_name)
 				, WIDE("%s"), libname );
-			//library->long_name = library->name;
-			library->name = (char*)pathrchr( library->full_name );
 		}
 		else
 		{
@@ -69745,8 +70012,9 @@ SYSTEM_PROC( generic_function, LoadFunctionExx )( CTEXTSTR libname, CTEXTSTR fun
 #    endif
 		if( !library->library )
 		{
-			if( l.flags.bLog )
-				_xlprintf( 2 DBG_RELAY)( WIDE("Attempt to load %s%s(%s) failed: %s."), bPrivate?"(local)":"(global)", libname, funcname?funcname:"all", dlerror() );
+			//if( l.flags.bLog )
+				_xlprintf( 2 DBG_RELAY)( WIDE("Attempt to load %s%s(%s) failed: %s."), bPrivate?"(local)":"(global)"
+				          , library->name, funcname?funcname:"all", dlerror() );
 #  endif
 #  ifdef UNICODE
 			{
@@ -69759,11 +70027,24 @@ SYSTEM_PROC( generic_function, LoadFunctionExx )( CTEXTSTR libname, CTEXTSTR fun
 #  endif
 			if( !library->library )
 			{
-				_xlprintf( 2 DBG_RELAY)( WIDE("Attempt to load  %s%s(%s) failed: %s."), bPrivate?WIDE("(local)"):WIDE("(global)"), library->full_name, funcname?funcname:WIDE("all"), dlerror() );
-				UnlinkThing( library );
-				ReleaseEx( library DBG_SRC );
-				ResumeDeadstart();
-				return NULL;
+				_xlprintf( 2 DBG_RELAY)( WIDE("Attempt to load  %s%s(%s) failed: %s."), bPrivate?WIDE("(local)"):WIDE("(global)")
+						, library->full_name, funcname?funcname:WIDE("all"), dlerror() );
+				library->library = dlopen( library->alt_full_name, RTLD_LAZY|(bPrivate?RTLD_LOCAL: RTLD_GLOBAL) );
+				if( !library->library )
+				{
+					_xlprintf( 2 DBG_RELAY)( WIDE("Attempt to load  %s%s(%s) failed: %s."), bPrivate?WIDE("(local)"):WIDE("(global)")
+							, library->alt_full_name, funcname?funcname:WIDE("all"), dlerror() );
+					library->library = dlopen( library->cur_full_name, RTLD_LAZY|(bPrivate?RTLD_LOCAL: RTLD_GLOBAL) );
+					if( !library->library )
+					{
+						_xlprintf( 2 DBG_RELAY)( WIDE("Attempt to load  %s%s(%s) failed: %s."), bPrivate?WIDE("(local)"):WIDE("(global)")
+								, library->cur_full_name, funcname?funcname:WIDE("all"), dlerror() );
+						UnlinkThing( library );
+						ReleaseEx( library DBG_SRC );
+						ResumeDeadstart();
+						return NULL;
+					}
+				}
 			}
 #  ifndef __ANDROID__
 		}
@@ -71305,6 +71586,9 @@ struct procreg_local_tag {
 #  define procreg_local_data  procreg_local_data_pp
 #endif
 #define l (*procreg_local_data)
+#ifdef __STATIC_GLOBALS__
+static struct procreg_local_tag procreg_local_data__;
+#endif
 static struct procreg_local_tag *procreg_local_data;
 static CTEXTSTR SaveName( CTEXTSTR name );
 PTREEDEF GetClassTreeEx( PCTREEDEF root
@@ -71695,8 +71979,15 @@ static void Init( void )
 {
 	// don't call this function, preserves the process line cache, just check the flag and simple skip any call.
 	// use SAFE_INIT();
+#ifndef __STATIC_GLOBALS__
 #define SAFE_INIT() if( !procreg_local_data ) RegisterAndCreateGlobalWithInit( (POINTER*)&procreg_local_data, sizeof( *procreg_local_data ), "procreg_local_data", InitGlobalSpace )
 	SAFE_INIT();
+#else
+	if( !procreg_local_data ) {
+		procreg_local_data = &procreg_local_data__;
+		InitGlobalSpace( procreg_local_data, sizeof( procreg_local_data[0] ) );
+	}
+#endif
 }
 static void ReadConfiguration( void );
 //PRIORITY_UNLOAD( InitProcreg, NAMESPACE_PRELOAD_PRIORITY )
@@ -71965,6 +72256,7 @@ PROCREG_PROC( PCLASSROOT, GetClassRootEx )( PCLASSROOT root, CTEXTSTR name_class
 }
 PROCREG_PROC( PCLASSROOT, GetClassRoot )( CTEXTSTR name_class )
 {
+	if( !procreg_local_data ) return NULL;
 	return (PCLASSROOT)GetClassTreeEx( l.Names, (PTREEDEF)name_class, NULL, TRUE );
 }
 #ifdef __cplusplus
