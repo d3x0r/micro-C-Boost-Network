@@ -1,4 +1,7 @@
-SACK is LGPL.
+SACK is WTFPL; previously LGPL in the intent to collect useful external changes.
+If you found it useful, and many find it useful, eventually someone will figure out
+what the commonality was, without every application having to mention it.
+
 this is a derivitive product and is non-authoritative.
 
         DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE 

@@ -22,6 +22,7 @@
 #define NEED_SHLOBJ
 #define JSON_PARSER_MAIN_SOURCE
 #define FORCE_COLOR_MACROS
+#define WINFILE_COMMON_SOURCE
 #include <stdio.h>
 #include <stdarg.h>
 /* Includes the system platform as required or appropriate. If
@@ -36,6 +37,9 @@
 #  undef _XOPEN_SOURCE
 #  define _XOPEN_SOURCE 500
 #endif
+#  ifndef _GNU_SOURCE
+#    define _GNU_SOURCE
+#  endif
 #ifndef STANDARD_HEADERS_INCLUDED
 /* multiple inclusion protection symbol */
 #define STANDARD_HEADERS_INCLUDED
@@ -165,18 +169,18 @@
 #    define stricmp _stricmp
 #    define strdup _strdup
 #  endif
-#ifdef WANT_MMSYSTEM
-#  include <mmsystem.h>
-#endif
-#if USE_NATIVE_TIME_GET_TIME
+#  ifdef WANT_MMSYSTEM
+#    include <mmsystem.h>
+#  endif
+#  if USE_NATIVE_TIME_GET_TIME
 //#  include <windowsx.h>
 // we like timeGetTime() instead of GetTickCount()
 //#  include <mmsystem.h>
-#ifdef __cplusplus
+#    ifdef __cplusplus
 extern "C"
-#endif
+#    endif
 __declspec(dllimport) DWORD WINAPI timeGetTime(void);
-#endif
+#  endif
 #  ifdef WIN32
 #    if defined( NEED_SHLAPI )
 #      include <shlwapi.h>
@@ -207,9 +211,6 @@ __declspec(dllimport) DWORD WINAPI timeGetTime(void);
 #  endif
  // ifdef unix/linux
 #else
-#  ifndef _GNU_SOURCE
-#    define _GNU_SOURCE
-#  endif
 #  include <pthread.h>
 #  include <sched.h>
 #  include <unistd.h>
@@ -319,7 +320,7 @@ But WHO doesn't have stdint?  BTW is sizeof( size_t ) == sizeof( void* )
 #    define DeclareThreadLocal static __declspec(thread)
 #    define DeclareThreadVar __declspec(thread)
 #  endif
-#elif !defined( __NO_THREAD_LOCAL__ ) && ( defined( __GNUC__ ) )
+#elif !defined( __NO_THREAD_LOCAL__ ) && ( defined( __GNUC__ ) || defined( __MAC__ ) )
 #    define HAS_TLS 1
 #    ifdef __cplusplus
 #      define DeclareThreadLocal static thread_local
@@ -1386,10 +1387,8 @@ typedef uint64_t THREAD_ID;
 // this is now always the case
 // it's a safer solution anyhow...
 #  ifdef __MAC__
-#    ifndef SYS_thread_selfid
-#      define SYS_thread_selfid                 372
-#    endif
-#    define GetMyThreadID()  (( ((uint64_t)getpid()) << 32 ) | ( (uint64_t)( syscall(SYS_thread_selfid) ) ) )
+     DeclareThreadLocal uint64_t tmpThreadid;
+#    define GetMyThreadID()  ((pthread_threadid_np(NULL, &tmpThreadid)),tmpThreadid)
 #  else
 #    ifndef GETPID_RETURNS_PPID
 #      define GETPID_RETURNS_PPID
@@ -2030,8 +2029,7 @@ TYPELIB_PROC  POINTER TYPELIB_CALLTYPE    SetDataItemEx ( PDATALIST *ppdl, INDEX
 TYPELIB_PROC  POINTER TYPELIB_CALLTYPE    SetDataItemEx ( PDATALIST *ppdl, INDEX idx, POINTER data DBG_PASS );
 /* \Returns a pointer to the data at a specified index.
    Parameters
-   \ \
-   ppdl :  address of a PDATALIST
+   \    ppdl :  address of a PDATALIST
    idx :   index of element to get                      */
 TYPELIB_PROC  POINTER TYPELIB_CALLTYPE    GetDataItem ( PDATALIST *ppdl, INDEX idx );
 /* Removes a data element from the list (moves all other
@@ -2348,17 +2346,24 @@ TYPELIB_PROC  void TYPELIB_CALLTYPE         EmptyDataQueue ( PDATAQUEUE *pplq );
  * reallocated and moved.
  */
 TYPELIB_PROC  LOGICAL TYPELIB_CALLTYPE  PeekDataQueueEx    ( PDATAQUEUE *pplq, POINTER ResultBuffer, INDEX idx );
-/* <combine sack::containers::data_queue::PeekDataQueueEx@PDATAQUEUE *@POINTER@INDEX>
-   \ \                                                                                */
 #define PeekDataQueueEx( q, type, result, idx ) PeekDataQueueEx( q, (POINTER)result, idx )
 /*
  * Result buffer is filled with the last element, and the result is true, otherwise the return
  * value is FALSE, and the data was not filled in.
  */
 TYPELIB_PROC  LOGICAL TYPELIB_CALLTYPE  PeekDataQueue    ( PDATAQUEUE *pplq, POINTER ResultBuffer );
-/* <combine sack::containers::data_queue::PeekDataQueue@PDATAQUEUE *@POINTER>
-   \ \                                                                        */
-#define PeekDataQueue( q, type, result ) PeekDataQueue( q, (POINTER)result )
+#define PeekDataQueue( q, type, result ) PeekDataQueueEx( q, type, result, 0 )
+/*
+ * gets the address a PDATAQUEUE element at index
+ * result buffer is a pointer to the type of structure expected to be
+ * stored within this.  Index from 0 to N indexes from first ( to be dequeued )
+ * to last item in queue.
+ */
+TYPELIB_PROC POINTER TYPELIB_CALLTYPE  PeekDataInQueueEx    ( PDATAQUEUE *pplq, INDEX idx );
+/*
+ * Results with the first item in the queue, else NULL.
+ */
+TYPELIB_PROC POINTER TYPELIB_CALLTYPE  PeekDataInQueue    ( PDATAQUEUE *pplq );
 /* <combine sack::containers::data_queue::CreateDataQueueEx@INDEX size>
    \ \                                                                  */
 #define     CreateDataQueue(size)     CreateDataQueueEx( size DBG_SRC )
@@ -2564,8 +2569,7 @@ _SETS_NAMESPACE
    array that maps usage of the set, and for the set size of
    elements.
    Remarks
-   \ \
-   Summary
+   \    Summary
    Generic sets are good for tracking lots of tiny structures.
    They track slabs of X structures at a time. They allocate a
    slab of X structures with an array of X bits indicating
@@ -2632,13 +2636,13 @@ typedef struct genericset_tag {
 	struct genericset_tag **me;
 	/* number of spots in this set block that are used. */
 	uint32_t nUsed;
- // hmm if I change this here? we're hozed... so.. we'll do it anyhow :) evil - recompile please
+    // this is the size of the bit pool before the pointer pool
 	uint32_t nBias;
- // after this p * unit must be computed
+ // the bit pool starts here (booleanUsed) after a number of
 	uint32_t bUsed[1];
+	                   // bits begins the aligned pointer pool.
 } GENERICSET, *PGENERICSET;
-/* \ \
-   Parameters
+/* \    Parameters
    pSet :      pointer to a generic set
    nMember :   index of the member
    setsize :   number of elements in each block
@@ -2649,13 +2653,11 @@ TYPELIB_PROC  POINTER  TYPELIB_CALLTYPE GetFromSetEx( GENERICSET **pSet, int set
    \ \                                                                             */
 #define GetFromSeta(ps, ss, us, max) GetFromSetPoolEx( NULL, 0, 0, 0, (ps), (ss), (us), (max) DBG_SRC )
 /* <combine sack::containers::sets::GetFromSetEx@GENERICSET **@int@int@int maxcnt>
-   \ \
-   Parameters
+   \    Parameters
    name :  name of type the set contains.
    pSet :  pointer to a set to get an element from.                                */
 #define GetFromSet( name, pset ) (name*)GetFromSeta( (GENERICSET**)(pset), sizeof( name##SET ), sizeof( name ), MAX##name##SPERSET )
-/* \ \
-   Parameters
+/* \    Parameters
    pSet :      pointer to a generic set
    nMember :   index of the member
    setsize :   number of elements in each block
@@ -2671,8 +2673,7 @@ TYPELIB_PROC  PGENERICSET  TYPELIB_CALLTYPE GetFromSetPoolEx( GENERICSET **pSetS
 /* <combine sack::containers::sets::GetFromSetPoolEx@GENERICSET **@int@int@int@GENERICSET **@int@int@int maxcnt>
    \ \                                                                                                           */
 #define GetFromSetPool( name, pool, pset ) (name*)GetFromSetPoola( (GENERICSET**)(pool)	    , sizeof( name##SETSET ), sizeof( name##SET ), MAX##name##SETSPERSET	, (GENERICSET**)(pset), sizeof( name##SET ), sizeof( name ), MAX##name##SPERSET )
-/* \ \
-   Parameters
+/* \    Parameters
    pSet :      pointer to a generic set
    nMember :   index of the member
    setsize :   number of elements in each block
@@ -2685,8 +2686,7 @@ TYPELIB_PROC  POINTER  TYPELIB_CALLTYPE GetSetMemberEx( GENERICSET **pSet, INDEX
 /* <combine sack::containers::sets::GetSetMemberEx@GENERICSET **@INDEX@int@int@int maxcnt>
    \ \                                                                                     */
 #define GetSetMember( name, pset, member ) ((name*)GetSetMembera( (GENERICSET**)(pset), (member), sizeof( name##SET ), sizeof( name ), MAX##name##SPERSET ))
-/* \ \
-   Parameters
+/* \    Parameters
    pSet :      pointer to a generic set
    nMember :   index of the member
    setsize :   number of elements in each block
@@ -2713,8 +2713,7 @@ TYPELIB_PROC  INDEX TYPELIB_CALLTYPE  GetMemberIndex(GENERICSET **set, POINTER u
 /* <combine sack::containers::sets::GetMemberIndex>
    \ \                                              */
 #define GetIndexFromSet( name, pset ) GetMemberIndex( name, pset, GetFromSet( name, pset ) )
-/* \ \
-   Parameters
+/* \    Parameters
    pSet :      pointer to a generic set
    nMember :   index of the member
    setsize :   number of elements in each block
@@ -2794,8 +2793,7 @@ TYPELIB_PROC  void TYPELIB_CALLTYPE  DeleteSet( GENERICSET **ppSet );
    ForAllinSet Callback - callback fucntion used with
    ForAllInSet                                        */
 typedef uintptr_t (CPROC *FAISCallback)(void*,uintptr_t);
-/* \ \
-   Parameters
+/* \    Parameters
    pSet :      poiner to a set
    unitsize :  size of elements in the array
    max :       count of elements per set block
@@ -3301,8 +3299,7 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateEx( size_t nSize DBG_PASS );
    PTEXT text = SegCreate( 10 );
    </code>                                                     */
 #define SegCreate(s) SegCreateEx(s DBG_SRC)
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromText> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromTextEx( CTEXTSTR text DBG_PASS );
@@ -3312,13 +3309,11 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromTextEx( CTEXTSTR text DBG_PAS
    PTEXT line = SegCreateFromText( "Around the world in a day." );
    </code>                                                         */
 #define SegCreateFromText(t) SegCreateFromTextEx(t DBG_SRC)
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromChar> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromCharLenEx( const char *text, size_t len DBG_PASS );
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromChar> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromCharEx( const char *text DBG_PASS );
@@ -3328,18 +3323,15 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromCharEx( const char *text DBG_
    PTEXT line = SegCreateFromChar( "Around the world in a day." );
    </code>                                                         */
 #define SegCreateFromChar(t) SegCreateFromCharEx(t DBG_SRC)
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromChar> */
 #define SegCreateFromCharLen(t,len) SegCreateFromCharLenEx((t),(len) DBG_SRC)
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromWide> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromWideLenEx( const wchar_t *text, size_t len DBG_PASS );
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromWide> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromWideEx( const wchar_t *text DBG_PASS );
@@ -3349,13 +3341,11 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromWideEx( const wchar_t *text D
    PTEXT line = SegCreateFromWideLen( L"Around the world in a day.", 26 );
    </code>                                                         */
 #define SegCreateFromWideLen(t,len) SegCreateFromWideLenEx((t),(len) DBG_SRC)
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromWide> */
 #define SegCreateFromWide(t) SegCreateFromWideEx(t DBG_SRC)
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateIndirect> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateIndirectEx( PTEXT pText DBG_PASS );
@@ -3374,8 +3364,7 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateIndirectEx( PTEXT pText DBG_PASS 
    length buffer for a TEXT segment.
                                                                                   */
 #define SegCreateIndirect(t) SegCreateIndirectEx(t DBG_SRC)
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegDuplicate> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegDuplicateEx( PTEXT pText DBG_PASS);
@@ -3393,16 +3382,14 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  LineDuplicateEx( PTEXT pText DBG_PASS );
 /* <combine sack::containers::text::LineDuplicateEx@PTEXT pText>
    \ \                                                           */
 #define LineDuplicate(pt) LineDuplicateEx(pt DBG_SRC )
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link TextDuplicate> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  TextDuplicateEx( PTEXT pText, int bSingle DBG_PASS );
 /* Duplicate the whole string of text to another string with
    exactly the same content.                                 */
 #define TextDuplicate(pt,s) TextDuplicateEx(pt,s DBG_SRC )
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromInt> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromIntEx( int value DBG_PASS );
@@ -3418,8 +3405,7 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromIntEx( int value DBG_PASS );
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFrom_64Ex( int64_t value DBG_PASS );
 /* Create a text segment from a uint64_t bit value. (long long int) */
 #define SegCreateFrom_64(v) SegCreateFrom_64Ex( v DBG_SRC )
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromFloat> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromFloatEx( float value DBG_PASS );
@@ -3468,7 +3454,7 @@ TYPELIB_PROC  void TYPELIB_CALLTYPE   LineReleaseEx (PTEXT line DBG_PASS );
    Any segment in the line may be passed, the first segment is
    found, and then all segments in the line are deleted.       */
 #define LineRelease(l) LineReleaseEx(l DBG_SRC )
-/* \ \
+/* \
    <b>See Also</b>
    <link DBG_PASS>
    <link SegRelease> */
@@ -3547,15 +3533,13 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegGrab     (PTEXT segment);
    Returns
    \Returns the '_this' that was substituted.                     */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegSubst    ( PTEXT _this, PTEXT that );
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegSplit> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegSplitEx( PTEXT *pLine, INDEX nPos DBG_PASS);
 /* Split a PTEXT segment.
    Example
-   \ \
-   <code lang="c++">
+   \    <code lang="c++">
    PTEXT result = SegSplit( &amp;old_string, 5 );
    </code>
    Returns
@@ -3665,8 +3649,7 @@ TYPELIB_PROC  INDEX TYPELIB_CALLTYPE  LineLengthExx( PTEXT pt, LOGICAL bSingle,P
 /* <combine sack::containers::text::LineLengthExEx@PTEXT@LOGICAL@int@PTEXT>
    \ \                                                                      */
 #define LineLengthExx(pt,single,eol) LineLengthExEx( pt,single,8,eol)
-/* \ \
-   Parameters
+/* \    Parameters
    Text segment :  PTEXT line or segment to get the length of
    single :        boolean, if set then only a single segment is
                    measured, otherwise all segments from this to
@@ -3713,8 +3696,7 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  BuildLineExx( PTEXT pt, LOGICAL bSingle, P
    \ \                                                                          */
 #define BuildLineEx(from,single) BuildLineExEx( from,single,8,NULL DBG_SRC )
 /* <combine sack::containers::text::BuildLineExEx@PTEXT@LOGICAL@int@PTEXT pEOL>
-   \ \
-    Flattens all segments in a line to a single segment result.
+   \     Flattens all segments in a line to a single segment result.
 */
 #define BuildLine(from) BuildLineExEx( from, FALSE,8,NULL DBG_SRC )
 //
@@ -3897,8 +3879,7 @@ TYPELIB_PROC  void TYPELIB_CALLTYPE  VarTextEmptyEx( PVARTEXT pvt DBG_PASS);
 #define VarTextEmpty(pvt) VarTextEmptyEx( (pvt) DBG_SRC )
 /* Add a single character to a vartext collector.
    Note
-   \ \
-   Parameters
+   \    Parameters
    pvt :       PVARTEXT to add character to
    c :         character to add
    DBG_PASS :  optional debug information         */
@@ -4222,8 +4203,7 @@ TYPELIB_PROC  PTREEROOT TYPELIB_CALLTYPE  CreateBinaryTreeExtended( uint32_t fla
    PTREEROOT tree = CreateBinaryTree();
    </code>                                                      */
 #define CreateBinaryTree() CreateBinaryTreeEx( NULL, NULL )
-/* \ \
-   Example
+/* \    Example
    <code lang="c++">
    PTREEROOT tree = CreateBinaryTree();
    DestroyBinaryTree( tree );
@@ -4231,8 +4211,7 @@ TYPELIB_PROC  PTREEROOT TYPELIB_CALLTYPE  CreateBinaryTreeExtended( uint32_t fla
    </code>                              */
 TYPELIB_PROC  void TYPELIB_CALLTYPE  DestroyBinaryTree( PTREEROOT root );
 /* Drops all the nodes in a tree so it becomes empty...
-   \ \
-   Example
+   \    Example
    <code lang="c++">
    PTREEROOT tree = CreateBinaryTree();
    ResetBinaryTree( tree );
@@ -4251,8 +4230,7 @@ TYPELIB_PROC  void TYPELIB_CALLTYPE  ResetBinaryTree( PTREEROOT root );
    BalanceBinaryTree( tree );
    </code>                                                        */
 TYPELIB_PROC  void TYPELIB_CALLTYPE  BalanceBinaryTree( PTREEROOT root );
-/* \ \
-   See Also
+/* \    See Also
    <link AddBinaryNode>
    <link DBG_PASS>
                         */
@@ -4395,8 +4373,7 @@ TYPELIB_PROC  CPOINTER TYPELIB_CALLTYPE  GetParentNode( PTREEROOT root );
    Binary Trees have a 'current' cursor. These operations may be
    used to browse the tree.
    Example
-   \ \
-   <code>
+   \    <code>
    // this assumes you have a tree, and it's fairly populated, then this demonstrates
    // all steps of browsing.
    POINTER my_data;
@@ -7032,6 +7009,9 @@ namespace sack {
 #  undef _XOPEN_SOURCE
 #  define _XOPEN_SOURCE 500
 #endif
+#  ifndef _GNU_SOURCE
+#    define _GNU_SOURCE
+#  endif
 #ifndef STANDARD_HEADERS_INCLUDED
 /* multiple inclusion protection symbol */
 #define STANDARD_HEADERS_INCLUDED
@@ -7161,18 +7141,18 @@ namespace sack {
 #    define stricmp _stricmp
 #    define strdup _strdup
 #  endif
-#ifdef WANT_MMSYSTEM
-#  include <mmsystem.h>
-#endif
-#if USE_NATIVE_TIME_GET_TIME
+#  ifdef WANT_MMSYSTEM
+#    include <mmsystem.h>
+#  endif
+#  if USE_NATIVE_TIME_GET_TIME
 //#  include <windowsx.h>
 // we like timeGetTime() instead of GetTickCount()
 //#  include <mmsystem.h>
-#ifdef __cplusplus
+#    ifdef __cplusplus
 extern "C"
-#endif
+#    endif
 __declspec(dllimport) DWORD WINAPI timeGetTime(void);
-#endif
+#  endif
 #  ifdef WIN32
 #    if defined( NEED_SHLAPI )
 #      include <shlwapi.h>
@@ -7203,9 +7183,6 @@ __declspec(dllimport) DWORD WINAPI timeGetTime(void);
 #  endif
  // ifdef unix/linux
 #else
-#  ifndef _GNU_SOURCE
-#    define _GNU_SOURCE
-#  endif
 #  include <pthread.h>
 #  include <sched.h>
 #  include <unistd.h>
@@ -7315,7 +7292,7 @@ But WHO doesn't have stdint?  BTW is sizeof( size_t ) == sizeof( void* )
 #    define DeclareThreadLocal static __declspec(thread)
 #    define DeclareThreadVar __declspec(thread)
 #  endif
-#elif !defined( __NO_THREAD_LOCAL__ ) && ( defined( __GNUC__ ) )
+#elif !defined( __NO_THREAD_LOCAL__ ) && ( defined( __GNUC__ ) || defined( __MAC__ ) )
 #    define HAS_TLS 1
 #    ifdef __cplusplus
 #      define DeclareThreadLocal static thread_local
@@ -8383,10 +8360,8 @@ typedef uint64_t THREAD_ID;
 // this is now always the case
 // it's a safer solution anyhow...
 #  ifdef __MAC__
-#    ifndef SYS_thread_selfid
-#      define SYS_thread_selfid                 372
-#    endif
-#    define GetMyThreadID()  (( ((uint64_t)getpid()) << 32 ) | ( (uint64_t)( syscall(SYS_thread_selfid) ) ) )
+     DeclareThreadLocal uint64_t tmpThreadid;
+#    define GetMyThreadID()  ((pthread_threadid_np(NULL, &tmpThreadid)),tmpThreadid)
 #  else
 #    ifndef GETPID_RETURNS_PPID
 #      define GETPID_RETURNS_PPID
@@ -9027,8 +9002,7 @@ TYPELIB_PROC  POINTER TYPELIB_CALLTYPE    SetDataItemEx ( PDATALIST *ppdl, INDEX
 TYPELIB_PROC  POINTER TYPELIB_CALLTYPE    SetDataItemEx ( PDATALIST *ppdl, INDEX idx, POINTER data DBG_PASS );
 /* \Returns a pointer to the data at a specified index.
    Parameters
-   \ \
-   ppdl :  address of a PDATALIST
+   \    ppdl :  address of a PDATALIST
    idx :   index of element to get                      */
 TYPELIB_PROC  POINTER TYPELIB_CALLTYPE    GetDataItem ( PDATALIST *ppdl, INDEX idx );
 /* Removes a data element from the list (moves all other
@@ -9345,17 +9319,24 @@ TYPELIB_PROC  void TYPELIB_CALLTYPE         EmptyDataQueue ( PDATAQUEUE *pplq );
  * reallocated and moved.
  */
 TYPELIB_PROC  LOGICAL TYPELIB_CALLTYPE  PeekDataQueueEx    ( PDATAQUEUE *pplq, POINTER ResultBuffer, INDEX idx );
-/* <combine sack::containers::data_queue::PeekDataQueueEx@PDATAQUEUE *@POINTER@INDEX>
-   \ \                                                                                */
 #define PeekDataQueueEx( q, type, result, idx ) PeekDataQueueEx( q, (POINTER)result, idx )
 /*
  * Result buffer is filled with the last element, and the result is true, otherwise the return
  * value is FALSE, and the data was not filled in.
  */
 TYPELIB_PROC  LOGICAL TYPELIB_CALLTYPE  PeekDataQueue    ( PDATAQUEUE *pplq, POINTER ResultBuffer );
-/* <combine sack::containers::data_queue::PeekDataQueue@PDATAQUEUE *@POINTER>
-   \ \                                                                        */
-#define PeekDataQueue( q, type, result ) PeekDataQueue( q, (POINTER)result )
+#define PeekDataQueue( q, type, result ) PeekDataQueueEx( q, type, result, 0 )
+/*
+ * gets the address a PDATAQUEUE element at index
+ * result buffer is a pointer to the type of structure expected to be
+ * stored within this.  Index from 0 to N indexes from first ( to be dequeued )
+ * to last item in queue.
+ */
+TYPELIB_PROC POINTER TYPELIB_CALLTYPE  PeekDataInQueueEx    ( PDATAQUEUE *pplq, INDEX idx );
+/*
+ * Results with the first item in the queue, else NULL.
+ */
+TYPELIB_PROC POINTER TYPELIB_CALLTYPE  PeekDataInQueue    ( PDATAQUEUE *pplq );
 /* <combine sack::containers::data_queue::CreateDataQueueEx@INDEX size>
    \ \                                                                  */
 #define     CreateDataQueue(size)     CreateDataQueueEx( size DBG_SRC )
@@ -9561,8 +9542,7 @@ _SETS_NAMESPACE
    array that maps usage of the set, and for the set size of
    elements.
    Remarks
-   \ \
-   Summary
+   \    Summary
    Generic sets are good for tracking lots of tiny structures.
    They track slabs of X structures at a time. They allocate a
    slab of X structures with an array of X bits indicating
@@ -9629,13 +9609,13 @@ typedef struct genericset_tag {
 	struct genericset_tag **me;
 	/* number of spots in this set block that are used. */
 	uint32_t nUsed;
- // hmm if I change this here? we're hozed... so.. we'll do it anyhow :) evil - recompile please
+    // this is the size of the bit pool before the pointer pool
 	uint32_t nBias;
- // after this p * unit must be computed
+ // the bit pool starts here (booleanUsed) after a number of
 	uint32_t bUsed[1];
+	                   // bits begins the aligned pointer pool.
 } GENERICSET, *PGENERICSET;
-/* \ \
-   Parameters
+/* \    Parameters
    pSet :      pointer to a generic set
    nMember :   index of the member
    setsize :   number of elements in each block
@@ -9646,13 +9626,11 @@ TYPELIB_PROC  POINTER  TYPELIB_CALLTYPE GetFromSetEx( GENERICSET **pSet, int set
    \ \                                                                             */
 #define GetFromSeta(ps, ss, us, max) GetFromSetPoolEx( NULL, 0, 0, 0, (ps), (ss), (us), (max) DBG_SRC )
 /* <combine sack::containers::sets::GetFromSetEx@GENERICSET **@int@int@int maxcnt>
-   \ \
-   Parameters
+   \    Parameters
    name :  name of type the set contains.
    pSet :  pointer to a set to get an element from.                                */
 #define GetFromSet( name, pset ) (name*)GetFromSeta( (GENERICSET**)(pset), sizeof( name##SET ), sizeof( name ), MAX##name##SPERSET )
-/* \ \
-   Parameters
+/* \    Parameters
    pSet :      pointer to a generic set
    nMember :   index of the member
    setsize :   number of elements in each block
@@ -9668,8 +9646,7 @@ TYPELIB_PROC  PGENERICSET  TYPELIB_CALLTYPE GetFromSetPoolEx( GENERICSET **pSetS
 /* <combine sack::containers::sets::GetFromSetPoolEx@GENERICSET **@int@int@int@GENERICSET **@int@int@int maxcnt>
    \ \                                                                                                           */
 #define GetFromSetPool( name, pool, pset ) (name*)GetFromSetPoola( (GENERICSET**)(pool)	    , sizeof( name##SETSET ), sizeof( name##SET ), MAX##name##SETSPERSET	, (GENERICSET**)(pset), sizeof( name##SET ), sizeof( name ), MAX##name##SPERSET )
-/* \ \
-   Parameters
+/* \    Parameters
    pSet :      pointer to a generic set
    nMember :   index of the member
    setsize :   number of elements in each block
@@ -9682,8 +9659,7 @@ TYPELIB_PROC  POINTER  TYPELIB_CALLTYPE GetSetMemberEx( GENERICSET **pSet, INDEX
 /* <combine sack::containers::sets::GetSetMemberEx@GENERICSET **@INDEX@int@int@int maxcnt>
    \ \                                                                                     */
 #define GetSetMember( name, pset, member ) ((name*)GetSetMembera( (GENERICSET**)(pset), (member), sizeof( name##SET ), sizeof( name ), MAX##name##SPERSET ))
-/* \ \
-   Parameters
+/* \    Parameters
    pSet :      pointer to a generic set
    nMember :   index of the member
    setsize :   number of elements in each block
@@ -9710,8 +9686,7 @@ TYPELIB_PROC  INDEX TYPELIB_CALLTYPE  GetMemberIndex(GENERICSET **set, POINTER u
 /* <combine sack::containers::sets::GetMemberIndex>
    \ \                                              */
 #define GetIndexFromSet( name, pset ) GetMemberIndex( name, pset, GetFromSet( name, pset ) )
-/* \ \
-   Parameters
+/* \    Parameters
    pSet :      pointer to a generic set
    nMember :   index of the member
    setsize :   number of elements in each block
@@ -9791,8 +9766,7 @@ TYPELIB_PROC  void TYPELIB_CALLTYPE  DeleteSet( GENERICSET **ppSet );
    ForAllinSet Callback - callback fucntion used with
    ForAllInSet                                        */
 typedef uintptr_t (CPROC *FAISCallback)(void*,uintptr_t);
-/* \ \
-   Parameters
+/* \    Parameters
    pSet :      poiner to a set
    unitsize :  size of elements in the array
    max :       count of elements per set block
@@ -10298,8 +10272,7 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateEx( size_t nSize DBG_PASS );
    PTEXT text = SegCreate( 10 );
    </code>                                                     */
 #define SegCreate(s) SegCreateEx(s DBG_SRC)
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromText> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromTextEx( CTEXTSTR text DBG_PASS );
@@ -10309,13 +10282,11 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromTextEx( CTEXTSTR text DBG_PAS
    PTEXT line = SegCreateFromText( "Around the world in a day." );
    </code>                                                         */
 #define SegCreateFromText(t) SegCreateFromTextEx(t DBG_SRC)
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromChar> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromCharLenEx( const char *text, size_t len DBG_PASS );
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromChar> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromCharEx( const char *text DBG_PASS );
@@ -10325,18 +10296,15 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromCharEx( const char *text DBG_
    PTEXT line = SegCreateFromChar( "Around the world in a day." );
    </code>                                                         */
 #define SegCreateFromChar(t) SegCreateFromCharEx(t DBG_SRC)
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromChar> */
 #define SegCreateFromCharLen(t,len) SegCreateFromCharLenEx((t),(len) DBG_SRC)
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromWide> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromWideLenEx( const wchar_t *text, size_t len DBG_PASS );
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromWide> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromWideEx( const wchar_t *text DBG_PASS );
@@ -10346,13 +10314,11 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromWideEx( const wchar_t *text D
    PTEXT line = SegCreateFromWideLen( L"Around the world in a day.", 26 );
    </code>                                                         */
 #define SegCreateFromWideLen(t,len) SegCreateFromWideLenEx((t),(len) DBG_SRC)
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromWide> */
 #define SegCreateFromWide(t) SegCreateFromWideEx(t DBG_SRC)
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateIndirect> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateIndirectEx( PTEXT pText DBG_PASS );
@@ -10371,8 +10337,7 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateIndirectEx( PTEXT pText DBG_PASS 
    length buffer for a TEXT segment.
                                                                                   */
 #define SegCreateIndirect(t) SegCreateIndirectEx(t DBG_SRC)
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegDuplicate> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegDuplicateEx( PTEXT pText DBG_PASS);
@@ -10390,16 +10355,14 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  LineDuplicateEx( PTEXT pText DBG_PASS );
 /* <combine sack::containers::text::LineDuplicateEx@PTEXT pText>
    \ \                                                           */
 #define LineDuplicate(pt) LineDuplicateEx(pt DBG_SRC )
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link TextDuplicate> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  TextDuplicateEx( PTEXT pText, int bSingle DBG_PASS );
 /* Duplicate the whole string of text to another string with
    exactly the same content.                                 */
 #define TextDuplicate(pt,s) TextDuplicateEx(pt,s DBG_SRC )
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromInt> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromIntEx( int value DBG_PASS );
@@ -10415,8 +10378,7 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromIntEx( int value DBG_PASS );
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFrom_64Ex( int64_t value DBG_PASS );
 /* Create a text segment from a uint64_t bit value. (long long int) */
 #define SegCreateFrom_64(v) SegCreateFrom_64Ex( v DBG_SRC )
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromFloat> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromFloatEx( float value DBG_PASS );
@@ -10465,7 +10427,7 @@ TYPELIB_PROC  void TYPELIB_CALLTYPE   LineReleaseEx (PTEXT line DBG_PASS );
    Any segment in the line may be passed, the first segment is
    found, and then all segments in the line are deleted.       */
 #define LineRelease(l) LineReleaseEx(l DBG_SRC )
-/* \ \
+/* \
    <b>See Also</b>
    <link DBG_PASS>
    <link SegRelease> */
@@ -10544,15 +10506,13 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegGrab     (PTEXT segment);
    Returns
    \Returns the '_this' that was substituted.                     */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegSubst    ( PTEXT _this, PTEXT that );
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegSplit> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegSplitEx( PTEXT *pLine, INDEX nPos DBG_PASS);
 /* Split a PTEXT segment.
    Example
-   \ \
-   <code lang="c++">
+   \    <code lang="c++">
    PTEXT result = SegSplit( &amp;old_string, 5 );
    </code>
    Returns
@@ -10662,8 +10622,7 @@ TYPELIB_PROC  INDEX TYPELIB_CALLTYPE  LineLengthExx( PTEXT pt, LOGICAL bSingle,P
 /* <combine sack::containers::text::LineLengthExEx@PTEXT@LOGICAL@int@PTEXT>
    \ \                                                                      */
 #define LineLengthExx(pt,single,eol) LineLengthExEx( pt,single,8,eol)
-/* \ \
-   Parameters
+/* \    Parameters
    Text segment :  PTEXT line or segment to get the length of
    single :        boolean, if set then only a single segment is
                    measured, otherwise all segments from this to
@@ -10710,8 +10669,7 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  BuildLineExx( PTEXT pt, LOGICAL bSingle, P
    \ \                                                                          */
 #define BuildLineEx(from,single) BuildLineExEx( from,single,8,NULL DBG_SRC )
 /* <combine sack::containers::text::BuildLineExEx@PTEXT@LOGICAL@int@PTEXT pEOL>
-   \ \
-    Flattens all segments in a line to a single segment result.
+   \     Flattens all segments in a line to a single segment result.
 */
 #define BuildLine(from) BuildLineExEx( from, FALSE,8,NULL DBG_SRC )
 //
@@ -10894,8 +10852,7 @@ TYPELIB_PROC  void TYPELIB_CALLTYPE  VarTextEmptyEx( PVARTEXT pvt DBG_PASS);
 #define VarTextEmpty(pvt) VarTextEmptyEx( (pvt) DBG_SRC )
 /* Add a single character to a vartext collector.
    Note
-   \ \
-   Parameters
+   \    Parameters
    pvt :       PVARTEXT to add character to
    c :         character to add
    DBG_PASS :  optional debug information         */
@@ -11219,8 +11176,7 @@ TYPELIB_PROC  PTREEROOT TYPELIB_CALLTYPE  CreateBinaryTreeExtended( uint32_t fla
    PTREEROOT tree = CreateBinaryTree();
    </code>                                                      */
 #define CreateBinaryTree() CreateBinaryTreeEx( NULL, NULL )
-/* \ \
-   Example
+/* \    Example
    <code lang="c++">
    PTREEROOT tree = CreateBinaryTree();
    DestroyBinaryTree( tree );
@@ -11228,8 +11184,7 @@ TYPELIB_PROC  PTREEROOT TYPELIB_CALLTYPE  CreateBinaryTreeExtended( uint32_t fla
    </code>                              */
 TYPELIB_PROC  void TYPELIB_CALLTYPE  DestroyBinaryTree( PTREEROOT root );
 /* Drops all the nodes in a tree so it becomes empty...
-   \ \
-   Example
+   \    Example
    <code lang="c++">
    PTREEROOT tree = CreateBinaryTree();
    ResetBinaryTree( tree );
@@ -11248,8 +11203,7 @@ TYPELIB_PROC  void TYPELIB_CALLTYPE  ResetBinaryTree( PTREEROOT root );
    BalanceBinaryTree( tree );
    </code>                                                        */
 TYPELIB_PROC  void TYPELIB_CALLTYPE  BalanceBinaryTree( PTREEROOT root );
-/* \ \
-   See Also
+/* \    See Also
    <link AddBinaryNode>
    <link DBG_PASS>
                         */
@@ -11392,8 +11346,7 @@ TYPELIB_PROC  CPOINTER TYPELIB_CALLTYPE  GetParentNode( PTREEROOT root );
    Binary Trees have a 'current' cursor. These operations may be
    used to browse the tree.
    Example
-   \ \
-   <code>
+   \    <code>
    // this assumes you have a tree, and it's fairly populated, then this demonstrates
    // all steps of browsing.
    POINTER my_data;
@@ -16494,6 +16447,43 @@ PDATAQUEUE  CreateLargeDataQueueEx( INDEX size, INDEX entries, INDEX expand DBG_
  LOGICAL  PeekDataQueue ( PDATAQUEUE *ppdq, POINTER result )
 {
 	return PeekDataQueueEx( ppdq, result, 0 );
+}
+// zero is the first,
+POINTER  PeekDataInQueueEx ( PDATAQUEUE *ppdq, INDEX idx )
+{
+	INDEX top;
+	if( ppdq && *ppdq )
+		while( LockedExchange( data_queue_local_lock, 1 ) )
+			Relinquish();
+	else
+		return 0;
+	// cannot get invalid id.
+	if( idx != INVALID_INDEX )
+	{
+		for( top = (*ppdq)->Bottom;
+			 idx != INVALID_INDEX && top != (*ppdq)->Top
+			 ; )
+		{
+			idx--;
+			if( idx != INVALID_INDEX )
+			{
+				top++;
+				if( (top) >= (*ppdq)->Cnt )
+					top = top-(*ppdq)->Cnt;
+			}
+		}
+		if( idx == INVALID_INDEX )
+		{
+			data_queue_local_lock[0] = 0;
+			return (*ppdq)->data + top * (*ppdq)->Size;
+		}
+	}
+	data_queue_local_lock[0] = 0;
+	return NULL;
+}
+POINTER  PeekDataInQueue ( PDATAQUEUE *ppdq )
+{
+	return PeekDataInQueueEx( ppdq, 0 );
 }
 void  EmptyDataQueue ( PDATAQUEUE *ppdq )
 {
@@ -32901,7 +32891,7 @@ Double quote	"""	222
      */
 #  endif
 // if any key...
-#if !defined( KEY_1 )
+#if 1 || !defined( KEY_1 )
 #  if defined( __ANDROID__ )
 #    include <android/keycodes.h>
 #    define KEY_SHIFT        AKEYCODE_SHIFT_LEFT
@@ -33070,15 +33060,64 @@ Double quote	"""	222
 #    define KEY_X   AKEYCODE_X
 #    define KEY_Y   AKEYCODE_Y
 #    define KEY_Z   AKEYCODE_Z
-#  elif defined( __LINUX__ )
+#  elif defined( __LINUX__ ) && !defined( __MAC__ ) && !defined( __ANDROID__ )
+#include <linux/input-event-codes.h>
+#undef BTN_START
+#define KEY_ESCAPE KEY_ESC
+#define KEY_PGDN KEY_PAGEDOWN
+#define KEY_PAGE_DOWN  KEY_PAGEDOWN
+#define KEY_PGUP KEY_PAGEUP
+#define KEY_PAGE_UP  KEY_PAGEUP
+#define KEY_DASH KEY_MINUS
+#define KEY_QUOTE KEY_APOSTROPHE
+#define KEY_PAD_PLUS KEY_KPPLUS
+#define KEY_PAD_ENTER KEY_KPENTER
+#define KEY_PAD_MINUS KEY_KPMINUS
+#define KEY_PAD_DOT   KEY_KPDOT
+#define KEY_PAD_DIV   KEY_KPSLASH
+//#define KEY_DASH
+#define KEY_LEFT_BRACKET KEY_LEFTBRACE
+#define KEY_RIGHT_BRACKET KEY_RIGHTBRACE
+#define KEY_PAD_MULT  KEY_KPASTERISK
+#define KEY_PAD_9   KEY_KP9
+#define KEY_PAD_8   KEY_KP8
+#define KEY_PAD_7   KEY_KP7
+#define KEY_PAD_6   KEY_KP6
+#define KEY_PAD_5   KEY_KP5
+#define KEY_PAD_4   KEY_KP4
+#define KEY_PAD_3   KEY_KP3
+#define KEY_PAD_2   KEY_KP2
+#define KEY_PAD_1   KEY_KP1
+#define KEY_PAD_0   KEY_KP0
+#define KEY_CENTER  KEY_KPPLUSMINUS
+#define KEY_LESS   KEY_COMMA
+#define KEY_PAD_DELETE KEY_KPDOT
+#define KEY_GREY_INSERT KEY_INSERT
+#define KEY_GREY_DELETE KEY_DELETE
+#define KEY_PERIOD KEY_DOT
+#define KEY_CAPS_LOCK KEY_CAPSLOCK
+#define KEY_LEFT_SHIFT KEY_LEFTSHIFT
+#define KEY_RIGHT_SHIFT KEY_RIGHTSHIFT
+#define KEY_ALT KEY_LEFTALT
+#define KEY_LEFT_ALT KEY_LEFTALT
+#define KEY_RIGHT_ALT KEY_RIGHTALT
+#define KEY_CTRL KEY_LEFTCTRL
+#define KEY_LEFT_CONTROL KEY_LEFTCTRL
+#define KEY_RIGHT_CONTROL KEY_RIGHTCTRL
+#define KEY_SCROLL_LOCK KEY_SCROLLLOCK
+#define KEY_SHIFT KEY_LEFTSHIFT
+#define KEY_DEL KEY_BACKSPACE
+//#define
+#define KEY_ACCENT KEY_GRAVE
 	  //#define USE_SDL_KEYSYM
 // ug - KEYSYMS are too wide...
 // so - we fall back to x scancode tables - and translate sym to these
 // since the scancodes which come from X are not the same as from console Raw
 // but - perhaps we should re-translate these to REAL scancodes... but in either
 // case - these fall to under 256 characters, and can therefore be used...
-#    define USE_X_RAW_SCANCODES
+//#    define USE_X_RAW_SCANCODES
 #    ifdef USE_X_RAW_SCANCODES
+//#pragma message( "XRAW")
 #      define KEY_SHIFT        0xFF
 #      define KEY_LEFT_SHIFT   50
  // maybe?
@@ -33163,6 +33202,7 @@ Double quote	"""	222
 #      define KEY_WINDOW_1      115
  // windows keys keys
 #      define KEY_WINDOW_2      117
+//#pragma message("GOOD DEFINE")
 #      define KEY_TAB           23
 #      define KEY_SLASH         61
 #      define KEY_BACKSPACE     22
@@ -33568,6 +33608,7 @@ Double quote	"""	222
 #      define KEY_MINUS     0x0C
 #      define KEY_PLUS         0x0D
 #      define  KEY_BKSP        0x0E
+#pragma error BAD DEFINE
 #      define KEY_TAB       0x0F
 #      define KEY_Q         0x10
 #      define KEY_W         0x11
@@ -37959,6 +38000,13 @@ enum ButtonFlags {
 // please do validate that the code gives them to you all the way
 // from the initial mouse message through all layers to the final
 // application handler.
+enum sizeDisplayValues {
+	wrsdv_one  = 0,
+	wrsdv_top = 1,
+	wrsdv_bottom = 2,
+	wrsdv_left = 4,
+	wrsdv_right = 8,
+};
 //----------------------------------------------------------
 enum DisplayAttributes {
    /* when used by the Display Lib manager, this describes how to manage the subsurface */
@@ -38025,8 +38073,7 @@ enum DisplayAttributes {
        See Also
        <link sack::image::render::GetDisplaySizeEx@int@int32_t *@int32_t *@uint32_t *@uint32_t *, GetDisplaySizeEx> */
     RENDER_PROC( void , GetDisplaySize)      ( uint32_t *width, uint32_t *height );
-	 /* \ \
-	    Parameters
+	 /* \	     Parameters
 	    nDisplay :  display to get the coordinates of. 0 is the
 	                default display from GetDesktopWindow(). 1\-n are
 	                displays for multiple display systems, 1,2,3,4
@@ -38366,8 +38413,7 @@ enum DisplayAttributes {
        display :  display to check the key state in
        key :      KEY_ symbol to check.                    */
     RENDER_PROC( uint32_t, IsKeyDown )              ( PRENDERER display, int key );
-    /* \ \
-       Parameters
+    /* \        Parameters
        display :  display to test the key status in
        key :      KEY_ symbol to check if the key is pressed
        Returns
@@ -38941,6 +38987,12 @@ struct render_interface_tag
 	RENDER_PROC_PTR( void, ReplyCloseDisplay )( void );
 		/* Clipboard Callback */
 	RENDER_PROC_PTR( void, SetClipboardEventCallback )(PRENDERER pRenderer, ClipboardCallback callback, uintptr_t psv);
+	// where ever the current mouse is, lock the mouse to the window, and allow the mouse to move it.
+	//
+	RENDER_PROC_PTR( void, BeginMoveDisplay )(PRENDERER pRenderer );
+	// where ever the current mouse is, lock the mouse to the window, and allow the mouse to move it.
+	//
+	RENDER_PROC_PTR( void, BeginSizeDisplay )(PRENDERER pRenderer, enum sizeDisplayValues sizeFrom );
 };
 #ifdef DEFINE_DEFAULT_RENDER_INTERFACE
 #define USE_RENDER_INTERFACE GetDisplayInterface()
@@ -39059,6 +39111,8 @@ typedef int check_this_variable;
 #define RenderIsInstanced()       ((USE_RENDER_INTERFACE)?((USE_RENDER_INTERFACE)->_RenderIsInstanced)?(USE_RENDER_INTERFACE)->_RenderIsInstanced():0:0)
 #define SetDisplayCursor(n)           {if((USE_RENDER_INTERFACE)&&(USE_RENDER_INTERFACE)->_SetDisplayCursor)REND_PROC_ALIAS(SetDisplayCursor)(n);}
 #define IsDisplayRedrawForced(r)    ((USE_RENDER_INTERFACE)?((USE_RENDER_INTERFACE)->_IsDisplayRedrawForced)?(USE_RENDER_INTERFACE)->_IsDisplayRedrawForced(r):0:0)
+#define BeginMoveDisplay(r)   ((USE_RENDER_INTERFACE)?((USE_RENDER_INTERFACE)->_BeginMoveDisplay)?((USE_RENDER_INTERFACE)->_BeginMoveDisplay(r),1):0:0)
+#define BeginSizeDisplay(r,m)   ((USE_RENDER_INTERFACE)?((USE_RENDER_INTERFACE)->_BeginSizeDisplay)?((USE_RENDER_INTERFACE)->_BeginSizeDisplay(r,m),1):0:0)
 #endif
 	_INTERFACE_NAMESPACE_END
 #ifdef __cplusplus
@@ -41869,8 +41923,8 @@ IDLE_PROC( int, Idle )( void )
 }
 IDLE_PROC( int, IdleForEx )( uint32_t dwMilliseconds DBG_PASS )
 {
-	uint32_t dwStart = timeGetTime();
-	while( ( dwStart + dwMilliseconds ) > timeGetTime() )
+	//uint32_t dwStart = timeGetTime();
+	//while( ( dwStart + dwMilliseconds ) > timeGetTime() )
 	{
 		if( !IdleEx( DBG_VOIDRELAY ) )
 		{
@@ -42005,6 +42059,7 @@ enum NetworkConnectionFlags {
 	, CF_CONNECTING      = 0x00000080
 	, CF_CONNECT_WAITING = 0x00008000
 	, CF_CONNECT_CLOSED  = 0x00100000
+  // wants to close at the next opportunity.
 	, CF_TOCLOSE         = 0x00000100
   // this flag is unused at this time
 	, UNUSED_CF_WRITEISPENDED   = 0x00000200
@@ -42681,12 +42736,6 @@ void TerminateClosedClientEx( PCLIENT pc DBG_PASS )
 #endif
 	if( !pc )
 		return;
-	if( pc->dwFlags & CF_TOCLOSE ) {
-#ifdef VERBOSE_DEBUG
-		lprintf( "WAIT FOR CLOSE LATER... %x", pc->dwFlags );
-#endif
-		//return;
-	}
 	if( pc->dwFlags & CF_CLOSED )
 	{
 		PendingBuffer * lpNext;
@@ -43489,12 +43538,12 @@ void InternalRemoveClientExx(PCLIENT lpClient, LOGICAL bBlockNotify, LOGICAL bLi
 #endif
 			return;
 		}
-		if( lpClient->lpFirstPending || ( lpClient->dwFlags & CF_WRITEPENDING ) ) {
-#ifdef LOG_DEBUG_CLOSING
-			lprintf( "CLOSE WHILE WAITING FOR WRITE TO FINISH..." );
-#endif
-			//lpClient->dwFlags |= CF_TOCLOSE;
-			//return;
+		if( bLinger && ( lpClient->lpFirstPending || ( lpClient->dwFlags & CF_WRITEPENDING ) ) ) {
+//#ifdef LOG_DEBUG_CLOSING
+			lprintf( "GRACEFUL CLOSE WHILE WAITING FOR WRITE TO FINISH..." );
+//#endif
+			lpClient->dwFlags |= CF_TOCLOSE;
+			return;
 			// continue on; otherwise the close event gets lost...
 		}
 		{
@@ -43602,12 +43651,18 @@ void RemoveClientExx(PCLIENT lpClient, LOGICAL bBlockNotify, LOGICAL bLinger DBG
 	if( !lpClient ) return;
 	if( !( lpClient->dwFlags & CF_UDP )
 		&& ( lpClient->dwFlags & ( CF_CONNECTED ) ) ) {
-		shutdown( lpClient->Socket, SHUT_WR );
-	} else
-	{
+		// not linger
+		// OR  nothing to write allow shutdown.
+		if( !bLinger || !(lpClient->lpFirstPending || ( lpClient->dwFlags & CF_WRITEPENDING ) ) )
+			shutdown( lpClient->Socket, SHUT_WR );
+		else {
+			lprintf( "linger and still pending write data..." );
+			lpClient->dwFlags |= CF_TOCLOSE;
+		}
+	} else {
 		int n = 0;
 		// UDP still needs to be done this way...
-				//
+		// socket not connected; shutdown will not work.
 		//lprintf( "This will end up resetting the socket?" );
 		EnterCriticalSec( &globalNetworkData.csNetwork );
 		InternalRemoveClientExx( lpClient, bBlockNotify, bLinger DBG_RELAY );
@@ -43623,6 +43678,3210 @@ void RemoveClientExx(PCLIENT lpClient, LOGICAL bBlockNotify, LOGICAL bLinger DBG
 		LeaveCriticalSec( &globalNetworkData.csNetwork );
 	}
 }
+SACK_NETWORK_NAMESPACE_END
+///////////////////////////////////////////////////////////////////////////
+//
+// Filename    -  network_all.c
+//
+// Description -  Utility source to merge network providers for
+//                amalgamated targets; provides #ifdef wrappers
+//
+// Author      -  James Buckeyne
+//
+// Create Date -  2019-06-26
+//
+///////////////////////////////////////////////////////////////////////////
+#if defined( __MAC__ )
+///////////////////////////////////////////////////////////////////////////
+//
+// Filename    -  network_mac.C
+//
+// Description -  Network event handling for MAC(BSD) using kevent
+//
+// Author      -  James Buckeyne
+//
+// Create Date -  2019-06-26
+//
+///////////////////////////////////////////////////////////////////////////
+//
+//  DEBUG FLAGS IN netstruc.h
+//
+#ifndef _DEFAULT_SOURCE
+  // for features.h
+#define _DEFAULT_SOURCE
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#endif
+#define FIX_RELEASE_COM_COLLISION
+#define NO_UNICODE_C
+//#define DO_LOGGING // override no _DEBUG def to do loggings...
+//#define NO_LOGGING // force neverlog....
+#ifdef __LINUX__
+#endif
+//for GetMacAddress
+#ifdef __LINUX__
+//#include <sys/timeb.h>
+//*******************8
+#ifndef __ANDROID__
+#else
+#define EPOLLRDHUP EPOLLHUP
+#define EPOLL_CLOEXEC 0
+#endif
+#ifdef __MAC__
+#else
+#endif
+//*******************8
+#endif
+#ifdef WIN32
+#ifdef __CYGWIN__
+#else
+#endif
+#endif
+SACK_NETWORK_NAMESPACE
+//static uintptr_t CPROC NetworkThreadProc( PTHREAD thread );
+void RemoveThreadEvent( PCLIENT pc ) {
+	struct peer_thread_info *thread = pc->this_thread;
+	// could be closed (accept, initial read, protocol causes close before ever completing getting scheduled)
+	if( !thread ) {
+		 lprintf( "didn't have one? %p", pc );
+		return;
+	}
+	{
+#  ifdef __EMSCRIPTEN__
+#  else
+#      ifdef __64__
+		struct kevent64_s ev;
+		if( pc->dwFlags & CF_LISTEN ) {
+			EV_SET64( &ev, pc->Socket, EVFILT_READ, EV_DELETE, 0, 0, (uint64_t)pc, NULL, NULL );
+			kevent64( thread->kqueue, &ev, 1, 0, 0, 0, 0 );
+		} else {
+			EV_SET64( &ev, pc->Socket, EVFILT_READ, EV_DELETE, 0, 0, (uintptr_t)pc, NULL, NULL );
+			kevent64( thread->kqueue, &ev, 1, 0, 0, 0, 0 );
+			EV_SET64( &ev, pc->Socket, EVFILT_WRITE, EV_DELETE, 0, 0, (uintptr_t)pc, NULL, NULL );
+			kevent64( thread->kqueue, &ev, 1, 0, 0, 0, 0 );
+		}
+		if( pc->SocketBroadcast ) {
+			EV_SET64( &ev, pc->SocketBroadcast, EVFILT_READ, EV_DELETE, 0, 0, (uint64_t)pc, NULL, NULL );
+			kevent64( thread->kqueue, &ev, 1, 0, 0, 0, 0 );
+		}
+#      else
+		struct kevent ev;
+		if( pc->dwFlags & CF_LISTEN ) {
+			EV_SET( &ev, pc->Socket, EVFILT_READ, EV_DELETE, 0, 0, (uint64_t)pc );
+			kevent( thread->kqueue, &ev, 1, 0, 0, 0 );
+		} else {
+			EV_SET( &ev, pc->Socket, EVFILT_READ, EV_DELETE, 0, 0, (uintptr_t)pc );
+			kevent( thread->kqueue, &ev, 1, 0, 0, 0 );
+			EV_SET( &ev, pc->Socket, EVFILT_WRITE, EV_DELETE, 0, 0, (uintptr_t)pc );
+			kevent( thread->kqueue, &ev, 1, 0, 0, 0 );
+		}
+		if( pc->SocketBroadcast ) {
+			EV_SET( &ev, pc->SocketBroadcsat, EVFILT_READ, EV_DELETE, 0, 0, (uint64_t)pc );
+			kevent( thread->kqueue, &ev, 1, 0, 0, 0 );
+		}
+#      endif
+ // __EMSCRIPTEN__
+#  endif
+	}
+	LockedDecrement( &thread->nEvents );
+#    ifdef LOG_NETWORK_EVENT_THREAD
+	lprintf( "peer %p now has %d events", thread, thread->nEvents );
+#    endif
+	// don't bubble sort root thread
+	if( thread->parent_peer )
+		while( (thread->nEvents < thread->parent_peer->nEvents) && thread->parent_peer->parent_peer ) {
+#    ifdef LOG_NETWORK_EVENT_THREAD
+			//lprintf( "swapping this with parent peer ... this events %d  parent %d", thread->nEvents, thread->parent_peer->nEvents );
+#    endif
+			if( thread->child_peer )
+				thread->child_peer->parent_peer = thread->parent_peer;
+			thread->parent_peer->child_peer = thread->child_peer;
+			struct peer_thread_info *tmp = thread->parent_peer;
+			tmp->parent_peer->child_peer = thread;
+			thread->parent_peer = tmp->parent_peer;
+			tmp->parent_peer = thread;
+			thread->child_peer = tmp;
+		}
+}
+struct event_data {
+	PCLIENT pc;
+	int broadcast;
+};
+void AddThreadEvent( PCLIENT pc, int broadcast )
+{
+	struct peer_thread_info *peer = globalNetworkData.root_thread;
+	LOGICAL addPeer = FALSE;
+	if( pc->Socket <= 0 ) {
+		lprintf( "SAVED FROM A FATAL INFINITE EVENT LOOP");
+		return;
+	}
+#ifdef LOG_NOTICES
+	//if( globalNetworkData.flags.bLogNotices )
+		lprintf( "Add thread event %p %d %08x  %s", pc, broadcast?pc->SocketBroadcast:pc->Socket, pc->dwFlags, broadcast?"broadcast":"direct" );
+#endif
+	if( !broadcast ) {
+		for( ; peer; peer = peer->child_peer ) {
+			if( !peer->child_peer ) {
+#ifdef LOG_NOTICES
+				if( globalNetworkData.flags.bLogNotices )
+					lprintf( "On last peer..." );
+#endif
+				if( peer->nEvents > globalNetworkData.nPeers ) {
+#ifdef LOG_NOTICES
+					if( globalNetworkData.flags.bLogNotices )
+						lprintf( "global peers is %d, this has %d", globalNetworkData.nPeers, peer->nEvents );
+#endif
+					addPeer = TRUE;
+					break;
+				}
+				if( peer->nEvents >= 2560 ) {
+#ifdef LOG_NOTICES
+					if( globalNetworkData.flags.bLogNotices )
+						lprintf( "this has max events already.... %d %d", globalNetworkData.nPeers, peer->nEvents );
+#endif
+					addPeer = TRUE;
+					break;
+				}
+			}
+			if( peer->nEvents < 2560 ) {
+												// last thread.
+				if( !peer->child_peer )
+					break;
+				if( peer->nEvents < peer->child_peer->nEvents ) {
+#ifdef LOG_NOTICES
+					//if( globalNetworkData.flags.bLogNotices )
+					//	lprintf( "this event has fewer than the next thread's events %d  %d", peer->nEvents, peer->child_peer->nEvents );
+#endif
+					break;
+				}
+			}
+		}
+		if( addPeer ) {
+#ifdef LOG_NOTICES
+			if( globalNetworkData.flags.bLogNotices )
+				lprintf( "Creating a new thread...." );
+#endif
+			AddLink( (PLIST*)&globalNetworkData.pThreads, ThreadTo( NetworkThreadProc, (uintptr_t)peer ) );
+			globalNetworkData.nPeers++;
+			while( !peer->child_peer )
+				Relinquish();
+			if( globalNetworkData.root_thread != peer ) {
+				// relink to be higher in list of peers so it's found earlier.
+#ifdef LOG_NOTICES
+				if( globalNetworkData.flags.bLogNotices )
+					lprintf( "Relinking thread to be after root peer (no events, so it must be first)" );
+#endif
+				peer->child_peer->child_peer = globalNetworkData.root_thread->child_peer;
+				globalNetworkData.root_thread->child_peer->parent_peer = peer->child_peer;
+				globalNetworkData.root_thread->child_peer = peer->child_peer;
+				peer->child_peer->parent_peer = globalNetworkData.root_thread;
+				peer->child_peer = NULL;
+				peer = globalNetworkData.root_thread->child_peer;
+			}
+			else
+				peer = peer->child_peer;
+		}
+	} else {
+ // add broadcast to the same event as the original.
+		peer = pc->this_thread;
+	}
+	// make sure to only add this handle when the first peer will also be added.
+	// this means the list can be 61 and at this time no more.
+#ifdef __EMSCRIPTEN__
+#else
+	{
+		struct event_data *data = New( struct event_data );
+		data->pc = pc;
+		data->broadcast = broadcast;
+#    ifdef __64__
+		struct kevent64_s ev;
+		if( pc->dwFlags & CF_LISTEN ) {
+			EV_SET64( &ev, broadcast?pc->SocketBroadcast:pc->Socket, EVFILT_READ, EV_ADD, 0, 0, (uintptr_t)data, NULL, NULL );
+			kevent64( peer->kqueue, &ev, 1, 0, 0, 0, 0 );
+		}
+		else {
+			EV_SET64( &ev, broadcast?pc->SocketBroadcast:pc->Socket, EVFILT_READ, EV_ADD, 0, 0, (uintptr_t)data, NULL, NULL );
+			kevent64( peer->kqueue, &ev, 1, 0, 0, 0, 0 );
+			EV_SET64( &ev, broadcast?pc->SocketBroadcast:pc->Socket, EVFILT_WRITE, EV_ADD | EV_CLEAR, 0, 0, (uintptr_t)data, NULL, NULL );
+			kevent64( peer->kqueue, &ev, 1, 0, 0, 0, 0 );
+		}
+#    else
+		struct kevent ev;
+		if( pc->dwFlags & CF_LISTEN ) {
+			EV_SET( &ev, broadcast?pc->SocketBroadcast:pc->Socket, EVFILT_READ, EV_ADD, 0, 0, (uintptr_t)data );
+			kevent( peer->kqueue, &ev, 1, 0, 0, 0 );
+		}
+		else {
+			EV_SET( &ev, broadcast?pc->SocketBroadcast:pc->Socket, EVFILT_READ, EV_ADD|EV_ENABLE, 0, 0, (uintptr_t)data );
+			kevent( peer->kqueue, &ev, 1, 0, 0, 0 );
+			EV_SET( &ev, broadcast?pc->SocketBroadcast:pc->Socket, EVFILT_WRITE, EV_ADD|EV_ENABLE|EV_CLEAR, 0, 0, (uintptr_t)data );
+			kevent( peer->kqueue, &ev, 1, 0, 0, 0 );
+		}
+#    endif
+	}
+ // __EMSCRIPTEN__
+#endif
+#ifdef LOG_NETWORK_EVENT_THREAD
+	lprintf( "added thread: %p  %p  %p  ", pc, pc->this_thread, peer );
+#endif
+	if( !pc->this_thread ) {
+		LockedIncrement( &peer->nEvents );
+		pc->this_thread = peer;
+		pc->flags.bAddedToEvents = 1;
+	}
+#ifdef LOG_NETWORK_EVENT_THREAD
+	lprintf( "peer %p now has %d events", peer, peer->nEvents );
+#endif
+	// scheduler thread already awake do not wake him.
+}
+int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t unused )
+{
+	int cnt;
+	struct timeval time;
+	if( globalNetworkData.bQuit )
+		return -1;
+#ifdef __EMSCRIPTEN__
+		lprintf( "Need Old Select Code Here" );
+		return 1;
+#else
+	{
+#    ifdef __64__
+		struct kevent64_s events[10];
+		cnt = kevent64( thread->kqueue, NULL, 0, events, 10, 0, NULL );
+#    else
+		kevent events[10];
+		cnt = kevent( thread->kqueue, NULL, 0, events, 10, NULL );
+#    endif
+		if( cnt < 0 )
+		{
+			int err = errno;
+			if( err == EINTR )
+				return 1;
+			Log1( "Sorry epoll_pwait/kevent call failed... %d", err );
+			return 1;
+		}
+		if( cnt > 0 )
+		{
+			int closed;
+			int n;
+			struct event_data *event_data;
+			THREAD_ID prior = 0;
+			PCLIENT next;
+#  ifdef LOG_NETWORK_EVENT_THREAD
+			lprintf( "process %d events", cnt );
+#  endif
+			for( n = 0; n < cnt; n++ ) {
+				closed = 0;
+				event_data = (struct event_data*)events[n].udata;
+#  ifdef LOG_NOTICES
+				lprintf( "Process %d %x %x"
+				       , ((uintptr_t)event_data == 1) ?0:event_data->broadcast?event_data->pc->SocketBroadcast:event_data->pc->Socket
+				       , ((uintptr_t)event_data == 1) ?0:event_data->pc->dwFlags
+				       , events[n].filter );
+#  endif
+				if( event_data == (struct event_data*)1 ) {
+					//char buf;
+					//int stat;
+					//stat = read( GetThreadSleeper( thread->thread ), &buf, 1 );
+					//call wakeable sleep to just clear the sleep; because this is an event on the sleep pipe.
+					//WakeableSleep( 1 );
+					//lprintf( "This should sleep forever..." );
+					return 1;
+				}
+				if( events[n].filter == EVFILT_READ )
+				{
+					int locked;
+					locked = 1;
+					while( !NetworkLock( event_data->pc, 1 ) ) {
+						if( !( event_data->pc->dwFlags & CF_ACTIVE ) ) {
+#  ifdef LOG_NETWORK_EVENT_THREAD
+							lprintf( "failed lock dwFlags : %8x", event_data->pc->dwFlags );
+#  endif
+							locked = 0;
+							break;
+						}
+						if( event_data->pc->dwFlags & CF_AVAILABLE ) {
+							locked = 0;
+							break;
+						}
+						Relinquish();
+					}
+					if( !( event_data->pc->dwFlags & ( CF_ACTIVE | CF_CLOSED ) ) ) {
+#  ifdef LOG_NETWORK_EVENT_THREAD
+						lprintf( "not active but locked? dwFlags : %8x", event_data->pc->dwFlags );
+#  endif
+						continue;
+					}
+					if( event_data->pc->dwFlags & CF_AVAILABLE )
+						continue;
+					if( !IsValid( event_data->pc->Socket ) ) {
+						NetworkUnlock( event_data->pc, 1 );
+						continue;
+					}
+#  ifdef LOG_NETWORK_EVENT_THREAD
+					lprintf( "EPOLLIN/EVFILT_READ %x", event_data->pc->dwFlags );
+#  endif
+					if( event_data->pc->dwFlags & CF_CLOSED ) {
+						PCLIENT pClient = event_data->pc;
+						// close notice went to application; all resources for application are gone.
+						// any pending reads are no longre valid.
+						//lprintf( "socket is already closed... what do we need to do?");
+						//WakeableSleep( 100 );
+#if 0 && !DrainSupportDeprecated
+						if( 0 && !pClient->bDraining )
+#endif
+						{
+							size_t bytes_read;
+							// act of reading can result in a close...
+							// there are things like IE which close and send
+							// adn we might get the close notice at application level indicating there might still be data...
+							while( ( bytes_read = FinishPendingRead( pClient DBG_SRC) ) > 0
+ // try and read...
+								&& bytes_read != (size_t)-1 );
+							//if( pClient->dwFlags & CF_TOCLOSE )
+							{
+								//lprintf( "Pending read failed - reset connection. (well this is FD_CLOSE so yeah...??]" );
+								//InternalRemoveClientEx( pc, TRUE, FALSE );
+							}
+						}
+#  ifdef LOG_NOTICES
+						//if( globalNetworkData.flags.bLogNotices )
+							lprintf("FD_CLOSE... %p  %08x", pClient, pClient->dwFlags );
+#  endif
+						//if( pClient->dwFlags & CF_ACTIVE )
+						{
+							// might already be cleared and gone..
+							//InternalRemoveClientEx( pClient, FALSE, TRUE );
+							TerminateClosedClient( pClient );
+							closed = 1;
+						}
+						// section will be blank after termination...(correction, we keep the section state now)
+ // it's no longer closing.  (was set during the course of closure)
+						pClient->dwFlags &= ~CF_CLOSING;
+					} else if( !(event_data->pc->dwFlags & (CF_ACTIVE) ) ) {
+						lprintf( "Event on socket no longer active..." );
+						// change to inactive status by the time we got here...
+					} else if( event_data->pc->dwFlags & CF_LISTEN )
+					{
+#ifdef LOG_NOTICES
+						if( globalNetworkData.flags.bLogNotices )
+							lprintf( "accepting..." );
+#endif
+						AcceptClient( event_data->pc );
+					}
+					else if( event_data->pc->dwFlags & CF_UDP )
+					{
+#ifdef LOG_NOTICES
+						if( globalNetworkData.flags.bLogNotices )
+							lprintf( "UDP Read Event..." );
+#endif
+						//lprintf( "UDP READ" );
+						FinishUDPRead( event_data->pc, event_data->broadcast );
+					}
+#if 0 && !DrainSupportDeprecated
+					else if( event_data->pc->bDraining )
+					{
+#ifdef LOG_NOTICES
+						if( globalNetworkData.flags.bLogNotices )
+							lprintf( "TCP Drain Event..." );
+#endif
+						TCPDrainRead( event_data->pc );
+					}
+#endif
+					else if( event_data->pc->dwFlags & CF_READPENDING )
+					{
+						size_t read;
+#ifdef LOG_NOTICES
+						if( globalNetworkData.flags.bLogNotices )
+							lprintf( "TCP Read Event..." );
+#endif
+						// packet oriented things may probably be reading only
+						// partial messages at a time...
+						read = FinishPendingRead( event_data->pc DBG_SRC );
+						//lprintf( "Read %d", read );
+						if( ( read == -1 ) && ( event_data->pc->dwFlags & CF_TOCLOSE ) )
+						{
+#ifdef LOG_NOTICES
+							//if( globalNetworkData.flags.bLogNotices )
+							lprintf( "Pending read failed - reset connection." );
+#endif
+							EnterCriticalSec( &globalNetworkData.csNetwork );
+							InternalRemoveClientEx( event_data->pc, FALSE, FALSE );
+							TerminateClosedClient( event_data->pc );
+							LeaveCriticalSec( &globalNetworkData.csNetwork );
+							closed = 1;
+						}
+						else if( !event_data->pc->RecvPending.s.bStream )
+							event_data->pc->dwFlags |= CF_READREADY;
+					}
+					else
+					{
+#ifdef LOG_NOTICES
+						if( globalNetworkData.flags.bLogNotices )
+							lprintf( "TCP Set read ready..." );
+#endif
+						event_data->pc->dwFlags |= CF_READREADY;
+					}
+					if( locked )
+						LeaveCriticalSec( &event_data->pc->csLockRead );
+				}
+				if( !closed && ( event_data->pc->dwFlags & CF_ACTIVE ) ) {
+					int locked;
+					locked = 1;
+					if( events[n].filter == EVFILT_WRITE )
+					{
+#  ifdef LOG_NETWORK_EVENT_THREAD
+						lprintf( "EPOLLOUT %s", ( event_data->pc->dwFlags & CF_CONNECTING ) ? "connecting"
+							: ( !( event_data->pc->dwFlags & CF_ACTIVE ) ) ? "closed" : "writing" );
+#  endif
+						while( !NetworkLock( event_data->pc, 0 ) ) {
+							locked = 0;
+							break;
+						}
+						if( !( event_data->pc->dwFlags & ( CF_ACTIVE | CF_CLOSED ) ) ) {
+#  ifdef LOG_NETWORK_EVENT_THREAD
+							lprintf( "not active but locked? dwFlags : %8x", event_data->pc->dwFlags );
+#  endif
+							continue;
+						}
+						if( event_data->pc->dwFlags & CF_AVAILABLE )
+							continue;
+						if( !IsValid( event_data->pc->Socket ) ) {
+							NetworkUnlock( event_data->pc, 0 );
+							continue;
+						}
+						if( !( event_data->pc->dwFlags & CF_ACTIVE ) ) {
+							//lprintf( "FLAGS IS NOT ACTIVE BUT: %x", event_data->pc->dwFlags );
+							// change to inactive status by the time we got here...
+						} else if( event_data->pc->dwFlags & CF_CONNECTING ) {
+#ifdef LOG_NOTICES
+							if( globalNetworkData.flags.bLogNotices )
+								lprintf( "Connected!" );
+#endif
+							event_data->pc->dwFlags |= CF_CONNECTED;
+							event_data->pc->dwFlags &= ~CF_CONNECTING;
+							{
+								PCLIENT pc = event_data->pc;
+#ifdef __LINUX__
+								socklen_t
+#else
+								int
+#endif
+									nLen = MAGIC_SOCKADDR_LENGTH;
+								if( !pc->saSource )
+									pc->saSource = AllocAddr();
+								if( getsockname( pc->Socket, pc->saSource, &nLen ) ) {
+									lprintf( "getsockname errno = %d", errno );
+								}
+								if( pc->saSource->sa_family == AF_INET )
+									SET_SOCKADDR_LENGTH( pc->saSource, IN_SOCKADDR_LENGTH );
+								else if( pc->saSource->sa_family == AF_INET6 )
+									SET_SOCKADDR_LENGTH( pc->saSource, IN6_SOCKADDR_LENGTH );
+								else
+									SET_SOCKADDR_LENGTH( pc->saSource, nLen );
+							}
+							{
+								int error;
+								socklen_t errlen = sizeof( error );
+								getsockopt( event_data->pc->Socket, SOL_SOCKET
+									, SO_ERROR
+									, &error, &errlen );
+								//lprintf( "Error checking for connect is: %s on %d", strerror( error ), event_data->pc->Socket );
+								if( event_data->pc->pWaiting ) {
+#ifdef LOG_NOTICES
+									if( globalNetworkData.flags.bLogNotices )
+										lprintf( "Got connect event, waking waiter.." );
+#endif
+									WakeThread( event_data->pc->pWaiting );
+								}
+								if( event_data->pc->connect.ThisConnected )
+									event_data->pc->connect.ThisConnected( event_data->pc, error );
+#ifdef LOG_NOTICES
+								if( globalNetworkData.flags.bLogNotices )
+									lprintf( "Connect error was: %d", error );
+#endif
+								// if connected okay - issue first read...
+								if( !error ) {
+#ifdef LOG_NOTICES
+									lprintf( "Read Complete" );
+#endif
+									if( event_data->pc->read.ReadComplete ) {
+#ifdef LOG_NOTICES
+										lprintf( "Initial Read Complete" );
+#endif
+										event_data->pc->read.ReadComplete( event_data->pc, NULL, 0 );
+									}
+									if( event_data->pc->lpFirstPending ) {
+										lprintf( "Data was pending on a connecting socket, try sending it now" );
+										TCPWrite( event_data->pc );
+									}
+								} else {
+									event_data->pc->dwFlags |= CF_CONNECTERROR;
+								}
+							}
+						} else if( event_data->pc->dwFlags & CF_UDP ) {
+							//lprintf( "UDP WRITE IS NEVER QUEUED." );
+							// udp write event complete....
+							// do we ever care? probably sometime...
+						} else {
+#ifdef LOG_NOTICES
+							if( globalNetworkData.flags.bLogNotices )
+								lprintf( "TCP Write Event..." );
+#endif
+							// if write did not get locked, a write is in progress
+							// wait until it finished there?
+							// did this wake up because that wrote?
+							if( locked ) {
+								TCPWrite( event_data->pc );
+							}
+							else
+								event_data->pc->flags.bWriteOnUnlock = true;
+						}
+						if( locked )
+							NetworkUnlock( event_data->pc, 0 );
+					}
+				} else {
+					//lprintf( "Already closed? Stop looping on this event? %p %d %x", event_data->pc, event_data->pc->Socket, event_data->pc->dwFlags );
+				}
+			}
+			// had some event  - return 1 to continue working...
+		}
+		return 1;
+	}
+#endif
+	//lprintf( "Attempting to wake thread (send sighup!)" );
+	//WakeThread( globalNetworkData.pThread );
+	//lprintf( "Only reason should get here is if it's not this thread..." );
+	return -1;
+}
+//----------------------------------------------------------------------------
+int CPROC IdleProcessNetworkMessages( uintptr_t quick_check )
+{
+	struct peer_thread_info *this_thread = IsNetworkThread();
+	if( this_thread )
+		return ProcessNetworkMessages( this_thread, quick_check );
+	return -1;
+}
+SACK_NETWORK_NAMESPACE_END
+#endif
+#ifdef _WIN32
+///////////////////////////////////////////////////////////////////////////
+//
+// Filename    -  Network.C
+//
+// Description -  Network event handler for windows winsock2 events
+//
+// Author      -  James Buckeyne
+//
+// Create Date -  2019-06-26
+//
+///////////////////////////////////////////////////////////////////////////
+//
+//  DEBUG FLAGS IN netstruc.h
+//
+#ifndef _DEFAULT_SOURCE
+  // for features.h
+#define _DEFAULT_SOURCE
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#endif
+#define FIX_RELEASE_COM_COLLISION
+#define NO_UNICODE_C
+#ifdef WIN32
+#ifdef __CYGWIN__
+#else
+#endif
+#endif
+SACK_NETWORK_NAMESPACE
+//----------------------------------------------------------------------------
+static int NetworkStartup( void )
+{
+	static int attempt = 0;
+	static int nStep = 0,
+	          nError;
+	static SOCKET sockMaster;
+	static SOCKADDR remSin;
+	switch( nStep )
+	{
+	case 0 :
+		SystemCheck();
+		nStep++;
+		attempt = 0;
+	case 1 :
+		// Sit around, waiting for the network to start...
+		//--------------------
+		// sorry this is really really ugly to read!
+		sockMaster = OpenSocket( TRUE, FALSE, FALSE, 0 );
+		if( sockMaster == INVALID_SOCKET )
+		{
+			lprintf( "Clever OpenSocket failed... fallback... and survey sez..." );
+			//--------------------
+			sockMaster = socket( AF_INET, SOCK_DGRAM, 0);
+			//--------------------
+		}
+		//--------------------
+		if( sockMaster == INVALID_SOCKET )
+		{
+			nError = WSAGetLastError();
+			lprintf( "Failed to create a socket - error is %ld", WSAGetLastError() );
+ // provvider init fail )
+			if( nError == 10106 )
+			{
+				if( ++attempt >= 30 ) return NetworkQuit();
+				return -2;
+			}
+			if( nError == WSAENETDOWN )
+			{
+				if( ++attempt >= 30 ) return NetworkQuit();
+				//else return NetworkPause("Socket is delaying...");
+			}
+ // reset...
+			 nStep = 0;
+			if( ++attempt >= 30 ) return NetworkQuit();
+//NetworkQuit();
+			return 1;
+		}
+		// Retrieve my IP address and UDP Port number
+		remSin.sa_family=AF_INET;
+		remSin.sa_data[0]=0;
+		remSin.sa_data[1]=0;
+		((SOCKADDR_IN*)&remSin)->sin_addr.s_addr=INADDR_ANY;
+		nStep++;
+		attempt = 0;
+		// Fall into next state..............
+	case 2 :
+		// Associate an address with a socket. (bind)
+		if( bind( sockMaster, (PSOCKADDR)&remSin, sizeof(remSin))
+			 == SOCKET_ERROR )
+		{
+			if( WSAGetLastError() == WSAENETDOWN )
+			{
+				if( ++attempt >= 30 ) return NetworkQuit();
+				//else return NetworkPause("Bind is Delaying");
+			}
+ // reset...
+			nStep = 0;
+			return NetworkQuit();
+		}
+		nStep++;
+		attempt = 0;
+		// Fall into next state..............
+	case 3 :
+		closesocket(sockMaster);
+		sockMaster = INVALID_SOCKET;
+ // reset...
+		nStep = 0;
+		break;
+	}
+	return 0;
+}
+//----------------------------------------------------------------------------
+void CPROC NetworkPauseTimer( uintptr_t psv )
+{
+	int nResult;
+	nResult = NetworkStartup();
+	if( nResult == 0 )
+	{
+		while( !globalNetworkData.uNetworkPauseTimer )
+			Relinquish();
+		RemoveTimer( globalNetworkData.uNetworkPauseTimer );
+		globalNetworkData.flags.bNetworkReady = TRUE;
+		globalNetworkData.flags.bThreadInitOkay = TRUE;
+	}
+	else if( nResult == -1 )
+	{
+		globalNetworkData.flags.bNetworkReady = TRUE;
+		globalNetworkData.flags.bThreadInitOkay = FALSE;
+		// exiting ... bad stuff happens
+	}
+	else if( nResult == -2 )
+	{
+		// delaying... okay....
+	}
+}
+//----------------------------------------------------------------------------
+static void HandleEvent( PCLIENT pClient )
+{
+	WSANETWORKEVENTS networkEvents;
+	if( globalNetworkData.bQuit )
+	{
+		lprintf( "Task is shutting down network... don't handle event." );
+		return;
+	}
+	if( !pClient )
+	{
+		lprintf( "How did a NULL client get here?!" );
+		return;
+	}
+	pClient->dwFlags |= CF_PROCESSING;
+#ifdef LOG_NETWORK_EVENT_THREAD
+	//if( globalNetworkData.flags.bLogNotices )
+	//	lprintf( "Client event on %p", pClient );
+#endif
+	if( WSAEnumNetworkEvents( pClient->Socket, pClient->event, &networkEvents ) == ERROR_SUCCESS )
+	{
+		if( networkEvents.lNetworkEvents == 0 ) {
+#ifdef LOG_NETWORK_EVENT_THREAD
+			if( globalNetworkData.flags.bLogNotices )
+				lprintf( "zero events...%p %p %p", pClient, pClient->Socket, pClient->event );
+#endif
+			return;
+		}
+		{
+			if( pClient->dwFlags & CF_UDP )
+			{
+				if( networkEvents.lNetworkEvents & FD_READ )
+				{
+#ifdef LOG_NOTICES
+					if( globalNetworkData.flags.bLogNotices )
+						lprintf( "Got UDP FD_READ" );
+#endif
+					FinishUDPRead( pClient, 0 );
+				}
+			}
+			else
+			{
+				THREAD_ID prior = 0;
+#ifdef LOG_CLIENT_LISTS
+				lprintf( "client lists Ac:%p(%p(%d)) Av:%p(%p(%d)) Cl:%p(%p(%d))"
+						 , &globalNetworkData.ActiveClients, globalNetworkData.ActiveClients, globalNetworkData.ActiveClients?globalNetworkData.ActiveClients->Socket:0
+						 , &globalNetworkData.AvailableClients, globalNetworkData.AvailableClients, globalNetworkData.AvailableClients?globalNetworkData.AvailableClients->Socket:0
+						 , &globalNetworkData.ClosedClients, globalNetworkData.ClosedClients, globalNetworkData.ClosedClients?globalNetworkData.ClosedClients->Socket:0
+						 );
+#endif
+#ifdef LOG_NETWORK_LOCKING
+				lprintf( "Handle Event left global" );
+#endif
+				// if an unknown socket issued a
+				// notification - close it - unknown handling of unknown socket.
+#ifdef LOG_NETWORK_EVENT_THREAD
+				if( globalNetworkData.flags.bLogNotices )
+					lprintf( "events : %08x on %p", networkEvents.lNetworkEvents, pClient );
+#endif
+				if( networkEvents.lNetworkEvents & FD_CONNECT )
+				{
+					{
+						uint16_t wError = networkEvents.iErrorCode[FD_CONNECT_BIT];
+#ifdef LOG_NOTICES
+						if( globalNetworkData.flags.bLogNotices )
+							lprintf( "FD_CONNECT on %p", pClient );
+#endif
+						if( !wError )
+							pClient->dwFlags |= CF_CONNECTED;
+						else
+						{
+#ifdef LOG_NOTICES
+							if( globalNetworkData.flags.bLogNotices )
+								lprintf( "Connect error: %d", wError );
+#endif
+							pClient->dwFlags |= CF_CONNECTERROR;
+						}
+						if( !( pClient->dwFlags & CF_CONNECTERROR ) )
+						{
+							// since this is done before connecting is clear, tcpwrite
+							// may make notice of previously queued data to
+							// connection opening...
+							//lprintf( "Sending any previously queued data." );
+							// with events, we get a FD_WRITE also... which calls tcpwrite.
+							//TCPWrite( pClient );
+						}
+						pClient->dwFlags &= ~CF_CONNECTING;
+						if( pClient->connect.ThisConnected )
+						{
+							if( !wError && !pClient->saSource ) {
+#ifdef __LINUX__
+								socklen_t
+#else
+								int
+#endif
+									nLen = MAGIC_SOCKADDR_LENGTH;
+								if( !pClient->saSource )
+									pClient->saSource = AllocAddr();
+								if( getsockname( pClient->Socket, pClient->saSource, &nLen ) )
+								{
+									lprintf( "getsockname errno = %d", errno );
+								}
+							}
+#ifdef LOG_NOTICES
+							if( globalNetworkData.flags.bLogNotices )
+								lprintf( "Post connect to application %p  error:%d", pClient, wError );
+#endif
+							if( pClient->dwFlags & CF_CPPCONNECT )
+								pClient->connect.CPPThisConnected( pClient->psvConnect, wError );
+							else
+								pClient->connect.ThisConnected( pClient, wError );
+						}
+						//lprintf( "Returned from application connected callback" );
+						// check to see if the read was queued before the connect
+						// actually completed...
+						if( (pClient->dwFlags & ( CF_ACTIVE | CF_CONNECTED )) ==
+							( CF_ACTIVE | CF_CONNECTED ) )
+						{
+							if( pClient->read.ReadComplete )
+								if( pClient->dwFlags & CF_CPPREAD )
+									pClient->read.CPPReadComplete( pClient->psvRead, NULL, 0 );
+								else
+									pClient->read.ReadComplete( pClient, NULL, 0 );
+						}
+						if( pClient->pWaiting )
+							WakeThread( pClient->pWaiting );
+#ifdef LOG_NOTICES
+						if( globalNetworkData.flags.bLogNotices )
+							lprintf( "FD_CONNECT Completed" );
+#endif
+						//lprintf( "Returned from application inital read complete." );
+					}
+				}
+				if( networkEvents.lNetworkEvents & FD_READ )
+				{
+					PCLIENT pcLock;
+					while( !( pcLock = NetworkLockEx( pClient, 1 DBG_SRC ) ) ) {
+						// done with events; inactive sockets can't have events
+						if( !( pClient->dwFlags & CF_ACTIVE ) ) {
+							pcLock = NULL;
+							break;
+						}
+						Relinquish();
+					}
+#ifdef LOG_NOTICES
+					//if( globalNetworkData.flags.bLogNotices )
+					//	lprintf( "FD_READ" );
+#endif
+					  if( ( pClient->dwFlags & CF_ACTIVE ) ) {
+#if 0 && !DrainSupportDeprecated
+						if( pClient->bDraining )
+						{
+							TCPDrainRead( pClient );
+						}
+						else
+#endif
+						{
+							// got a network event, and won't get another until recv is called.
+							// mark that the socket has data, then the pend_read code will trigger the finishpendingread.
+							if( FinishPendingRead( pClient DBG_SRC ) == 0 )
+							{
+								pClient->dwFlags |= CF_READREADY;
+							}
+							if( pClient->dwFlags & CF_TOCLOSE )
+							{
+								//lprintf( "Pending read failed - and wants to close." );
+								//InternalRemoveClientEx( pc, TRUE, FALSE );
+							}
+						}
+						NetworkUnlock( pClient, 1 );
+					}
+				}
+				if( networkEvents.lNetworkEvents & FD_WRITE )
+				{
+					PCLIENT pcLock;
+					while( !( pcLock = NetworkLockEx( pClient, 0 DBG_SRC ) ) ) {
+						// done with events; inactive sockets can't have events
+						if( !( pClient->dwFlags & CF_ACTIVE ) ) {
+							pcLock = NULL;
+							break;
+						}
+						Relinquish();
+					}
+					if( pClient->dwFlags & CF_ACTIVE ) {
+#ifdef LOG_NOTICES
+						//if( globalNetworkData.flags.bLogNotices )
+						//	lprintf( "FD_Write" );
+#endif
+						// returns true while it wrote or there is data to write
+						if( pClient->lpFirstPending )
+							TCPWrite(pClient);
+						if( !pClient->lpFirstPending ) {
+							if( pClient->dwFlags & CF_TOCLOSE )
+							{
+								pClient->dwFlags &= ~CF_TOCLOSE;
+								//lprintf( "Pending read failed - and wants to close." );
+								EnterCriticalSec( &globalNetworkData.csNetwork );
+								InternalRemoveClientEx( pClient, FALSE, TRUE );
+								TerminateClosedClient( pClient );
+								LeaveCriticalSec( &globalNetworkData.csNetwork );
+							}
+						}
+						NetworkUnlock( pClient, 0 );
+					}
+				}
+				if( networkEvents.lNetworkEvents & FD_CLOSE )
+				{
+					//lprintf( "FD_CLOSE %p", pClient );
+#if 0 && !DrainSupportDeprecated
+					if( !pClient->bDraining )
+#endif
+					{
+						size_t bytes_read;
+						// act of reading can result in a close...
+						// there are things like IE which close and send
+						// adn we might get the close notice at application level indicating there might still be data...
+						//lprintf( "closed, try pending read %p", pClient );
+						while( ( bytes_read = FinishPendingRead( pClient DBG_SRC) ) > 0
+ // try and read...
+							&& bytes_read != (size_t)-1 )
+						//if( pClient->dwFlags & CF_TOCLOSE )
+						{
+							//lprintf( "Pending read failed - reset connection. (well this is FD_CLOSE so yeah...??]" );
+							//InternalRemoveClientEx( pc, TRUE, FALSE );
+						}
+					}
+#ifdef LOG_NOTICES
+					if( globalNetworkData.flags.bLogNotices )
+						lprintf("FD_CLOSE... %p  %08x", pClient, pClient->dwFlags );
+#endif
+					if( pClient->dwFlags & CF_ACTIVE )
+					{
+						// might already be cleared and gone..
+						EnterCriticalSec( &globalNetworkData.csNetwork );
+						InternalRemoveClientEx( pClient, FALSE, TRUE );
+						TerminateClosedClient( pClient );
+						LeaveCriticalSec( &globalNetworkData.csNetwork );
+					}
+					// section will be blank after termination...(correction, we keep the section state now)
+ // it's no longer closing.  (was set during the course of closure)
+					pClient->dwFlags &= ~CF_CLOSING;
+				}
+				if( networkEvents.lNetworkEvents & FD_ACCEPT )
+				{
+#ifdef LOG_NOTICES
+					//if( globalNetworkData.flags.bLogNotices )
+					//	lprintf( "FD_ACCEPT on %p", pClient );
+#endif
+					AcceptClient(pClient);
+					//NetworkUnlock( pClient, 1 );
+				}
+				//lprintf( "leaveing event handler..." );
+				//lprintf( "Left event handler CS." );
+			}
+		}
+	}
+	else
+	{
+		DWORD dwError = WSAGetLastError();
+		if( dwError == 10038 )
+		{
+			// no longer a socket, probably in a closed or closing state.
+		}
+		else
+			lprintf( "Event enum failed... do what? close socket? %p %" _32f, pClient, dwError );
+	}
+	pClient->dwFlags &= ~CF_PROCESSING;
+}
+//----------------------------------------------------------------------------
+void RemoveThreadEvent( PCLIENT pc ) {
+	struct peer_thread_info *thread = pc->this_thread;
+ // could be closed (accept, initial read, protocol causes close before ever completing getting scheduled)
+	if( !thread ) return;
+	// reduce peer wait count to 1.
+#ifdef LOG_NETWORK_EVENT_THREAD
+	lprintf( "Remove client %p from %p thread events...  proc:%d  ev:%d  wait:%d", pc, thread, thread->flags.bProcessing, thread->nEvents, thread->nWaitEvents );
+#endif
+	thread->counting = TRUE;
+	thread->nEvents = 1;
+	if( thread->thread != MakeThread() && !thread->flags.bProcessing )
+		while( thread->nEvents != thread->nWaitEvents ) {
+			if( !thread->flags.bProcessing )
+			{
+				// have to make sure threads reset to the new list.
+				//lprintf( "have to wait for thread to be in wait state..." );
+				LeaveCriticalSec( &globalNetworkData.csNetwork );
+				LeaveCriticalSec( &globalNetworkData.csNetwork );
+				while( (thread->nWaitEvents > 1) || thread->flags.bProcessing ) {
+					WSASetEvent( thread->hThread );
+					Relinquish();
+				}
+				EnterCriticalSec( &globalNetworkData.csNetwork );
+				EnterCriticalSec( &globalNetworkData.csNetwork );
+			}
+			else
+  // if it's processing, race it; build new list, count it.
+				break;
+			Relinquish();
+		}
+	{
+		INDEX idx;
+		INDEX c = 0;
+		PCLIENT previous;
+		PLIST newList = CreateList();
+		SetLink( &newList, 65, 0 );
+		//EmptyDataList( &thread->event_list );
+		LIST_FORALL( thread->monitor_list, idx, PCLIENT, previous ) {
+			if( previous != pc )
+			{
+				AddLink( &newList, previous );
+				SetDataItem( &thread->event_list, c++, GetDataItem( &thread->event_list, idx ) );
+			}
+		}
+		thread->event_list->Cnt = c;
+		thread->nEvents = (int)c;
+		thread->counting = FALSE;
+		DeleteListEx( &thread->monitor_list DBG_SRC );
+		thread->monitor_list = newList;
+		pc->this_thread = NULL;
+#ifdef LOG_NETWORK_EVENT_THREAD
+		lprintf( "peer %p now has %d events", thread, thread->nEvents );
+#endif
+	}
+  // don't bubble sort root thread
+	if( thread->parent_peer )
+		while( ( thread->nEvents < thread->parent_peer->nEvents ) && thread->parent_peer->parent_peer ) {
+#ifdef LOG_NETWORK_EVENT_THREAD
+			//lprintf( "swapping this with parent peer ... this events %d  parent %d", thread->nEvents, thread->parent_peer->nEvents );
+#endif
+			if( thread->child_peer )
+				thread->child_peer->parent_peer = thread->parent_peer;
+			thread->parent_peer->child_peer = thread->child_peer;
+			struct peer_thread_info *tmp = thread->parent_peer;
+			tmp->parent_peer->child_peer = thread;
+			thread->parent_peer = tmp->parent_peer;
+			tmp->parent_peer = thread;
+			thread->child_peer = tmp;
+		}
+}
+// unused parameter broadcsat on windows; not needed.
+void AddThreadEvent( PCLIENT pc, int broadcsat )
+{
+	struct peer_thread_info *peer = globalNetworkData.root_thread;
+	LOGICAL addPeer = FALSE;
+#ifdef LOG_NOTICES
+	if( globalNetworkData.flags.bLogNotices )
+		lprintf( "Add thread event %p %p %08x", pc, pc->event, pc->dwFlags );
+#endif
+	for( ; peer; peer = peer->child_peer ) {
+		if( !peer->child_peer ) {
+#ifdef LOG_NOTICES
+			if( globalNetworkData.flags.bLogNotices )
+				lprintf( "On last peer..." );
+#endif
+			if( peer->nEvents > globalNetworkData.nPeers ) {
+#ifdef LOG_NOTICES
+				if( globalNetworkData.flags.bLogNotices )
+					lprintf( "global peers is %d, this has %d", globalNetworkData.nPeers, peer->nEvents );
+#endif
+				addPeer = TRUE;
+				break;
+			}
+			if( peer->nEvents >= 60 ) {
+#ifdef LOG_NOTICES
+				if( globalNetworkData.flags.bLogNotices )
+					lprintf( "this has max events already....", globalNetworkData.nPeers, peer->nEvents );
+#endif
+				addPeer = TRUE;
+				break;
+			}
+		}
+		if( peer->nEvents < 60 ) {
+// last thread.
+			if( !peer->child_peer )
+				break;
+			if( peer->nEvents < peer->child_peer->nEvents ) {
+#ifdef LOG_NOTICES
+				//if( globalNetworkData.flags.bLogNotices )
+				//	lprintf( "this event has fewer than the next thread's events %d  %d", peer->nEvents, peer->child_peer->nEvents );
+#endif
+				break;
+			}
+		}
+	}
+	if( addPeer ) {
+#ifdef LOG_NOTICES
+		if( globalNetworkData.flags.bLogNotices )
+			lprintf( "Creating a new thread...." );
+#endif
+		AddLink( (PLIST*)&globalNetworkData.pThreads, ThreadTo( NetworkThreadProc, (uintptr_t)peer ) );
+		globalNetworkData.nPeers++;
+		while( !peer->child_peer )
+			Relinquish();
+		if( globalNetworkData.root_thread != peer ) {
+			// relink to be higher in list of peers so it's found earlier.
+#ifdef LOG_NOTICES
+			if( globalNetworkData.flags.bLogNotices )
+				lprintf( "Relinking thread to be after root peer (no events, so it must be first)" );
+#endif
+			peer->child_peer->child_peer = globalNetworkData.root_thread->child_peer;
+			globalNetworkData.root_thread->child_peer->parent_peer = peer->child_peer;
+			globalNetworkData.root_thread->child_peer = peer->child_peer;
+			peer->child_peer->parent_peer = globalNetworkData.root_thread;
+			peer->child_peer = NULL;
+			peer = globalNetworkData.root_thread->child_peer;
+		}
+		else
+			peer = peer->child_peer;
+	}
+	// make sure to only add this handle when the first peer will also be added.
+	// this means the list can be 61 and at this time no more.
+	AddLink( &peer->monitor_list, pc );
+	AddDataItem( &peer->event_list, &pc->event );
+	pc->this_thread = peer;
+	pc->flags.bAddedToEvents = 1;
+	peer->nEvents++;
+#ifdef LOG_NETWORK_EVENT_THREAD
+	lprintf( "peer %p now has %d events", peer, peer->nEvents );
+#endif
+ // scheduler thread already awake do not wake him.
+	if( !peer->flags.bProcessing && peer->parent_peer )
+		WSASetEvent( peer->hThread );
+}
+// this is passed '0' when it is called internally
+// this is passed '1' when it is called by idleproc
+int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t quick_check )
+{
+	//lprintf( "Check messages." );
+	if( globalNetworkData.bQuit )
+		return -1;
+	if( thread->flags.bProcessing )
+		return 0;
+	// disallow changing of the lists.
+	if( !thread->parent_peer )
+	{
+		EnterCriticalSec( &globalNetworkData.csNetwork );
+		{
+			PCLIENT pc;
+			PCLIENT next;
+			for( pc = globalNetworkData.ClosedClients; pc; pc = next )
+			{
+#    ifdef LOG_NOTICES
+				lprintf( "Have a closed client to check..." );
+#    endif
+				next = pc->next;
+				if( +GetTickCount() > (pc->LastEvent + 1000) )
+				{
+					//lprintf( "Remove thread event on closed thread (should be terminate here..)" );
+					// also does the remove.
+					TerminateClosedClient( pc );
+					//RemoveThreadEvent( pc ); // also does the close.
+				}
+			}
+		}
+		{
+			PCLIENT pc;
+			while( pc = (PCLIENT)DequeLink( &globalNetworkData.client_schedule ) )
+			{
+				// use this for "added to schedule".  Closing removes from schedule.
+				if( !pc->flags.bAddedToEvents )
+				{
+					if( pc->dwFlags & CF_CLOSED || (!(pc->dwFlags & CF_ACTIVE)) )
+					{
+						lprintf( " Found closed? %p", pc );
+						continue;
+					}
+#ifdef LOG_NETWORK_EVENT_THREAD
+					if( globalNetworkData.flags.bLogNotices )
+						lprintf( "Added to schedule : %p %08x", pc, pc->dwFlags );
+#endif
+					AddThreadEvent( pc, 0 );
+				}
+				else
+					lprintf( "Client in schedule queue, but it is already schedule?! %p", pc );
+			}
+		}
+		LeaveCriticalSec( &globalNetworkData.csNetwork );
+#ifdef LOG_NETWORK_LOCKING
+		lprintf( "Process Network left global" );
+#endif
+	}
+	else
+	{
+		// wait for master thread to set up the proper wait
+		while( thread->nEvents == 0 )
+			Relinquish();
+	}
+	while( 1 )
+	{
+		int32_t result;
+		// want to wait here anyhow...
+#ifdef LOG_NETWORK_EVENT_THREAD
+		//if( globalNetworkData.flags.bLogNotices )
+		//	lprintf( "%p Waiting on %d events", thread, thread->nEvents );
+#endif
+		thread->nWaitEvents = thread->nEvents;
+		thread->flags.bProcessing = 0;
+		while( thread->counting ) { thread->nWaitEvents = thread->nEvents; Relinquish(); }
+		result = WSAWaitForMultipleEvents( thread->nEvents
+													, (const HANDLE *)thread->event_list->data
+													, FALSE
+													, (quick_check)?0:WSA_INFINITE
+													, FALSE
+													);
+		if( globalNetworkData.bQuit )
+			return -1;
+#ifdef LOG_NETWORK_EVENT_THREAD
+		//if( globalNetworkData.flags.bLogNotices )
+		//	lprintf( "Event Wait Result was %d", result );
+#endif
+		// this should never be 0, but we're awake, not sleeping, and should say we're in a place
+		// where we probably do want to be woken on a 0 event.
+		if( result != WSA_WAIT_EVENT_0 )
+		{
+#ifdef LOG_NETWORK_EVENT_THREAD
+			//if( globalNetworkData.flags.bLogNotices )
+			//	lprintf( "Begin - thread processing %d", result );
+#endif
+			thread->flags.bProcessing = 1;
+		}
+		thread->nWaitEvents = 0;
+		if( result == WSA_WAIT_FAILED )
+		{
+			DWORD dwError = WSAGetLastError();
+			if( dwError == WSA_INVALID_HANDLE )
+			{
+				lprintf( "Rebuild list, have a bad event handle somehow." );
+				break;
+			}
+			lprintf( "error of wait is %d   %p", dwError, thread );
+			LogBinary( thread->event_list->data, 64 );
+			break;
+		}
+#ifndef UNDER_CE
+		else if( result == WSA_WAIT_IO_COMPLETION )
+		{
+			// reselect... not sure where io completion fits for network...
+			continue;
+		}
+#endif
+		else if( result == WSA_WAIT_TIMEOUT )
+		{
+			if( quick_check )
+				return 1;
+		}
+		else if( result >= WSA_WAIT_EVENT_0 )
+		{
+			// if result is _0, then it's the global event, and we just return.
+			if( result > WSA_WAIT_EVENT_0 )
+			{
+				PCLIENT pc = (PCLIENT)GetLink( &thread->monitor_list, result - (WSA_WAIT_EVENT_0) );
+				if( !pc || ( pc->dwFlags & CF_AVAILABLE ) ) {
+					//lprintf( "thread event happened on a now available client." );
+				}
+				else
+					HandleEvent( pc );
+				if( !quick_check )
+					continue;
+			}
+			//else
+			{
+#ifdef LOG_NOTICES
+				if( globalNetworkData.flags.bLogNotices )
+					lprintf( thread->parent_peer?"RESET THREAD EVENT":"RESET GLOBAL EVENT" );
+#endif
+				WSAResetEvent( thread->hThread );
+			}
+			return 1;
+		}
+	}
+	// result 0... we had nothing to do
+	// but we are this thread.
+	return 0;
+}
+//----------------------------------------------------------------------------
+int CPROC IdleProcessNetworkMessages( uintptr_t quick_check )
+{
+	struct peer_thread_info *this_thread = IsNetworkThread();
+	if( this_thread )
+		return ProcessNetworkMessages( this_thread, quick_check );
+	return -1;
+}
+SACK_NETWORK_NAMESPACE_END
+#endif
+#if defined( __LINUX__ ) && !defined( __MAC__ )
+///////////////////////////////////////////////////////////////////////////
+//
+// Filename    -  network_linux.C
+//
+// Description -  Network event handling using epoll
+//
+// Author      -  James Buckeyne
+//
+// Create Date -  2019-06-26
+//
+///////////////////////////////////////////////////////////////////////////
+//
+//  DEBUG FLAGS IN netstruc.h
+//
+#ifndef _DEFAULT_SOURCE
+  // for features.h
+#define _DEFAULT_SOURCE
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#endif
+#define FIX_RELEASE_COM_COLLISION
+#define NO_UNICODE_C
+//#define DO_LOGGING // override no _DEBUG def to do loggings...
+//#define NO_LOGGING // force neverlog....
+#ifdef __LINUX__
+#endif
+//for GetMacAddress
+#ifdef __LINUX__
+//#include <sys/timeb.h>
+//*******************8
+#ifndef __ANDROID__
+#else
+#define EPOLLRDHUP EPOLLHUP
+#define EPOLL_CLOEXEC 0
+#endif
+//*******************8
+#endif
+SACK_NETWORK_NAMESPACE
+void RemoveThreadEvent( PCLIENT pc ) {
+	struct peer_thread_info *thread = pc->this_thread;
+	// could be closed (accept, initial read, protocol causes close before ever completing getting scheduled)
+	if( !thread ) {
+		 lprintf( "didn't have one? %p", pc );
+		return;
+	}
+	{
+#  ifdef __EMSCRIPTEN__
+#  else
+		int r;
+#      ifdef LOG_NETWORK_EVENT_THREAD
+		lprintf( "Removing event %p   %d from poll %d", pc, pc->Socket, thread->epoll_fd );
+#      endif
+		//r = epoll_ctl( thread->epoll_fd, EPOLL_CTL_DISABLE, pc->Socket, NULL );
+		//if( r < 0 ) lprintf( "Error removing:%d", errno );
+		r = epoll_ctl( thread->epoll_fd, EPOLL_CTL_DEL, pc->Socket, NULL );
+		if( r < 0 ) lprintf( "Error removing:%d", errno );
+		if( pc->SocketBroadcast ) {
+			r = epoll_ctl( thread->epoll_fd, EPOLL_CTL_DEL, pc->SocketBroadcast, NULL );
+			if( r < 0 ) lprintf( "Error removing:%d", errno );
+		}
+		pc->flags.bAddedToEvents = 0;
+		pc->this_thread = NULL;
+ // __EMSCRIPTEN__
+#  endif
+	}
+	LockedDecrement( &thread->nEvents );
+#    ifdef LOG_NETWORK_EVENT_THREAD
+	lprintf( "peer %p now has %d events", thread, thread->nEvents );
+#    endif
+	// don't bubble sort root thread
+	if( thread->parent_peer )
+		while( (thread->nEvents < thread->parent_peer->nEvents) && thread->parent_peer->parent_peer ) {
+#    ifdef LOG_NETWORK_EVENT_THREAD
+			//lprintf( "swapping this with parent peer ... this events %d  parent %d", thread->nEvents, thread->parent_peer->nEvents );
+#    endif
+			if( thread->child_peer )
+				thread->child_peer->parent_peer = thread->parent_peer;
+			thread->parent_peer->child_peer = thread->child_peer;
+			struct peer_thread_info *tmp = thread->parent_peer;
+			tmp->parent_peer->child_peer = thread;
+			thread->parent_peer = tmp->parent_peer;
+			tmp->parent_peer = thread;
+			thread->child_peer = tmp;
+		}
+}
+struct event_data {
+	PCLIENT pc;
+	int broadcast;
+};
+void AddThreadEvent( PCLIENT pc, int broadcast )
+{
+	struct peer_thread_info *peer = globalNetworkData.root_thread;
+	LOGICAL addPeer = FALSE;
+	if( pc->Socket <= 0 ) {
+		lprintf( "SAVED FROM A FATAL INFINITE EVENT LOOP");
+		return;
+	}
+#ifdef LOG_NOTICES
+	//if( globalNetworkData.flags.bLogNotices )
+		lprintf( "Add thread event %p %d %08x  %s", pc, broadcast?pc->SocketBroadcast:pc->Socket, pc->dwFlags, broadcast?"broadcast":"direct" );
+#endif
+	if( !broadcast ) {
+		for( ; peer; peer = peer->child_peer ) {
+			if( !peer->child_peer ) {
+#ifdef LOG_NOTICES
+				if( globalNetworkData.flags.bLogNotices )
+					lprintf( "On last peer..." );
+#endif
+				if( peer->nEvents > globalNetworkData.nPeers ) {
+#ifdef LOG_NOTICES
+					if( globalNetworkData.flags.bLogNotices )
+						lprintf( "global peers is %d, this has %d", globalNetworkData.nPeers, peer->nEvents );
+#endif
+					addPeer = TRUE;
+					break;
+				}
+				if( peer->nEvents >= 2560 ) {
+#ifdef LOG_NOTICES
+					if( globalNetworkData.flags.bLogNotices )
+						lprintf( "this has max events already.... %d %d", globalNetworkData.nPeers, peer->nEvents );
+#endif
+					addPeer = TRUE;
+					break;
+				}
+			}
+			if( peer->nEvents < 2560 ) {
+												// last thread.
+				if( !peer->child_peer )
+					break;
+				if( peer->nEvents < peer->child_peer->nEvents ) {
+#ifdef LOG_NOTICES
+					//if( globalNetworkData.flags.bLogNotices )
+					//	lprintf( "this event has fewer than the next thread's events %d  %d", peer->nEvents, peer->child_peer->nEvents );
+#endif
+					break;
+				}
+			}
+		}
+		if( addPeer ) {
+#ifdef LOG_NOTICES
+			if( globalNetworkData.flags.bLogNotices )
+				lprintf( "Creating a new thread...." );
+#endif
+			AddLink( (PLIST*)&globalNetworkData.pThreads, ThreadTo( NetworkThreadProc, (uintptr_t)peer ) );
+			globalNetworkData.nPeers++;
+			while( !peer->child_peer )
+				Relinquish();
+			if( globalNetworkData.root_thread != peer ) {
+				// relink to be higher in list of peers so it's found earlier.
+#ifdef LOG_NOTICES
+				if( globalNetworkData.flags.bLogNotices )
+					lprintf( "Relinking thread to be after root peer (no events, so it must be first)" );
+#endif
+				peer->child_peer->child_peer = globalNetworkData.root_thread->child_peer;
+				globalNetworkData.root_thread->child_peer->parent_peer = peer->child_peer;
+				globalNetworkData.root_thread->child_peer = peer->child_peer;
+				peer->child_peer->parent_peer = globalNetworkData.root_thread;
+				peer->child_peer = NULL;
+				peer = globalNetworkData.root_thread->child_peer;
+			}
+			else
+				peer = peer->child_peer;
+		}
+	} else {
+ // add broadcast to the same event as the original.
+		peer = pc->this_thread;
+	}
+	// make sure to only add this handle when the first peer will also be added.
+	// this means the list can be 61 and at this time no more.
+#ifdef __EMSCRIPTEN__
+#else
+	{
+		int r;
+		struct epoll_event ev;
+		ev.data.ptr = New( struct event_data );
+		((struct event_data*)ev.data.ptr)->pc = pc;
+		((struct event_data*)ev.data.ptr)->broadcast = broadcast;
+		if( pc->dwFlags & CF_LISTEN )
+			ev.events = EPOLLIN;
+		else {
+			ev.events = EPOLLIN | EPOLLOUT | EPOLLRDHUP | EPOLLET;
+		}
+#    ifdef LOG_NETWORK_EVENT_THREAD
+		lprintf( "peer add socket %d to %d now has 0x%x events", pc->Socket, peer->epoll_fd, ev.events );
+#    endif
+		r = epoll_ctl( peer->epoll_fd, EPOLL_CTL_ADD, broadcast?pc->SocketBroadcast:pc->Socket, &ev );
+		if( r < 0 ) lprintf( "Error adding:%d %d", errno, broadcast?pc->SocketBroadcast:pc->Socket );
+	}
+ // __EMSCRIPTEN__
+#endif
+#ifdef LOG_NETWORK_EVENT_THREAD
+	lprintf( "added thread: %p  %p  %p  ", pc, pc->this_thread, peer );
+#endif
+	if( !pc->this_thread ) {
+		LockedIncrement( &peer->nEvents );
+		pc->this_thread = peer;
+		pc->flags.bAddedToEvents = 1;
+	}
+#ifdef LOG_NETWORK_EVENT_THREAD
+	lprintf( "peer %p now has %d events", peer, peer->nEvents );
+#endif
+	// scheduler thread already awake do not wake him.
+}
+int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t unused )
+{
+	int cnt;
+	struct timeval time;
+	if( globalNetworkData.bQuit )
+		return -1;
+#ifdef __EMSCRIPTEN__
+		lprintf( "Need Old Select Code Here" );
+		return 1;
+#else
+	{
+		struct epoll_event events[10];
+#    ifdef LOG_NETWORK_EVENT_THREAD
+		lprintf( "Wait on %d   %d", thread->epoll_fd, thread->nEvents );
+#    endif
+		cnt = epoll_wait( thread->epoll_fd, events, 10, -1 );
+		if( cnt < 0 )
+		{
+			int err = errno;
+			if( err == EINTR )
+				return 1;
+			Log1( "Sorry epoll_pwait/kevent call failed... %d", err );
+			return 1;
+		}
+		if( cnt > 0 )
+		{
+			int closed;
+			int n;
+			struct event_data *event_data;
+			THREAD_ID prior = 0;
+			PCLIENT next;
+#  ifdef LOG_NETWORK_EVENT_THREAD
+			lprintf( "process %d events", cnt );
+#  endif
+			for( n = 0; n < cnt; n++ ) {
+				closed = 0;
+				event_data = (struct event_data*)events[n].data.ptr;
+#  ifdef LOG_NOTICES
+				if( event_data != (struct event_data*)1 ) {
+					lprintf( "Process %d %x", event_data->broadcast?event_data->pc->SocketBroadcast:event_data->pc->Socket
+							 , events[n].events );
+				}
+#  endif
+				if( event_data == (struct event_data*)1 ) {
+					//char buf;
+					//int stat;
+					//stat = read( GetThreadSleeper( thread->thread ), &buf, 1 );
+					//call wakeable sleep to just clear the sleep; because this is an event on the sleep pipe.
+					//WakeableSleep( 1 );
+					//lprintf( "This should sleep forever..." );
+					return 1;
+				}
+				if( events[n].events & EPOLLIN )
+				{
+					int locked;
+					locked = 1;
+					while( !NetworkLock( event_data->pc, 1 ) ) {
+						if( !( event_data->pc->dwFlags & CF_ACTIVE ) ) {
+#  ifdef LOG_NETWORK_EVENT_THREAD
+							lprintf( "failed lock dwFlags : %8x", event_data->pc->dwFlags );
+#  endif
+							locked = 0;
+							break;
+						}
+						if( event_data->pc->dwFlags & CF_AVAILABLE ) {
+							locked = 0;
+							break;
+						}
+						Relinquish();
+					}
+					if( !( event_data->pc->dwFlags & ( CF_ACTIVE | CF_CLOSED ) ) ) {
+#  ifdef LOG_NETWORK_EVENT_THREAD
+						lprintf( "not active but locked? dwFlags : %8x", event_data->pc->dwFlags );
+#  endif
+						continue;
+					}
+					if( event_data->pc->dwFlags & CF_AVAILABLE )
+						continue;
+					if( !IsValid( event_data->pc->Socket ) ) {
+						NetworkUnlock( event_data->pc, 1 );
+						continue;
+					}
+#  ifdef LOG_NETWORK_EVENT_THREAD
+					lprintf( "EPOLLIN/EVFILT_READ %x", event_data->pc->dwFlags );
+#  endif
+					if( event_data->pc->dwFlags & CF_CLOSED ) {
+						PCLIENT pClient = event_data->pc;
+						// close notice went to application; all resources for application are gone.
+						// any pending reads are no longre valid.
+						//lprintf( "socket is already closed... what do we need to do?");
+#  ifdef LOG_NOTICES
+						lprintf("FD_CLOSE... %p  %08x", pClient, pClient->dwFlags );
+#  endif
+						TerminateClosedClient( pClient );
+						closed = 1;
+						// section will be blank after termination...(correction, we keep the section state now)
+ // it's no longer closing.  (was set during the course of closure)
+						pClient->dwFlags &= ~CF_CLOSING;
+					} else if( !(event_data->pc->dwFlags & (CF_ACTIVE) ) ) {
+						lprintf( "Event on socket no longer active..." );
+						// change to inactive status by the time we got here...
+					} else if( event_data->pc->dwFlags & CF_LISTEN )
+					{
+#ifdef LOG_NOTICES
+						if( globalNetworkData.flags.bLogNotices )
+							lprintf( "accepting..." );
+#endif
+						AcceptClient( event_data->pc );
+					}
+					else if( event_data->pc->dwFlags & CF_UDP )
+					{
+#ifdef LOG_NOTICES
+						if( globalNetworkData.flags.bLogNotices )
+							lprintf( "UDP Read Event..." );
+#endif
+						//lprintf( "UDP READ" );
+						FinishUDPRead( event_data->pc, event_data->broadcast );
+					}
+#if 0 && !DrainSupportDeprecated
+					else if( event_data->pc->bDraining )
+					{
+#ifdef LOG_NOTICES
+						if( globalNetworkData.flags.bLogNotices )
+							lprintf( "TCP Drain Event..." );
+#endif
+						TCPDrainRead( event_data->pc );
+					}
+#endif
+					else if( event_data->pc->dwFlags & CF_READPENDING )
+					{
+						size_t read;
+#ifdef LOG_NOTICES
+						if( globalNetworkData.flags.bLogNotices )
+							lprintf( "TCP Read Event..." );
+#endif
+						// packet oriented things may probably be reading only
+						// partial messages at a time...
+						read = FinishPendingRead( event_data->pc DBG_SRC );
+						//lprintf( "Read %d", read );
+						if( ( read == -1 ) && ( event_data->pc->dwFlags & CF_TOCLOSE ) )
+						{
+							int locked;
+							locked = 1;
+#ifdef LOG_NOTICES
+							//if( globalNetworkData.flags.bLogNotices )
+							lprintf( "Pending read failed - reset connection." );
+#endif
+							// lock other read channel.
+							while( !NetworkLock( event_data->pc, 0 ) ) {
+								if( !(event_data->pc->dwFlags & CF_ACTIVE) ) {
+#  ifdef LOG_NETWORK_EVENT_THREAD
+									lprintf( "failed lock dwFlags : %8x", event_data->pc->dwFlags );
+#  endif
+									locked = 0;
+									break;
+								}
+								if( event_data->pc->dwFlags & CF_AVAILABLE ) {
+									locked = 0;
+									break;
+								}
+								//lprintf( "Have to unlock..." );
+								NetworkUnlock( event_data->pc, 1 );
+								Relinquish();
+								//lprintf( "Need to relock..." );
+								while( !NetworkLock( event_data->pc, 1 ) ) {
+									if( !( event_data->pc->dwFlags & CF_ACTIVE ) ) {
+#  ifdef LOG_NETWORK_EVENT_THREAD
+										lprintf( "failed lock dwFlags : %8x", event_data->pc->dwFlags );
+#  endif
+										locked = 0;
+										break;
+									}
+									if( event_data->pc->dwFlags & CF_AVAILABLE ) {
+										locked = 0;
+										break;
+									}
+									Relinquish();
+								}
+								if( !locked ) break;
+							}
+							if( locked ) {
+								while( !TryNetworkGlobalLock( DBG_VOIDSRC ) ) {
+									NetworkUnlock( event_data->pc, 1 );
+									NetworkUnlock( event_data->pc, 0 );
+									Relinquish();
+									while( !NetworkLock( event_data->pc, 0 ) ) {
+										if( !(event_data->pc->dwFlags & CF_ACTIVE) ) {
+#  ifdef LOG_NETWORK_EVENT_THREAD
+											lprintf( "failed lock dwFlags : %8x", event_data->pc->dwFlags );
+#  endif
+											locked = 0;
+											break;
+										}
+										if( event_data->pc->dwFlags & CF_AVAILABLE ) {
+											locked = 0;
+											break;
+										}
+										Relinquish();
+									}
+									if( !locked ) break;
+									while( !NetworkLock( event_data->pc, 1 ) ) {
+										if( !(event_data->pc->dwFlags & CF_ACTIVE) ) {
+#  ifdef LOG_NETWORK_EVENT_THREAD
+											lprintf( "failed lock dwFlags : %8x", event_data->pc->dwFlags );
+#  endif
+											locked = 0;
+											break;
+										}
+										if( event_data->pc->dwFlags & CF_AVAILABLE ) {
+											locked = 0;
+											break;
+										}
+										NetworkUnlock( event_data->pc, 0 );
+										Relinquish();
+										while( !NetworkLock( event_data->pc, 0 ) ) {
+											if( !(event_data->pc->dwFlags & CF_ACTIVE) ) {
+#  ifdef LOG_NETWORK_EVENT_THREAD
+												lprintf( "failed lock dwFlags : %8x", event_data->pc->dwFlags );
+#  endif
+												locked = 0;
+												break;
+											}
+											if( event_data->pc->dwFlags & CF_AVAILABLE ) {
+												locked = 0;
+												break;
+											}
+											Relinquish();
+										}
+										if( !locked ) break;
+									}
+									if( !locked ) break;
+								}
+								if( locked ) {
+									InternalRemoveClientEx( event_data->pc, FALSE, FALSE );
+									NetworkUnlock( event_data->pc, 0 );
+									TerminateClosedClient( event_data->pc );
+									LeaveCriticalSec( &globalNetworkData.csNetwork );
+									closed = 1;
+								}
+							}
+						}
+						else if( !event_data->pc->RecvPending.s.bStream )
+							event_data->pc->dwFlags |= CF_READREADY;
+					}
+					else
+					{
+#ifdef LOG_NOTICES
+						if( globalNetworkData.flags.bLogNotices )
+							lprintf( "TCP Set read ready..." );
+#endif
+						event_data->pc->dwFlags |= CF_READREADY;
+					}
+					if( locked )
+						LeaveCriticalSec( &event_data->pc->csLockRead );
+				}
+				// many times a read event can cause the socket to close before write can complete.
+				if( !closed && ( event_data->pc->dwFlags & CF_ACTIVE ) ) {
+					int locked;
+					locked = 1;
+					if( events[n].events & EPOLLOUT )
+					{
+#  ifdef LOG_NETWORK_EVENT_THREAD
+						lprintf( "EPOLLOUT %s", ( event_data->pc->dwFlags & CF_CONNECTING ) ? "connecting"
+							: ( !( event_data->pc->dwFlags & CF_ACTIVE ) ) ? "closed" : "writing" );
+#  endif
+						if( !NetworkLock( event_data->pc, 0 ) ) {
+							locked = 0;
+						}
+						if( !( event_data->pc->dwFlags & ( CF_ACTIVE | CF_CLOSED ) ) ) {
+#  ifdef LOG_NETWORK_EVENT_THREAD
+							lprintf( "not active but locked? dwFlags : %8x", event_data->pc->dwFlags );
+#  endif
+							continue;
+						}
+						if( event_data->pc->dwFlags & CF_AVAILABLE )
+							continue;
+						if( !IsValid( event_data->pc->Socket ) ) {
+							NetworkUnlock( event_data->pc, 0 );
+							continue;
+						}
+						if( !( event_data->pc->dwFlags & CF_ACTIVE ) ) {
+							//lprintf( "FLAGS IS NOT ACTIVE BUT: %x", event_data->pc->dwFlags );
+							// change to inactive status by the time we got here...
+						} else if( event_data->pc->dwFlags & CF_CONNECTING ) {
+#ifdef LOG_NOTICES
+							if( globalNetworkData.flags.bLogNotices )
+								lprintf( "Connected!" );
+#endif
+							event_data->pc->dwFlags |= CF_CONNECTED;
+							event_data->pc->dwFlags &= ~CF_CONNECTING;
+							{
+								PCLIENT pc = event_data->pc;
+#ifdef __LINUX__
+								socklen_t
+#else
+								int
+#endif
+									nLen = MAGIC_SOCKADDR_LENGTH;
+								if( !pc->saSource )
+									pc->saSource = AllocAddr();
+								if( getsockname( pc->Socket, pc->saSource, &nLen ) ) {
+									lprintf( "getsockname errno = %d", errno );
+								}
+								if( pc->saSource->sa_family == AF_INET )
+									SET_SOCKADDR_LENGTH( pc->saSource, IN_SOCKADDR_LENGTH );
+								else if( pc->saSource->sa_family == AF_INET6 )
+									SET_SOCKADDR_LENGTH( pc->saSource, IN6_SOCKADDR_LENGTH );
+								else
+									SET_SOCKADDR_LENGTH( pc->saSource, nLen );
+							}
+							{
+								int error;
+								socklen_t errlen = sizeof( error );
+								getsockopt( event_data->pc->Socket, SOL_SOCKET
+									, SO_ERROR
+									, &error, &errlen );
+								//lprintf( "Error checking for connect is: %s on %d", strerror( error ), event_data->pc->Socket );
+								if( event_data->pc->pWaiting ) {
+#ifdef LOG_NOTICES
+									if( globalNetworkData.flags.bLogNotices )
+										lprintf( "Got connect event, waking waiter.." );
+#endif
+									WakeThread( event_data->pc->pWaiting );
+								}
+								if( event_data->pc->connect.ThisConnected )
+									event_data->pc->connect.ThisConnected( event_data->pc, error );
+#ifdef LOG_NOTICES
+								if( globalNetworkData.flags.bLogNotices )
+									lprintf( "Connect error was: %d", error );
+#endif
+								// if connected okay - issue first read...
+								if( !error ) {
+#ifdef LOG_NOTICES
+									lprintf( "Read Complete" );
+#endif
+									if( event_data->pc->read.ReadComplete ) {
+#ifdef LOG_NOTICES
+										lprintf( "Initial Read Complete" );
+#endif
+										event_data->pc->read.ReadComplete( event_data->pc, NULL, 0 );
+									}
+									if( event_data->pc->lpFirstPending ) {
+										lprintf( "Data was pending on a connecting socket, try sending it now" );
+										TCPWrite( event_data->pc );
+									}
+									if( !event_data->pc->lpFirstPending ) {
+										if( event_data->pc->dwFlags & CF_TOCLOSE )
+										{
+											event_data->pc->dwFlags &= ~CF_TOCLOSE;
+											lprintf( "Pending write completed - and wants to close." );
+											EnterCriticalSec( &globalNetworkData.csNetwork );
+											InternalRemoveClientEx( event_data->pc, FALSE, TRUE );
+											TerminateClosedClient( event_data->pc );
+											LeaveCriticalSec( &globalNetworkData.csNetwork );
+										}
+									}
+								} else {
+									event_data->pc->dwFlags |= CF_CONNECTERROR;
+								}
+							}
+						} else if( event_data->pc->dwFlags & CF_UDP ) {
+							//lprintf( "UDP WRITE IS NEVER QUEUED." );
+							// udp write event complete....
+							// do we ever care? probably sometime...
+						} else {
+#ifdef LOG_NOTICES
+							if( globalNetworkData.flags.bLogNotices )
+								lprintf( "TCP Write Event..." );
+#endif
+							// if write did not get locked, a write is in progress
+							// wait until it finished there?
+							// did this wake up because that wrote?
+							if( locked ) {
+								TCPWrite( event_data->pc );
+							} else {
+								// although this is only a few instructions down, this can still be a lost event that the other
+								// lock has already ended, so this will get lost still...
+								event_data->pc->flags.bWriteOnUnlock = 1;
+								//lprintf( "Write event didn't get the lock... and maybe we won't get to write more?" );
+							}
+						}
+						if( locked )
+							NetworkUnlock( event_data->pc, 0 );
+					}
+				} else {
+					//lprintf( "Already closed? Stop looping on this event? %p %d %x", event_data->pc, event_data->pc->Socket, event_data->pc->dwFlags );
+				}
+			}
+			// had some event  - return 1 to continue working...
+		}
+		return 1;
+	}
+#endif
+	//lprintf( "Attempting to wake thread (send sighup!)" );
+	//WakeThread( globalNetworkData.pThread );
+	//lprintf( "Only reason should get here is if it's not this thread..." );
+	return -1;
+}
+//----------------------------------------------------------------------------
+int CPROC IdleProcessNetworkMessages( uintptr_t quick_check )
+{
+	struct peer_thread_info *this_thread = IsNetworkThread();
+	if( this_thread )
+		return ProcessNetworkMessages( this_thread, quick_check );
+	return -1;
+}
+SACK_NETWORK_NAMESPACE_END
+#endif
+///////////////////////////////////////////////////////////////////////////
+//
+// Filename    -  network_address.C
+//
+// Description -  Network address support
+//
+// Author      -  James Buckeyne
+//
+// Create Date -  2019-06-26
+//
+///////////////////////////////////////////////////////////////////////////
+//
+//  DEBUG FLAGS IN netstruc.h
+//
+#ifndef _DEFAULT_SOURCE
+  // for features.h
+#define _DEFAULT_SOURCE
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#endif
+#define FIX_RELEASE_COM_COLLISION
+#define NO_UNICODE_C
+//#define DO_LOGGING // override no _DEBUG def to do loggings...
+//#define NO_LOGGING // force neverlog....
+#ifdef __LINUX__
+#endif
+//for GetMacAddress
+#ifdef __LINUX__
+//#include <sys/timeb.h>
+//*******************8
+#ifndef __ANDROID__
+#else
+#define EPOLLRDHUP EPOLLHUP
+#define EPOLL_CLOEXEC 0
+#endif
+#ifdef __MAC__
+#else
+#endif
+//*******************8
+#endif
+#ifdef WIN32
+#ifdef __CYGWIN__
+#else
+#endif
+#endif
+SACK_NETWORK_NAMESPACE
+//----------------------------------------------------------------------------
+#if !defined( __MAC__ ) && !defined( __EMSCRIPTEN__ )
+#  define INCLUDE_MAC_SUPPORT
+#endif
+//int get_mac_addr (char *device, unsigned char *buffer)
+NETWORK_PROC( int, GetMacAddress)(PCLIENT pc, uint8_t* buf, size_t *buflen )
+{
+#ifdef INCLUDE_MAC_SUPPORT
+#  ifdef __LINUX__
+#    ifdef __THIS_CODE_GETS_MY_MAC_ADDRESS___
+	int fd;
+	struct ifreq ifr;
+	fd = socket(PF_UNIX, SOCK_DGRAM, 0);
+	if (fd == -1)
+	{
+		lprintf("Unable to create socket for pclient: %p", pc);
+		return -1;
+	}
+	strcpy (ifr.ifr_name, GetNetworkLong(pc,GNL_IP));
+	if (ioctl (fd, SIOCGIFFLAGS, &ifr) < 0)
+	{
+		close (fd);
+		return -1;
+	}
+	if (ioctl (fd, SIOCGIFHWADDR, &ifr) < 0)
+	{
+		close (fd);
+		return -1;
+	}
+	close (fd);
+	memcpy (pc->hwClient, ifr.ifr_hwaddr.sa_data, 6);
+	return 0;
+#    endif
+	   /* this code queries the arp table to figure out who the other side is */
+	//int fd;
+	struct arpreq arpr;
+	struct ifconf ifc;
+	MemSet( &arpr, 0, sizeof( arpr ) );
+	lprintf( "this is broken." );
+	MemCpy( &arpr.arp_pa, pc->saClient, sizeof( SOCKADDR ) );
+	arpr.arp_ha.sa_family = AF_INET;
+	{
+		char ifbuf[256];
+		ifc.ifc_len = sizeof( ifbuf );
+		ifc.ifc_buf = ifbuf;
+		ioctl( pc->Socket, SIOCGIFCONF, &ifc );
+		{
+			int i;
+			struct ifreq *IFR;
+			IFR = ifc.ifc_req;
+			for( i = ifc.ifc_len / sizeof( struct ifreq); --i >=0; IFR++ )
+			{
+				printf( "IF: %s\n", IFR->ifr_name );
+				strcpy( arpr.arp_dev, "eth0" );
+			}
+		}
+	}
+	DebugBreak();
+	if( ioctl( pc->Socket, SIOCGARP, &arpr ) < 0 )
+	{
+		lprintf( "Error of some sort ... %s", strerror( errno ) );
+		DebugBreak();
+	}
+	return 0;
+#  endif
+#  ifdef WIN32
+	HRESULT hr;
+	ULONG   ulLen;
+	// I don't understand this useless cast - from size_t to ULONG?
+	// isn't that the same thing?
+	ulLen = (ULONG)(*buflen);
+	//needs ws2_32.lib and iphlpapi.lib in the linker.
+	hr = SendARP ( (IPAddr)GetNetworkLong(pc,GNL_MYIP), (IPAddr)GetNetworkLong(pc,GNL_MYIP), (PULONG)buf, &ulLen);
+	(*buflen) = ulLen;
+//  The second parameter of SendARP is a PULONG, which is typedef'ed to a pointer to
+//  an unsigned long.  The pc->hwClient is a pointer to an array of uint8_t (unsigned chars),
+//  actually defined in netstruc.h as uint8_t hwClient[6]; Well, in the end, they are all
+//  just addresses, whether they be address to information of eight bits in length, or
+//  of (sizeof(unsigned)) in length.  Although this may, in the future, throw a warning.
+	//hr = SendARP (GetNetworkLong(pc,GNL_IP), 0, (PULONG)pc->hwClient, &ulLen);
+	//lprintf ("Return %08x, length %8d\n", hr, ulLen);
+	return hr == S_OK;
+#  endif
+#else
+	return 0;
+#endif
+}
+//int get_mac_addr (char *device, unsigned char *buffer)
+NETWORK_PROC( PLIST, GetMacAddresses)( void )
+{
+#ifdef INCLUDE_MAC_SUPPORT
+#ifdef __LINUX__
+#ifdef __THIS_CODE_GETS_MY_MAC_ADDRESS___
+	int fd;
+	struct ifreq ifr;
+	fd = socket(PF_UNIX, SOCK_DGRAM, 0);
+	if (fd == -1)
+	{
+		lprintf("Unable to create socket for pclient: %p", pc);
+		return -1;
+	}
+	strcpy (ifr.ifr_name, GetNetworkLong(pc,GNL_IP));
+	if (ioctl (fd, SIOCGIFFLAGS, &ifr) < 0)
+	{
+		close (fd);
+		return -1;
+	}
+	if (ioctl (fd, SIOCGIFHWADDR, &ifr) < 0)
+	{
+		close (fd);
+		return -1;
+	}
+	close (fd);
+	memcpy (pc->hwClient, ifr.ifr_hwaddr.sa_data, 6);
+	return 0;
+#endif
+	/* this code queries the arp table to figure out who the other side is */
+	//int fd;
+	struct arpreq arpr;
+	MemSet( &arpr, 0, sizeof( arpr ) );
+#if 0
+	lprintf( "this is broken." );
+	MemCpy( &arpr.arp_pa, pc->saClient, sizeof( SOCKADDR ) );
+	arpr.arp_ha.sa_family = AF_INET;
+	{
+		char ifbuf[256];
+		ifc.ifc_len = sizeof( ifbuf );
+		ifc.ifc_buf = ifbuf;
+		ioctl( pc->Socket, SIOCGIFCONF, &ifc );
+		{
+			int i;
+			struct ifreq *IFR;
+			IFR = ifc.ifc_req;
+			for( i = ifc.ifc_len / sizeof( struct ifreq); --i >=0; IFR++ )
+			{
+				printf( "IF: %s\n", IFR->ifr_name );
+				strcpy( arpr.arp_dev, "eth0" );
+			}
+		}
+	}
+	DebugBreak();
+	if( ioctl( pc->Socket, SIOCGARP, &arpr ) < 0 )
+	{
+		lprintf( "Error of some sort ... %s", strerror( errno ) );
+		DebugBreak();
+	}
+#endif
+	return 0;
+#endif
+#ifdef WIN32
+	HRESULT hr;
+	ULONG   ulLen;
+	uint8_t hwClient[6];
+	ulLen = 6;
+	//needs ws2_32.lib and iphlpapi.lib in the linker.
+	hr = SendARP ((IPAddr)GetNetworkLong(NULL,GNL_IP), 0x100007f, (PULONG)&hwClient, &ulLen);
+//  The second parameter of SendARP is a PULONG, which is typedef'ed to a pointer to
+//  an unsigned long.  The pc->hwClient is a pointer to an array of uint8_t (unsigned chars),
+//  actually defined in netstruc.h as uint8_t hwClient[6]; Well, in the end, they are all
+//  just addresses, whether they be address to information of eight bits in length, or
+//  of (sizeof(unsigned)) in length.  Although this may, in the future, throw a warning.
+	//hr = SendARP (GetNetworkLong(pc,GNL_IP), 0, (PULONG)pc->hwClient, &ulLen);
+	lprintf ("Return %08x, length %8d\n", hr, ulLen);
+	return 0;
+#endif
+#else
+	return 0;
+#endif
+}
+//----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
+LOGICAL IsAddressV6( SOCKADDR *addr )
+{
+	if( addr->sa_family == AF_INET6 && SOCKADDR_LENGTH( addr ) == 28 )
+		return TRUE;
+	return FALSE;
+}
+const char * GetAddrString( SOCKADDR *addr )
+{
+	static char buf[256];
+	//lprintf( "addr family is: %d", addr->sa_family );
+	if( addr->sa_family == AF_INET )
+		snprintf( buf, 256, "%d.%d.%d.%d"
+			, *(((unsigned char *)addr) + 4),
+			*(((unsigned char *)addr) + 5),
+			*(((unsigned char *)addr) + 6),
+			*(((unsigned char *)addr) + 7) );
+	else if( addr->sa_family == AF_INET6 )
+	{
+		int first0 = 8;
+		int last0 = 0;
+		int after0 = 0;
+		int n;
+		int ofs = 0;
+		uint32_t piece;
+		for( n = 0; n < 8; n++ ) {
+			piece = (*(((unsigned short *)((unsigned char*)addr + 8 + (n * 2)))));
+			if( piece ) {
+				if( first0 < 8 )
+					after0 = 1;
+				if( !ofs ) {
+					ofs += snprintf( buf + ofs, 256 - ofs, "%x", ntohs( piece ) );
+				}
+				else {
+					//lprintf( last0, n );
+					if( last0 == 4 && first0 == 0 )
+						if( piece == 0xFFFF ) {
+							snprintf( buf, 256, "::ffff:%d.%d.%d.%d",
+								(*((unsigned char*)addr + 20)),
+								(*((unsigned char*)addr + 21)),
+								(*((unsigned char*)addr + 22)),
+								(*((unsigned char*)addr + 23)) );
+							break;
+						}
+					ofs += snprintf( buf + ofs, 256 - ofs, ":%x", ntohs( piece ) );
+				}
+			}
+			else {
+				if( !after0 ) {
+					if( first0 > n ) {
+						first0 = n;
+						ofs += snprintf( buf + ofs, 256 - ofs, ":" );
+					}
+					if( last0 < n )
+						last0 = n;
+				}
+				if( last0 < n )
+					ofs += snprintf( buf + ofs, 256 - ofs, ":%x", ntohs( piece ) );
+			}
+		}
+		if( !after0 && first0 < 8 )
+			ofs += snprintf( buf + ofs, 256 - ofs, ":" );
+	}
+	else
+		snprintf( buf, 256, "unknown protocol" );
+	return buf;
+}
+const char * GetAddrName( SOCKADDR *addr )
+{
+	char * tmp = ((char**)addr)[-1];
+	if( !tmp )
+	{
+		const char *buf = GetAddrString( addr );
+		((char**)addr)[-1] = strdup( buf );
+	}
+	return ((char**)addr)[-1];
+}
+void SetAddrName( SOCKADDR *addr, const char *name )
+{
+	((uintptr_t*)addr)[-1] = (uintptr_t)strdup( name );
+}
+//---------------------------------------------------------------------------
+SOCKADDR *AllocAddrEx( DBG_VOIDPASS )
+{
+	SOCKADDR *lpsaAddr=(SOCKADDR*)AllocateEx( MAGIC_SOCKADDR_LENGTH + 2 * sizeof( uintptr_t ) DBG_RELAY );
+	memset( lpsaAddr, 0, MAGIC_SOCKADDR_LENGTH );
+	//initialize socket length to something identifiable?
+	((uintptr_t*)lpsaAddr)[0] = 3;
+ // string representation of address
+	((uintptr_t*)lpsaAddr)[1] = 0;
+	lpsaAddr = (SOCKADDR*)( ( (uintptr_t)lpsaAddr ) + sizeof(uintptr_t) * 2 );
+	return lpsaAddr;
+}
+//----------------------------------------------------------------------------
+int GetAddressParts( SOCKADDR *sa, uint32_t *pdwIP, uint16_t *pdwPort )
+{
+	int result = TRUE;
+	if( sa )
+	{
+		if( sa->sa_family == AF_INET ) {
+			if( pdwIP )
+				(*pdwIP) = (uint32_t)(((SOCKADDR_IN*)sa)->sin_addr.S_un.S_addr);
+		}
+		else if( sa->sa_family == AF_INET6 ) {
+			if( pdwIP )
+ //-V512
+				memcpy( pdwIP, &(((SOCKADDR_IN*)sa)->sin_addr.S_un.S_addr), 16 );
+		}
+		else
+			result = FALSE;
+		if( (sa->sa_family == AF_INET) || (sa->sa_family = AF_INET6) ) {
+			if( pdwPort )
+				(*pdwPort) = ntohs((uint16_t)( (SOCKADDR_IN*)sa)->sin_port);
+		}
+		else
+			result = FALSE;
+	}
+	return result;
+}
+//----------------------------------------------------------------------------
+ // return a copy of this address...
+SOCKADDR* DuplicateAddressEx( SOCKADDR *pAddr DBG_PASS )
+{
+	POINTER tmp = (POINTER)( ( (uintptr_t)pAddr ) - 2*sizeof(uintptr_t) );
+	SOCKADDR *dup = AllocAddrEx( DBG_VOIDRELAY );
+	POINTER tmp2 = (POINTER)( ( (uintptr_t)dup ) - 2*sizeof(uintptr_t) );
+	MemCpy( tmp2, tmp, SOCKADDR_LENGTH( pAddr ) + 2*sizeof(uintptr_t) );
+	if( ((char**)( ( (uintptr_t)pAddr ) - sizeof(char*) ))[0] )
+		( (char**)( ( (uintptr_t)dup ) - sizeof( char* ) ) )[0]
+				= strdup( ((char**)( ( (uintptr_t)pAddr ) - sizeof( char* ) ))[0] );
+	return dup;
+}
+//---------------------------------------------------------------------------
+NETWORK_PROC( SOCKADDR *,CreateAddress_hton)( uint32_t dwIP,uint16_t nHisPort)
+{
+	SOCKADDR_IN *lpsaAddr=(SOCKADDR_IN*)AllocAddr();
+	if (!lpsaAddr)
+		return(NULL);
+	SET_SOCKADDR_LENGTH( lpsaAddr, IN_SOCKADDR_LENGTH );
+         // InetAddress Type.
+	lpsaAddr->sin_family       = AF_INET;
+	lpsaAddr->sin_addr.S_un.S_addr  = htonl(dwIP);
+	lpsaAddr->sin_port         = htons(nHisPort);
+	return((SOCKADDR*)lpsaAddr);
+}
+//---------------------------------------------------------------------------
+#if defined( __LINUX__ ) && !defined( __CYGWIN__ )
+#  ifndef __LINUX__
+#    define UNIX_PATH_MAX	 108
+struct sockaddr_un {
+#    ifdef __MAC__
+	u_char   sa_len;
+#    endif
+	sa_family_t  sun_family;
+	char	       sun_path[UNIX_PATH_MAX];
+};
+#  endif
+NETWORK_PROC( SOCKADDR *,CreateUnixAddress)( CTEXTSTR path )
+{
+	struct sockaddr_un *lpsaAddr;
+#ifdef UNICODE
+	char *tmp_path = CStrDup( path );
+#endif
+   lpsaAddr=(struct sockaddr_un*)AllocAddr();
+	if (!lpsaAddr)
+		return(NULL);
+	((uintptr_t*)lpsaAddr)[-1] = StrLen( path ) + 1;
+	lpsaAddr->sun_family = PF_UNIX;
+#ifdef UNICODE
+	strncpy( lpsaAddr->sun_path, tmp_path, 107 );
+	Deallocate( char*, tmp_path );
+#else
+	strncpy( lpsaAddr->sun_path, path, 107 );
+#endif
+#ifdef __MAC__
+	lpsaAddr->sun_len = 2+strlen( lpsaAddr->sun_path );
+#endif
+	return((SOCKADDR*)lpsaAddr);
+}
+#else
+NETWORK_PROC( SOCKADDR *,CreateUnixAddress)( CTEXTSTR path )
+{
+	lprintf( "-- CreateUnixAddress -- not available. " );
+	return NULL;
+}
+#endif
+//---------------------------------------------------------------------------
+SOCKADDR *CreateAddress( uint32_t dwIP,uint16_t nHisPort)
+{
+	SOCKADDR_IN *lpsaAddr=(SOCKADDR_IN*)AllocAddr();
+	if (!lpsaAddr)
+		return(NULL);
+	SET_SOCKADDR_LENGTH( lpsaAddr, IN_SOCKADDR_LENGTH );
+         // InetAddress Type.
+	lpsaAddr->sin_family	    = AF_INET;
+	lpsaAddr->sin_addr.S_un.S_addr  = dwIP;
+	lpsaAddr->sin_port         = htons(nHisPort);
+	return((SOCKADDR*)lpsaAddr);
+}
+//---------------------------------------------------------------------------
+SOCKADDR *CreateRemote( CTEXTSTR lpName,uint16_t nHisPort)
+{
+	SOCKADDR_IN *lpsaAddr;
+	int conversion_success = FALSE;
+	char *tmpName = NULL;
+#ifdef UNICODE
+	char *_lpName = CStrDup( lpName );
+#  define lpName _lpName
+#endif
+#ifndef WIN32
+	PHOSTENT phe;
+	// a IP type name will never have a / in it, therefore
+	// we can assume it's a unix type address....
+	if( lpName && StrChr( lpName, '/' ) )
+		return CreateUnixAddress( lpName );
+#endif
+	if( lpName[0] == '[' && lpName[StrLen( lpName ) - 1] == ']' ) {
+		size_t len;
+		tmpName = NewArray( char, len = StrLen( lpName ) );
+		memcpy( tmpName, lpName + 1, len - 2 );
+		tmpName[len - 2] = 0;
+		lpName = tmpName;
+	}
+	lpsaAddr=(SOCKADDR_IN*)AllocAddr();
+	if( !lpsaAddr )
+	{
+#ifdef UNICODE
+		Deallocate( char *, _lpName );
+#endif
+		return(NULL);
+	}
+	SetAddrName( (SOCKADDR*)lpsaAddr, lpName );
+	// if it's a numeric name... attempt to use as an address.
+#ifdef __LINUX__
+	if( lpName &&
+		( lpName[0] >= '0' && lpName[0] <= '9' )
+	  && StrChr( lpName, '.' ) )
+	{
+		if( inet_pton( AF_INET, lpName, &lpsaAddr->sin_addr ) > 0 )
+		{
+			SET_SOCKADDR_LENGTH( lpsaAddr, IN_SOCKADDR_LENGTH );
+         // InetAddress Type.
+			lpsaAddr->sin_family       = AF_INET;
+			conversion_success = TRUE;
+		}
+	}
+	else if( lpName
+		   && ( ( lpName[0] >= '0' && lpName[0] <= '9' )
+		      || ( lpName[0] >= 'a' && lpName[0] <= 'f' )
+		      || ( lpName[0] >= 'A' && lpName[0] <= 'F' )
+		      || lpName[0] == ':'
+		      || ( lpName[0] == '[' && lpName[StrLen( lpName ) - 1] == ']' ) )
+		   && StrChr( lpName, ':' )!=StrRChr( lpName, ':' ) )
+	{
+		//lprintf( "Converting name:", lpName );
+		if( inet_pton( AF_INET6, lpName, (struct in6_addr*)(&lpsaAddr->sin_addr+1) ) > 0 )
+		{
+			//lprintf( "This iset in the wrong place?" );
+			((struct sockaddr_in6*)lpsaAddr)->sin6_scope_id = 0;
+			SET_SOCKADDR_LENGTH( lpsaAddr, IN6_SOCKADDR_LENGTH );
+         // InetAddress Type.
+			lpsaAddr->sin_family       = AF_INET6;
+			conversion_success = TRUE;
+		}
+	}
+#endif
+	if( !conversion_success )
+	{
+		if( lpName )
+		{
+#ifndef h_addr
+#define h_addr h_addr_list[0]
+#define H_ADDR_DEFINED
+#endif
+#ifdef WIN32
+			{
+				struct addrinfo *result;
+				struct addrinfo *test;
+				int error;
+				//lprintf( "Or we do getaddrinfo... %s", lpName );
+				error = getaddrinfo( lpName, NULL, NULL, (struct addrinfo**)&result );
+				if( error == 0 )
+				{
+					for( test = result; test; test = test->ai_next )
+					{
+						//SOCKADDR *tmp;
+						//AddLink( &globalNetworkData.addresses, tmp = AllocAddr() );
+						//lprintf( "Copy addr: %d", test->ai_addrlen );
+						MemCpy( lpsaAddr, test->ai_addr, test->ai_addrlen );
+						SET_SOCKADDR_LENGTH( lpsaAddr, test->ai_addrlen );
+						break;
+					}
+				}
+				else
+					lprintf( "getaddrinfo Error: %d for [%s]", error, lpName );
+			}
+ //WIN32
+#else
+			char *tmp = CStrDup( lpName );
+#ifdef __EMSCRIPTEN__
+			if(!(phe=gethostbyname(tmp) ) )
+#else
+         if(1)
+#endif
+			{
+#if !defined( __EMSCRIPTEN__ )
+				if( !(phe=gethostbyname2(tmp,AF_INET6) ) )
+#endif
+				{
+#if !defined( __EMSCRIPTEN__ )
+					if( !(phe=gethostbyname2(tmp,AF_INET) ) )
+#endif
+					{
+						 // could not find the name in the host file.
+						lprintf( "Could not Resolve to %s  %s", tmp, lpName );
+						ReleaseAddress((SOCKADDR*)lpsaAddr);
+						Deallocate( char*, tmp );
+						if( tmpName ) Deallocate( char*, tmpName );
+						return(NULL);
+					}
+#if !defined( __EMSCRIPTEN__ )
+					else
+					{
+						lprintf( "Strange, gethostbyname failed, but AF_INET worked... %s", tmp );
+						SET_SOCKADDR_LENGTH( lpsaAddr, IN_SOCKADDR_LENGTH );
+						lpsaAddr->sin_family = AF_INET;
+           // save IP address from host entry.
+						memcpy( &lpsaAddr->sin_addr.S_un.S_addr,
+							    phe->h_addr,
+						       phe->h_length);
+					}
+#endif
+				}
+#if !defined( __EMSCRIPTEN__ )
+				else
+				{
+					SET_SOCKADDR_LENGTH( lpsaAddr, IN6_SOCKADDR_LENGTH );
+         // InetAddress Type.
+					lpsaAddr->sin_family = AF_INET6;
+					//lprintf( "This copy:%d", phe->h_length );
+#  if inline_note_never_included
+					{
+						__SOCKADDR_COMMON (sin6_);
+						n_port_t sin6_port;
+						uint32_t sin6_flowinfo;
+						struct in6_addr sin6_addr;
+						uint32_t sin6_scope_id;
+					};
+#  endif
+           // save IP address from host entry.
+					memcpy( ((struct sockaddr_in6*)lpsaAddr)->sin6_addr.s6_addr,
+							 phe->h_addr,
+							 phe->h_length);
+				}
+#endif
+			}
+			else
+			{
+				Deallocate( char *, tmp );
+				SET_SOCKADDR_LENGTH( lpsaAddr, IN_SOCKADDR_LENGTH );
+         // InetAddress Type.
+				lpsaAddr->sin_family = AF_INET;
+				//lprintf( "gethostbyname2:...." );
+           // save IP address from host entry.
+				memcpy( &lpsaAddr->sin_addr.S_un.S_addr,
+					 phe->h_addr,
+					 phe->h_length);
+			}
+#endif
+#ifdef H_ADDR_DEFINED
+#  undef H_ADDR_DEFINED
+#  undef h_addr
+#endif
+		}
+		else
+		{
+         // InetAddress Type.
+			lpsaAddr->sin_family      = AF_INET;
+			lpsaAddr->sin_addr.S_un.S_addr = 0;
+			SET_SOCKADDR_LENGTH( lpsaAddr, IN_SOCKADDR_LENGTH );
+		}
+	}
+#ifdef UNICODE
+	Deallocate( char *, _lpName );
+#  undef lpName
+#endif
+	//lprintf( "Resulting thing" );
+	//DumpAddr( "RESULT ADDRESS", (SOCKADDR*)lpsaAddr );
+	// put in his(destination) port number...
+	if( tmpName ) Deallocate( char*, tmpName );
+	lpsaAddr->sin_port         = htons(nHisPort);
+	return((SOCKADDR*)lpsaAddr);
+}
+//----------------------------------------------------------------------------
+#ifdef __cplusplus
+namespace udp {
+#endif
+NETWORK_PROC( void, DumpAddrEx)( CTEXTSTR name, SOCKADDR *sa DBG_PASS )
+	{
+		if( !sa ) { _lprintf(DBG_RELAY)( "%s: NULL", name ); return; }
+		LogBinary( (uint8_t *)sa, SOCKADDR_LENGTH( sa ) );
+		if( sa->sa_family == AF_INET ) {
+			_lprintf(DBG_RELAY)( "%s: (%s) %d.%d.%d.%d:%d ", name
+			       , ( ((uintptr_t*)sa)[-1] & 0xFFFF0000 )?( ((char**)sa)[-1] ) : "no name"
+			       //*(((unsigned char *)sa)+0),
+			       //*(((unsigned char *)sa)+1),
+			       ,*(((unsigned char *)sa)+4),
+			       *(((unsigned char *)sa)+5),
+			       *(((unsigned char *)sa)+6),
+			       *(((unsigned char *)sa)+7)
+			       , ntohs( *(((unsigned short *)((unsigned char*)sa + 2))) )
+			);
+		} else if( sa->sa_family == AF_INET6 )
+		{
+			lprintf( "Socket address binary: %s", name );
+			_lprintf(DBG_RELAY)( "%s: (%s) %03d %04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x "
+					 , name
+					, ( ((uintptr_t*)sa)[-1] & 0xFFFF0000 )?( ((char**)sa)[-1] ) : "no name"
+					 , ntohs(*(((unsigned short *)((unsigned char*)sa+2))))
+					 , ntohs(*(((unsigned short *)((unsigned char*)sa+8))))
+					 , ntohs(*(((unsigned short *)((unsigned char*)sa+10))))
+					 , ntohs(*(((unsigned short *)((unsigned char*)sa+12))))
+					 , ntohs(*(((unsigned short *)((unsigned char*)sa+14))))
+					 , ntohs(*(((unsigned short *)((unsigned char*)sa+16))))
+					 , ntohs(*(((unsigned short *)((unsigned char*)sa+18))))
+					 , ntohs(*(((unsigned short *)((unsigned char*)sa+20))))
+					 , ntohs(*(((unsigned short *)((unsigned char*)sa+22))))
+					 );
+		}
+}
+#ifdef __cplusplus
+}
+#endif
+//----------------------------------------------------------------------------
+NETWORK_PROC( SOCKADDR *, SetAddressPort )( SOCKADDR *pAddr, uint16_t nDefaultPort )
+{
+	if( pAddr )
+		((SOCKADDR_IN *)pAddr)->sin_port = htons(nDefaultPort);
+	return pAddr;
+}
+//----------------------------------------------------------------------------
+NETWORK_PROC( SOCKADDR *, SetNonDefaultPort )( SOCKADDR *pAddr, uint16_t nDefaultPort )
+{
+	if( pAddr && !((SOCKADDR_IN *)pAddr)->sin_port )
+		((SOCKADDR_IN *)pAddr)->sin_port = htons(nDefaultPort);
+	return pAddr;
+}
+//----------------------------------------------------------------------------
+NETWORK_PROC( SOCKADDR *,CreateSockAddress)(CTEXTSTR name, uint16_t nDefaultPort )
+{
+// blah... should process a ip:port - but - default port?!
+	uint32_t bTmpName = 0;
+	char * tmp;
+	SOCKADDR *sa = NULL;
+	char *port;
+	uint16_t wPort;
+	CTEXTSTR portName = name;
+#ifdef UNICODE
+	char *_name = CStrDup( name );
+#  define name _name
+#endif
+ //-V595
+	if( name[0] == '[' ) {
+		while( portName[0] && portName[0] != ']' )
+			portName++;
+		if( portName[0] ) portName++;
+	}
+	if( name && portName[0] && ( port = (char*)strrchr( portName, ':' ) ) )
+	{
+		tmp = StrDup( name );
+		bTmpName = 1;
+		port = tmp + (port-name);
+		name = tmp;
+		//Log1( "Found ':' assuming %s is IP:PORT", name );
+		*port = 0;
+		port++;
+  // a trailing : could be IPV6 abbreviation.
+		if( port[0] )
+		{
+			if( isdigit( *port ) )
+			{
+ //-V595
+				wPort = (short)atoi( port );
+			}
+			else
+			{
+				struct servent *se;
+				se = getservbyname( port, NULL );
+				if( !se )
+				{
+#ifdef UNICODE
+#define FMT "S"
+#else
+#define FMT "s"
+#endif
+					Log1( "Could not resolve \"%" FMT "\" as a valid service name", port );
+					//return NULL;
+					wPort = nDefaultPort;
+				}
+				else
+					wPort = htons(se->s_port);
+				//Log1( "port alpha - name resolve to %d", wPort );
+			}
+		}
+		else
+			wPort = nDefaultPort;
+#ifdef UNICODE
+#  undef name
+#endif
+		sa = CreateRemote( name, wPort );
+		if( port )
+		{
+  // incase we obliterated it
+			port[-1] = ':';
+		}
+	}
+  // no port specification...
+	else
+	{
+		//Log1( "%s does not have a ':'", name );
+		sa = CreateRemote( name, nDefaultPort );
+	}
+#ifdef UNICODE
+	Deallocate( char *, _name );
+#endif
+	if( bTmpName ) Deallocate( char*, tmp );
+	return sa;
+}
+//----------------------------------------------------------------------------
+SOCKADDR *CreateLocal(uint16_t nMyPort)
+{
+	char lpHostName[HOSTNAME_LEN];
+	if (gethostname(lpHostName,HOSTNAME_LEN))
+	{
+		return(NULL);
+	}
+	return CreateRemote( "0.0.0.0", nMyPort );
+}
+//----------------------------------------------------------------------------
+LOGICAL CompareAddressEx( SOCKADDR *sa1, SOCKADDR *sa2, int method )
+{
+	if( method == SA_COMPARE_FULL )
+	{
+		if( sa1 && sa2 )
+		{
+			if( ((SOCKADDR_IN*)sa1)->sin_family == ((SOCKADDR_IN*)sa2)->sin_family )
+			{
+				switch( ((SOCKADDR_IN*)sa1)->sin_family )
+				{
+				case AF_INET:
+					{
+						SOCKADDR_IN *sin1 = (SOCKADDR_IN*)sa1;
+						SOCKADDR_IN *sin2 = (SOCKADDR_IN*)sa2;
+						if( MemCmp( sin1, sin2, sizeof( SOCKADDR_IN ) ) == 0 )
+							return 1;
+					}
+					break;
+				default:
+					xlprintf( LOG_ALWAYS )( "unhandled address type passed to compare, resulting FAILURE" );
+					return 0;
+				}
+			}
+		}
+	}
+	else
+	{
+		if( sa1 && sa2 )
+		{
+			if( ((SOCKADDR_IN*)sa1)->sin_family == ((SOCKADDR_IN*)sa2)->sin_family )
+			{
+				switch( ((SOCKADDR_IN*)sa1)->sin_family )
+				{
+				case AF_INET:
+					{
+						if( MemCmp( &((SOCKADDR_IN*)sa1)->sin_addr, &((SOCKADDR_IN*)sa2)->sin_addr, sizeof( ((SOCKADDR_IN*)sa2)->sin_addr ) ) == 0 )
+							return 1;
+					}
+					break;
+				default:
+					xlprintf( LOG_ALWAYS )( "unhandled address type passed to compare, resulting FAILURE" );
+					return 0;
+				}
+			}
+		}
+	}
+	return 0;
+}
+//----------------------------------------------------------------------------
+LOGICAL CompareAddress( SOCKADDR *sa1, SOCKADDR *sa2 )
+{
+	return CompareAddressEx( sa1, sa2, SA_COMPARE_FULL );
+}
+//----------------------------------------------------------------------------
+PLIST GetLocalAddresses( void )
+{
+	return globalNetworkData.addresses;
+}
+//----------------------------------------------------------------------------
+LOGICAL IsThisAddressMe( SOCKADDR *addr, uint16_t myport )
+{
+	struct interfaceAddress *test_addr;
+	INDEX idx;
+	LIST_FORALL( globalNetworkData.addresses, idx, struct interfaceAddress *, test_addr )
+	{
+		if( ((SOCKADDR_IN*)addr)->sin_family == ((SOCKADDR_IN*)test_addr->sa)->sin_family )
+		{
+			switch( ((SOCKADDR_IN*)addr)->sin_family )
+			{
+			case AF_INET:
+				{
+					if( MemCmp( &((SOCKADDR_IN*)addr)->sin_addr, &((SOCKADDR_IN*)test_addr->sa)->sin_addr, sizeof(((SOCKADDR_IN*)addr)->sin_addr)  ) == 0 )
+					{
+						return TRUE;
+					}
+				}
+				break;
+			default:
+				lprintf( "Unknown comparison" );
+			}
+		}
+	}
+	return FALSE;
+}
+//----------------------------------------------------------------------------
+LOGICAL IsBroadcastAddressForInterface( struct interfaceAddress *address, SOCKADDR *addr ) {
+	if( addr->sa_family == AF_INET ) {
+      //lprintf( "can test for broadcast... %08x %08x %08x", ( ((uint32_t*)(address->saMask->sa_data+2))[0] | ((uint32_t*)(addr->sa_data+2))[0] ), ((uint32_t*)address->saMask->sa_data)[0] , ((uint32_t*)addr->sa_data)[0] );
+		if( ( ((uint32_t*)(address->saMask->sa_data+2))[0] | ((uint32_t*)(addr->sa_data+2))[0] ) == 0xFFFFFFFFU )
+         return TRUE;
+	}
+   return FALSE;
+}
+//----------------------------------------------------------------------------
+struct interfaceAddress* GetInterfaceForAddress( SOCKADDR *addr )
+{
+	struct interfaceAddress *test_addr;
+	INDEX idx;
+	if( !globalNetworkData.addresses )
+		LoadNetworkAddresses();
+	LIST_FORALL( globalNetworkData.addresses, idx, struct interfaceAddress *, test_addr )
+	{
+		if( ((SOCKADDR_IN*)addr)->sin_family == ((SOCKADDR_IN*)test_addr->sa)->sin_family )
+		{
+			switch( ((SOCKADDR_IN*)addr)->sin_family )
+			{
+			case AF_INET:
+				{
+					if( MemCmp( &((SOCKADDR_IN*)addr)->sin_addr, test_addr->sa->sa_data + 2, sizeof(((SOCKADDR_IN*)addr)->sin_addr)  ) == 0 )
+					{
+						return test_addr;
+					}
+				}
+				break;
+			case AF_INET6:
+				{
+					if( MemCmp( &((SOCKADDR_IN*)addr)->sin_addr, test_addr->sa->sa_data + 2, 16 ) == 0 )
+					{
+						return test_addr;
+					}
+				}
+				break;
+			default:
+				lprintf( "Unknown comparison" );
+			}
+		}
+	}
+	return NULL;
+}
+//----------------------------------------------------------------------------
+SOCKADDR* GetBroadcastAddressForInterface( SOCKADDR *addr )
+{
+	struct interfaceAddress *test_addr;
+	INDEX idx;
+	if( !globalNetworkData.addresses )
+		LoadNetworkAddresses();
+	LIST_FORALL( globalNetworkData.addresses, idx, struct interfaceAddress *, test_addr )
+	{
+		if( ((SOCKADDR_IN*)addr)->sin_family == ((SOCKADDR_IN*)test_addr->sa)->sin_family )
+		{
+			switch( ((SOCKADDR_IN*)addr)->sin_family )
+			{
+			case AF_INET:
+				{
+					if( MemCmp( &((SOCKADDR_IN*)addr)->sin_addr, test_addr->sa->sa_data + 2, sizeof(((SOCKADDR_IN*)addr)->sin_addr)  ) == 0 )
+					{
+						return test_addr->saBroadcast;
+					}
+				}
+				break;
+			case AF_INET6:
+				{
+					if( MemCmp( &((SOCKADDR_IN*)addr)->sin_addr, test_addr->sa->sa_data + 2, 16 ) == 0 )
+					{
+						return test_addr->saBroadcast;
+					}
+				}
+				break;
+			default:
+				lprintf( "Unknown comparison" );
+			}
+		}
+	}
+	return FALSE;
+}
+//----------------------------------------------------------------------------
+SOCKADDR* GetInterfaceAddressForBroadcast( SOCKADDR *addr )
+{
+	struct interfaceAddress *test_addr;
+	INDEX idx;
+	if( !globalNetworkData.addresses )
+		LoadNetworkAddresses();
+	LIST_FORALL( globalNetworkData.addresses, idx, struct interfaceAddress *, test_addr )
+	{
+		if( ((SOCKADDR_IN*)addr)->sin_family == ((SOCKADDR_IN*)test_addr->sa)->sin_family )
+		{
+			switch( ((SOCKADDR_IN*)addr)->sin_family )
+			{
+			case AF_INET:
+				{
+					if( MemCmp( &((SOCKADDR_IN*)addr)->sin_addr, test_addr->saBroadcast->sa_data + 2, 4 ) == 0 )
+					{
+						return test_addr->sa;
+					}
+				}
+				break;
+			case AF_INET6:
+				{
+					if( MemCmp( &((SOCKADDR_IN*)addr)->sin_addr, test_addr->saBroadcast->sa_data + 2, 16  ) == 0 )
+					{
+						return test_addr->sa;
+					}
+				}
+				break;
+			default:
+				lprintf( "Unknown comparison" );
+			}
+		}
+	}
+	return FALSE;
+}
+//----------------------------------------------------------------------------
+void ReleaseAddress(SOCKADDR *lpsaAddr)
+{
+	// sockaddr is often skewed from what I would expect it. (contains its own length)
+	if( lpsaAddr )
+	{
+		/* strdup is used for the addr part so use free instead of release */
+		free( ((POINTER*)( ( (uintptr_t)lpsaAddr ) - sizeof(uintptr_t) ))[0] );
+		Deallocate(POINTER, (POINTER)( ( (uintptr_t)lpsaAddr ) - 2 * sizeof(uintptr_t) ));
+	}
+}
+//----------------------------------------------------------------------------
+// creates class C broadcast address
+SOCKADDR *CreateBroadcast(uint16_t nPort)
+{
+	SOCKADDR_IN *bcast=(SOCKADDR_IN*)AllocAddr();
+	SOCKADDR *lpMyAddr;
+	if (!bcast)
+		return(NULL);
+	lpMyAddr = CreateLocal(0);
+	SET_SOCKADDR_LENGTH( bcast, IN_SOCKADDR_LENGTH );
+	bcast->sin_family	    = AF_INET;
+	bcast->sin_addr.S_un.S_addr  = ((SOCKADDR_IN*)lpMyAddr)->sin_addr.S_un.S_addr;
+ // Fake a subnet broadcast address
+	bcast->sin_addr.S_un.S_un_b.s_b4 = 0xFF;
+	bcast->sin_port        = htons(nPort);
+	ReleaseAddress(lpMyAddr);
+	return((SOCKADDR*)bcast);
+}
+//----------------------------------------------------------------------------
+void DumpSocket( PCLIENT pc )
+{
+	DumpAddr( "REMOT", pc->saClient );
+	DumpAddr( "LOCAL", pc->saSource );
+	return;
+}
+#ifdef __cplusplus
+namespace udp {
+#endif
+#undef DumpAddr
+NETWORK_PROC( void, DumpAddr)( CTEXTSTR name, SOCKADDR *sa )
+{
+	DumpAddrEx( name, sa DBG_SRC );
+}
+#ifdef __cplusplus
+}
+#endif
+//----------------------------------------------------------------------------
+CTEXTSTR GetSystemName( void )
+{
+	// start the network with defaults... we're able to reallocate later.
+#ifdef __ANDROID__
+#if 0
+	// dont' actually have to start winsock; but we do have to do work to get our IP
+	int sock_startup = socket( AF_INET, SOCK_RAW, 0);
+	if( sock_startup == -1 )
+		sock_startup = socket( AF_INET, SOCK_DGRAM, 0);
+	if( sock_startup == -1 )
+		sock_startup = socket( AF_INET, SOCK_STREAM, 0);
+	if( sock_startup >= 0 )
+	{
+		struct ifconf buffer;
+		struct ifreq ifr[10];
+		int ifc_num;
+		int n;
+		buffer.ifc_len = sizeof(ifr);
+		buffer.ifc_ifcu.ifcu_buf = (char*)ifr;
+		ioctl( sock_startup, SIOCGIFCONF, &buffer);
+		ifc_num = buffer.ifc_len / sizeof(struct ifreq);
+#define INT_TO_ADDR(_addr) (_addr & 0xFF), (_addr >> 8 & 0xFF), (_addr >> 16 & 0xFF), (_addr >> 24 & 0xFF)
+		for( n = 0; n < ifc_num; n++ )
+		{
+			int sd, ifc_num, addr, bcast, mask, network;
+			lprintf( "interface %d : %s", n, ifr[n].ifr_name );
+			if (ifr[n].ifr_addr.sa_family != AF_INET)
+			{
+				continue;
+			}
+			/* display the interface name */
+			lprintf("%d) interface: %s\n", n+1, ifr[n].ifr_name);
+			/* Retrieve the IP address, broadcast address, and subnet mask. */
+			if (ioctl(sd, SIOCGIFADDR, &ifr[n]) == 0)
+			{
+				addr = ((struct sockaddr_in *)(&ifr[n].ifr_addr))->sin_addr.s_addr;
+				lprintf("%d) address: %d.%d.%d.%d\n", n+1, INT_TO_ADDR(addr));
+			}
+			if (ioctl(sd, SIOCGIFBRDADDR, &ifr[n]) == 0)
+			{
+				bcast = ((struct sockaddr_in *)(&ifr[n].ifr_broadaddr))->sin_addr.s_addr;
+				lprintf("%d) broadcast: %d.%d.%d.%d\n", n+1, INT_TO_ADDR(bcast));
+			}
+			if (ioctl(sd, SIOCGIFNETMASK, &ifr[n]) == 0)
+			{
+				mask = ((struct sockaddr_in *)(&ifr[n].ifr_netmask))->sin_addr.s_addr;
+				lprintf("%d) netmask: %d.%d.%d.%d\n", n+1, INT_TO_ADDR(mask));
+			}
+			/* Compute the current network value from the address and netmask. */
+			network = addr & mask;
+			lprintf("%d) network: %d.%d.%d.%d\n", n+1, INT_TO_ADDR(network));
+		}
+		close( sock_startup );
+	}
+	else
+#endif
+		globalNetworkData.system_name = "No Name Available";
+#else
+	NetworkStart();
+#endif
+	return globalNetworkData.system_name;
+}
+#undef NetworkLock
+#undef NetworkUnlock
+NETWORK_PROC( void, GetNetworkAddressBinary )( SOCKADDR *addr, uint8_t **data, size_t *datalen ) {
+	if( addr ) {
+		size_t namelen;
+		size_t addrlen = SOCKADDR_LENGTH( addr );
+		const char * tmp = ((const char**)addr)[-1];
+		if( !( (uintptr_t)tmp & 0xFFFF0000 ) )
+		{
+			lprintf( "corrupted sockaddr." );
+			DebugBreak();
+		}
+		if( tmp )
+		{
+			namelen = StrLen( tmp );
+		}
+		else
+			namelen = 0;
+		(*datalen) = namelen + 1 + 1 + SOCKADDR_LENGTH( addr );
+		(*data) = NewArray( uint8_t, (*datalen) );
+		MemCpy( (*data), tmp, namelen + 1 );
+		(*data)[namelen+1] = (uint8_t)addrlen;
+		MemCpy( (*data) + namelen + 1, addr, addrlen );
+	}
+}
+NETWORK_PROC( SOCKADDR *, MakeNetworkAddressFromBinary )( uintptr_t *data, size_t datalen ) {
+	SOCKADDR *addr = AllocAddr();
+	size_t namelen = strlen( (const char*)data );
+ // if empty name, don't include it.
+	if( namelen )
+		SetAddrName( addr, (const char*)data );
+	SET_SOCKADDR_LENGTH( addr, data[1] );
+	MemCpy( addr, data + 2, data[1] );
+	return addr;
+}
+#ifdef __LINUX__
+void LoadNetworkAddresses( void ) {
+	struct ifaddrs *addrs, *tmp;
+	struct interfaceAddress *ia;
+	getifaddrs( &addrs );
+	tmp = addrs;
+	ia = New( struct interfaceAddress );
+	ia->sa = CreateRemote( "0.0.0.0", 0 );
+	ia->saMask = NULL;
+	ia->saBroadcast = CreateRemote( "255.255.255.255", 0 );
+	AddLink( &globalNetworkData.addresses, ia );
+	for( ; tmp; tmp = tmp->ifa_next )
+	{
+		SOCKADDR *dup;
+		if( !tmp->ifa_addr )
+			continue;
+#  ifndef __MAC__
+		if( tmp->ifa_addr && tmp->ifa_addr->sa_family == AF_PACKET )
+			continue;
+#  endif
+		ia = New( struct interfaceAddress );
+		dup = AllocAddr();
+		if( tmp->ifa_addr->sa_family == AF_INET6 ) {
+			continue;
+			//memcpy( dup, tmp->ifa_addr, IN6_SOCKADDR_LENGTH );
+			//SET_SOCKADDR_LENGTH( dup, IN6_SOCKADDR_LENGTH );
+		}
+		else {
+			memcpy( dup, tmp->ifa_addr, IN_SOCKADDR_LENGTH );
+			SET_SOCKADDR_LENGTH( dup, IN_SOCKADDR_LENGTH );
+		}
+		ia->sa = dup;
+		dup = AllocAddr();
+		if( tmp->ifa_addr->sa_family == AF_INET6 ) {
+			//memcpy( dup, tmp->ifa_netmask, IN6_SOCKADDR_LENGTH );
+			//SET_SOCKADDR_LENGTH( dup, IN6_SOCKADDR_LENGTH );
+		}
+		else {
+			if( tmp->ifa_netmask ) {
+				memcpy( dup, tmp->ifa_netmask, IN_SOCKADDR_LENGTH );
+				SET_SOCKADDR_LENGTH( dup, IN_SOCKADDR_LENGTH );
+			} else {
+				memset( dup, 0, IN_SOCKADDR_LENGTH );
+				SET_SOCKADDR_LENGTH( dup, IN_SOCKADDR_LENGTH );
+			}
+		}
+		ia->saMask = dup;
+		ia->saBroadcast = AllocAddr();
+		ia->saBroadcast->sa_family = ia->sa->sa_family;
+		ia->saBroadcast->sa_data[0] = 0;
+		ia->saBroadcast->sa_data[1] = 0;
+		ia->saBroadcast->sa_data[2] = (ia->sa->sa_data[2] & ia->saMask->sa_data[2]) | (~ia->saMask->sa_data[2]);
+		ia->saBroadcast->sa_data[3] = (ia->sa->sa_data[3] & ia->saMask->sa_data[3]) | (~ia->saMask->sa_data[3]);
+		ia->saBroadcast->sa_data[4] = (ia->sa->sa_data[4] & ia->saMask->sa_data[4]) | (~ia->saMask->sa_data[4]);
+		ia->saBroadcast->sa_data[5] = (ia->sa->sa_data[5] & ia->saMask->sa_data[5]) | (~ia->saMask->sa_data[5]);
+		SET_SOCKADDR_LENGTH( ia->saBroadcast, SOCKADDR_LENGTH( ia->sa ) );
+		AddLink( &globalNetworkData.addresses, ia );
+	}
+	freeifaddrs( addrs );
+}
+#endif
+#ifdef _WIN32
+#if 0
+#ifdef WIN32
+	{
+		struct addrinfo *result;
+		struct addrinfo *test;
+#ifdef _UNICODE
+		char *tmp = WcharConvert( globalNetworkData.system_name );
+		getaddrinfo( tmp, NULL, NULL, (struct addrinfo**)&result );
+		Deallocate( char*, tmp );
+#else
+		getaddrinfo( globalNetworkData.system_name, NULL, NULL, (struct addrinfo**)&result );
+#endif
+		for( test = result; test; test = test->ai_next )
+		{
+			//if( test->ai_family == AF_INET )
+			{
+				SOCKADDR *tmp;
+				AddLink( &globalNetworkData.addresses, tmp = AllocAddr() );
+				((uintptr_t*)tmp)[-1] = test->ai_addrlen;
+				MemCpy( tmp, test->ai_addr, test->ai_addrlen );
+				//lprintf( "initialize addres..." );
+				//DumpAddr( "blah", tmp );
+			}
+		}
+	}
+#endif
+#endif
+void LoadNetworkAddresses( void ) {
+	// Declare and initialize variables
+	PIP_INTERFACE_INFO pInfo;
+	pInfo = (IP_INTERFACE_INFO *) malloc( sizeof(IP_INTERFACE_INFO) );
+	DWORD dwRetVal = 0;
+	PIP_ADAPTER_INFO pAdapterInfo;
+	PIP_ADAPTER_INFO pAdapter = NULL;
+	ULONG ulOutBufLen = sizeof (IP_ADAPTER_INFO);
+	pAdapterInfo = New(IP_ADAPTER_INFO);
+	if (pAdapterInfo == NULL) {
+		lprintf("Error allocating memory needed to call GetAdaptersinfo\n");
+		free( pInfo );
+		return;
+	}
+	// Make an initial call to GetAdaptersInfo to get
+	// the necessary size into the ulOutBufLen variable
+	if (GetAdaptersInfo(pAdapterInfo, &ulOutBufLen) == ERROR_BUFFER_OVERFLOW) {
+		Deallocate( PIP_ADAPTER_INFO, pAdapterInfo);
+		pAdapterInfo = (IP_ADAPTER_INFO *) NewArray(uint8_t, ulOutBufLen);
+		if (pAdapterInfo == NULL) {
+			lprintf("Error allocating memory needed to call GetAdaptersinfo\n");
+			free( pInfo );
+			return;
+		}
+	}
+	if ((dwRetVal = GetAdaptersInfo(pAdapterInfo, &ulOutBufLen)) == NO_ERROR) {
+		pAdapter = pAdapterInfo;
+		while (pAdapter) {
+			PIP_ADDR_STRING ipadd = &pAdapter->IpAddressList;
+			for( ; ipadd; ipadd = ipadd->Next ) {
+			/*
+			typedef struct _IP_ADDR_STRING {
+			  struct _IP_ADDR_STRING  *Next;
+			  IP_ADDRESS_STRING      IpAddress;
+			  IP_MASK_STRING         IpMask;
+			  DWORD                  Context;
+			} IP_ADDR_STRING, *PIP_ADDR_STRING;
+			*/
+				if( StrCmp( ipadd->IpAddress.String, "0.0.0.0" ) == 0 )
+					continue;
+				struct interfaceAddress *ia = New( struct interfaceAddress );
+				ia->sa = CreateRemote( ipadd->IpAddress.String, 0 );
+				ia->saMask = CreateRemote( ipadd->IpMask.String, 0 );
+				ia->saBroadcast = AllocAddr();
+				ia->saBroadcast->sa_family = ia->sa->sa_family;
+				ia->saBroadcast->sa_data[0] = 0;
+				ia->saBroadcast->sa_data[1] = 0;
+				ia->saBroadcast->sa_data[2] = (ia->sa->sa_data[2] & ia->saMask->sa_data[2]) | (~ia->saMask->sa_data[2]);
+				ia->saBroadcast->sa_data[3] = (ia->sa->sa_data[3] & ia->saMask->sa_data[3]) | (~ia->saMask->sa_data[3]);
+				ia->saBroadcast->sa_data[4] = (ia->sa->sa_data[4] & ia->saMask->sa_data[4]) | (~ia->saMask->sa_data[4]);
+				ia->saBroadcast->sa_data[5] = (ia->sa->sa_data[5] & ia->saMask->sa_data[5]) | (~ia->saMask->sa_data[5]);
+				AddLink( &globalNetworkData.addresses, ia );
+			}
+			pAdapter = pAdapter->Next;
+		}
+	}
+	else {
+		lprintf( "GetAdaptersInfo failed with error: %d\n", dwRetVal );
+	}
+#if 0
+//msdn.microsoft.com/en-us/library/windows/desktop/aa365915%28v=vs.85%29.aspx?f=255&MSPPError=-2147217396
+https:
+    PIP_ADAPTER_ADDRESSES pAddresses = NULL;
+    ULONG outBufLen = 0;
+    ULONG Iterations = 0;
+    PIP_ADAPTER_ADDRESSES pCurrAddresses = NULL;
+    PIP_ADAPTER_UNICAST_ADDRESS pUnicast = NULL;
+    PIP_ADAPTER_ANYCAST_ADDRESS pAnycast = NULL;
+    PIP_ADAPTER_MULTICAST_ADDRESS pMulticast = NULL;
+    IP_ADAPTER_DNS_SERVER_ADDRESS *pDnServer = NULL;
+    IP_ADAPTER_PREFIX *pPrefix = NULL;
+  do {
+        pAddresses = (IP_ADAPTER_ADDRESSES *) MALLOC(outBufLen);
+        if (pAddresses == NULL) {
+            printf
+                ("Memory allocation failed for IP_ADAPTER_ADDRESSES struct\n");
+            exit(1);
+        }
+        dwRetVal =
+            GetAdaptersAddresses(AF_UNSPEC
+		, GAA_FLAG_SKIP_DNS_SERVER|GAA_FLAG_SKIP_FRIENDLY_NAME|GAA_FLAG_INCLUDE_ALL_INTERFACES
+		, NULL, pAddresses, &outBufLen);
+        if (dwRetVal == ERROR_BUFFER_OVERFLOW) {
+            FREE(pAddresses);
+            pAddresses = NULL;
+        } else {
+            break;
+        }
+        Iterations++;
+    } while ((dwRetVal == ERROR_BUFFER_OVERFLOW) && (Iterations < MAX_TRIES));
+#endif
+}
+#endif
 SACK_NETWORK_NAMESPACE_END
 // DEBUG FALGS in netstruc.h
 //TODO: after the connect and just before the call to the connect callback fill in the PCLIENT's MAC addr field.
@@ -44901,20 +48160,12 @@ int TCPWriteEx(PCLIENT pc DBG_PASS)
 					lprintf( "Pending write..." );
 #endif
 					pc->dwFlags |= CF_WRITEPENDING;
-#ifdef __LINUX__
-					//if( !(pc->dwFlags & CF_WRITEISPENDED ) )
-					//{
-					//	   lprintf( "Sending signal" );
-					//    WakeThread( globalNetworkData.pThread );
-					//}
-					//else
-					//    lprintf( "Yes... it was already pending..(no signal)" );
-#endif
 					return TRUE;
 				}
 				{
-					_lprintf(DBG_RELAY)(" Network Send Error: %5d(buffer:%p ofs: %" _size_f "  Len: %" _size_f ")",
+					_lprintf(DBG_RELAY)(" Network Send Error: %5d(sock:%p, buffer:%p ofs: %" _size_f "  Len: %" _size_f ")",
 											  dwError,
+											  pc,
 											  pc->lpFirstPending->buffer.c,
 											  pc->lpFirstPending->dwUsed,
 											  pc->lpFirstPending->dwAvail );
@@ -44934,17 +48185,15 @@ int TCPWriteEx(PCLIENT pc DBG_PASS)
 				}
  // other side closed.
 			} else if (!nSent) {
-				lprintf( "sent zero bytes - assume it was closed - and HOPE there's an event..." );
+				//lprintf( "sent zero bytes - assume it was closed - and HOPE there's an event..." );
+				// this is more likely to show up as an EPIPE
 				pc->dwFlags |= CF_TOCLOSE;
 				// if this happened - don't return TRUE result which would
 				// result in queuing a pending buffer...
   // no sence processing the rest of this.
 				return FALSE;
 			} else if( pc->lpFirstPending && ( nSent < (int)pc->lpFirstPending->dwAvail ) ) {
-				//pc->lpFirstPending->dwUsed += nSent;
-				//pc->lpFirstPending->dwAvail -= nSent;
 				pc->dwFlags |= CF_WRITEPENDING;
-				//lprintf( "THIS IS ANOTHER PENDING CONDITION THAT WASN'T ACCOUNTED %d of %d", nSent, pc->lpFirstPending->dwAvail  );
 			}
 		}
 		else
@@ -45007,17 +48256,6 @@ int TCPWriteEx(PCLIENT pc DBG_PASS)
 					if( !(pc->dwFlags & CF_WRITEPENDING) )
 					{
 						pc->dwFlags |= CF_WRITEPENDING;
-#if 0
-#ifdef USE_WSA_EVENTS
-						if( globalNetworkData.flags.bLogNotices )
-							lprintf( "SET GLOBAL EVENT (write pending)" );
-						EnqueLink( &globalNetworkData.client_schedule, pc );
-						WSASetEvent( globalNetworkData.hMonitorThreadControlEvent );
-#endif
-#ifdef __LINUX__
-						AddThreadEvent( pc, 0 );
-#endif
-#endif
 					}
 					return TRUE;
 				}
@@ -48911,6 +52149,7 @@ void SetWebSocketDataCompletion( PCLIENT pc, web_socket_completion callback ) {
  */
 #ifndef INCLUDED_SHA1_H_
 #define INCLUDED_SHA1_H_
+#define _SHA1_H_
 #ifdef SHA1_SOURCE
 #define SHA1_PROC(type,name) EXPORT_METHOD type CPROC name
 #else
@@ -49895,8 +53134,10 @@ SRG_EXPORT char * SRG_ID_Generator( void );
 SRG_EXPORT char *SRG_ID_Generator_256( void );
 // return a unique ID using SHA3-keccak-512
 SRG_EXPORT char *SRG_ID_Generator3( void );
-// return a unique ID using SHA3-K12-512
+// return a unique ID using K12-32768
 SRG_EXPORT char *SRG_ID_Generator4( void );
+// return a short unique ID using K12-32768
+SRG_EXPORT char *SRG_ID_ShortGenerator4( void );
 //------------------------------------------------------------------------
 //   crypt_util.c extra simple routines - kinda like 'passwd'
 //
@@ -54596,8 +57837,9 @@ enum jsox_word_char_states {
 	JSOX_WORD_POS_UNDEFINED_7,
 	JSOX_WORD_POS_UNDEFINED_8,
 	//JSOX_WORD_POS_UNDEFINED_9, // instead of stepping to this value here, go to RESET
-	JSOX_WORD_POS_NAN_1,
   // 20
+	JSOX_WORD_POS_NAN_1,
+  // 21
 	JSOX_WORD_POS_NAN_2,
 	//JSOX_WORD_POS_NAN_3,// instead of stepping to this value here, go to RESET
 	JSOX_WORD_POS_INFINITY_1,
@@ -54609,8 +57851,9 @@ enum jsox_word_char_states {
 	JSOX_WORD_POS_INFINITY_7,
 	//JSOX_WORD_POS_INFINITY_8,// instead of stepping to this value here, go to RESET
 	JSOX_WORD_POS_FIELD,
+  // 30
 	JSOX_WORD_POS_AFTER_FIELD,
- // 30
+ // 31
 	JSOX_WORD_POS_DOT_OPERATOR,
 	JSOX_WORD_POS_PROPER_NAME,
 	JSOX_WORD_POS_AFTER_PROPER_NAME,
@@ -55346,14 +58589,11 @@ static LOGICAL openArray( struct jsox_parse_state *state, struct jsox_output_buf
 		vtprintf( state->pvtError, "Fault while parsing; colon expected after field name %c at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
 		state->status = FALSE;
 		return FALSE;
-	}
-	if( state->word > JSOX_WORD_POS_RESET && state->word < JSOX_WORD_POS_FIELD )
- // don't pass C; otherwise array opens.
-		recoverIdent(state,output,0);
+        }
 	if( state->val.value_type == JSOX_VALUE_STRING ) {
 		state->val.className = state->val.string;
 #ifdef DEBUG_CLASS_STATES
-		lprintf( "SET class: %s", state->val.className );
+		lprintf( "SET class: %.*s %d", state->val.stringLen, state->val.className, state->val.stringLen );
 #endif
 		state->val.classNameLen = state->val.stringLen;
 		state->val.string = NULL;
@@ -55396,6 +58636,7 @@ static LOGICAL openArray( struct jsox_parse_state *state, struct jsox_output_buf
 		}else {
 			if( !state->pvtError ) state->pvtError = VarTextCreate();
 			vtprintf( state->pvtError, "Fault while parsing; while getting field name unexpected %c at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
+			vtprintf( state->pvtError, "\nError: word state: %d %d", state->parse_context, state->objectContext );
 			state->status = FALSE;
 			return FALSE;
 		}
@@ -55701,17 +58942,17 @@ int recoverIdent( struct jsox_parse_state *state, struct jsox_output_buffer* out
 		openObject( state, output, cInt );
 /*'['*/
 	else if( cInt == 91 )
-		openArray( state, output, cInt );
+		openArray( state, output, 0 );
 /*':'*/
 	else if( cInt == 58 ) {
  // well.. it is.  It's already a fairly commited value.
 		state->word = JSOX_WORD_POS_RESET;
 		if( !state->completedString ) {
 			state->completedString = TRUE;
-			state->val.stringLen = output->pos - state->val.string;
+                        state->val.stringLen = output->pos - state->val.string;
 		}
 #ifdef DEBUG_STRING_LENGTH
-		lprintf( "Update stringLen  '%c'  :%d", cInt, state->val.stringLen );
+                lprintf( "Update stringLen  '%c'  :%d", cInt?cInt:'?', state->val.stringLen );
 #endif
 /*','*/
 	} else if( cInt == 44 ) {
@@ -55722,7 +58963,7 @@ int recoverIdent( struct jsox_parse_state *state, struct jsox_output_buffer* out
 			state->val.stringLen = output->pos - state->val.string;
 		}
 #ifdef DEBUG_STRING_LENGTH
-		lprintf( "Update stringLen  '%c'  :%d", cInt, state->val.stringLen );
+		lprintf( "Update stringLen  '%c'  :%d", cInt?cInt:'~', state->val.stringLen );
 #endif
 	} else if( cInt >= 0 ) {
 		// ignore white space.
@@ -56025,7 +59266,9 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 				openObject( state, output, c );
 				break;
 			case '[':
-				openArray( state, output, c );
+  // gather any preceeding string.
+				recoverIdent(state,output,c);
+				//openArray( state, output, c );
 				break;
 			case ':':
 				recoverIdent(state,output,c);
@@ -56067,7 +59310,10 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 			case '}':
 				{
 					int emitObject;
-					emitObject = TRUE;
+                                        emitObject = TRUE;
+                                        if( state->word == JSOX_WORD_POS_AFTER_FIELD ) {
+						state->word = JSOX_WORD_POS_RESET;
+                                        }
 					if( state->word == JSOX_WORD_POS_END ) {
 						// allow starting a new word
 						state->word = JSOX_WORD_POS_RESET;
@@ -56124,15 +59370,19 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 							pushValue( state, state->elements, &state->val );
 						else {
 							if( !state->pvtError ) state->pvtError = VarTextCreate();
-							vtprintf( state->pvtError, "Fault while parsing; unexpected %c at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
+							vtprintf( state->pvtError, "Fault while parsing(2); unexpected %c at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
 							state->status = FALSE;
 						}
 					}
 					else {
+                                            if( state->val.value_type != JSOX_VALUE_UNSET ) {
+                                                //pushValue( state, state->elements, &state->val );
+                                            } else {
 						if( !state->pvtError ) state->pvtError = VarTextCreate();
-						vtprintf( state->pvtError, "Fault while parsing; unexpected %c at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
-						state->status = FALSE;
+						vtprintf( state->pvtError, "Fault while parsing(3); unexpected %c at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
+                                                state->status = FALSE;
 						break;
+                                            }
 					}
 					{
 						struct jsox_parse_context* old_context = ( struct jsox_parse_context* )PopLink( state->context_stack );
@@ -56141,7 +59391,7 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 						state->val._contains = state->elements;
  // this will restore as IN_ARRAY or OBJECT_FIELD
 						state->parse_context = old_context->context;
-					// lose current class in the pop; have; have to report completed status before popping.
+                                                // lose current class in the pop; have; have to report completed status before popping.
 						if( state->parse_context == JSOX_CONTEXT_UNKNOWN ) {
 							if( !state->current_class )
 								state->completed = TRUE;
@@ -56383,7 +59633,7 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 					if( state->val.string )
 						lprintf( "gathering object field:%c  %d %.*s", c, output->pos- state->val.string, output->pos - state->val.string, state->val.string );
 					else
-						lprintf( "Gathering, but no string yet?" );
+						lprintf( "Gathering, but no string yet? %c", c );
 #endif
 					switch( c )
 					{
@@ -56493,6 +59743,7 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 						if( state->word == JSOX_WORD_POS_AFTER_FIELD ) {
 							state->status = FALSE;
 							if( !state->pvtError ) state->pvtError = VarTextCreate();
+							//lprintf( "Val is:%s", state->val.string );
 	// fault
 							vtprintf( state->pvtError, "fault while parsing; second string in field name at %" _size_f "  %" _size_f ":%" _size_f, state->n, state->line, state->col );
 							break;
@@ -60011,6 +63262,11 @@ static	int CPROC sack_filesys_find_first( struct find_cursor* _cursor ) {
 	if( cursor->handle ) {
 		do {
 			cursor->de = readdir( cursor->handle );
+			//lprintf( "filefound? %s", cursor->de->d_name );
+			if( cursor->de && cursor->de->d_type == DT_DIR) {
+				//lprintf( "result with dir? %s", cursor->de->d_name );
+					break;
+			}
 		} while( cursor->de && !CompareMask( cursor->mask, cursor->de->d_name, 0 ) );
 		return ( cursor->de != NULL );
 	}
@@ -60039,6 +63295,11 @@ static	int CPROC sack_filesys_find_next( struct find_cursor* _cursor ) {
 #else
 	do {
 		cursor->de = readdir( cursor->handle );
+			//lprintf( "filefound? %s", cursor->de->d_name );
+			if( cursor->de && cursor->de->d_type == DT_DIR) {
+				//lprintf( "result with dir? %s", cursor->de->d_name );
+				break;
+			}
 	} while( cursor->de && !CompareMask( cursor->mask, cursor->de->d_name, 0 ) );
 	r = ( cursor->de != NULL );
 #endif
@@ -60491,7 +63752,7 @@ try_mask:
 	{
 		if( mask[m] == '\t' || mask[m] == '|' )
 		{
-			lprintf( "Found mask seperator - skipping to next mask :%s", mask + m + 1 );
+			//lprintf( "Found mask seperator - skipping to next mask :%s", mask + m + 1 );
 			n = 0;
 			m++;
 			continue;
@@ -61946,7 +65207,7 @@ void ConvertTickToTime( int64_t tick, PSACK_TIME st ) {
 	struct tm tm;
 	tv.tv_sec = ( tick >> 8 ) / 1000;
 	tv.tv_usec =  ( ( tick >> 8 ) % 1000 ) * 1000;
-	gmtime_r( &tv.tv_sec, &tm );
+	localtime_r( &tv.tv_sec, &tm );
 	st->yr = tm.tm_year + 1900;
 	st->mo = tm.tm_mon+1;
 	st->dy = tm.tm_mday;
@@ -61969,6 +65230,7 @@ int64_t GetTimeOfDay( uint64_t* tick, int8_t* ptz )
  // -840/15 = -56  720/15 = 48
 		tz = (((tz / 100) * 60) + (tz % 100)) / 15;
 	tick[0] = timeGetTime64ns();
+	tick[0] += (int64_t)tz * 900 * (int64_t)1000000000;
 	ptz[0] = tz;
 	return ( tick[0] /1000000 )<<8 | (tz&0xFF);
 #ifdef _WIN32
@@ -71744,6 +75006,7 @@ void ReadConfiguration( void )
 		AddConfigurationMethod( pch, "endif", EndTestOption );
 		AddConfigurationMethod( pch, "else", ElseTestOption );
 		AddConfigurationMethod( pch, "service=%w library=%w load=%w unload=%w", HandleLibrary );
+		AddConfigurationMethod( pch, "alias service '%m' = '%m'", HandleAlias );
 		AddConfigurationMethod( pch, "alias service %w %w", HandleAlias );
 		AddConfigurationMethod( pch, "module %w", HandleModule );
 		AddConfigurationMethod( pch, "pmodule %w", HandlePrivateModule );
@@ -74321,6 +77584,7 @@ static void MD5_memset (uint8_t* output, int value, unsigned int len)
  */
 #ifndef INCLUDED_SHA1_H_
 #define INCLUDED_SHA1_H_
+#define _SHA1_H_
 #ifdef SHA1_SOURCE
 #define SHA1_PROC(type,name) EXPORT_METHOD type CPROC name
 #else
@@ -77618,6 +80882,19 @@ char *SRG_ID_Generator4( void ) {
 	} while( (buf[0] & 0x3f) < 10 );
 	used[usingCtx] = 0;
 	return EncodeBase64Ex( (uint8*)buf, (16 + 16), &outlen, (const char *)1 );
+}
+char *SRG_ID_ShortGenerator4( void ) {
+	    struct random_context *ctx;
+	uint32_t buf[(12)/4];
+	size_t outlen;
+	static struct random_context *_ctx[SRG_MAX_GENERATOR_THREADS];
+	static uint32_t used[SRG_MAX_GENERATOR_THREADS];
+	int usingCtx;
+	usingCtx = 0;
+	ctx = getGenerator( _ctx, used, SRG_CreateEntropy4, &usingCtx );
+        SRG_GetEntropyBuffer( ctx, buf, 8 * (12) );
+	used[usingCtx] = 0;
+	return EncodeBase64Ex( (uint8*)buf, (12), &outlen, (const char *)1 );
 }
 #ifndef SALTY_RANDOM_GENERATOR_SOURCE
 #define SALTY_RANDOM_GENERATOR_SOURCE
