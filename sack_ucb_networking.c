@@ -22,6 +22,7 @@
 #define NEED_SHLOBJ
 #define JSON_PARSER_MAIN_SOURCE
 #define FORCE_COLOR_MACROS
+#define WINFILE_COMMON_SOURCE
 #include <stdio.h>
 #include <stdarg.h>
 /* Includes the system platform as required or appropriate. If
@@ -36,9 +37,18 @@
 #  undef _XOPEN_SOURCE
 #  define _XOPEN_SOURCE 500
 #endif
+#  ifndef _GNU_SOURCE
+#    define _GNU_SOURCE
+#  endif
 #ifndef STANDARD_HEADERS_INCLUDED
 /* multiple inclusion protection symbol */
 #define STANDARD_HEADERS_INCLUDED
+#if _POSIX_C_SOURCE < 200112L
+#  ifdef _POSIX_C_SOURCE
+#    undef _POSIX_C_SOURCE
+#  endif
+#  define _POSIX_C_SOURCE 200112L
+#endif
 #include <stdlib.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -155,24 +165,30 @@
 #    include <shlobj.h>
 #  endif
 #  if _MSC_VER > 1500
-#    define mkdir _mkdir
 #    define fileno _fileno
 #    define stricmp _stricmp
 #    define strdup _strdup
 #  endif
+#  ifdef WANT_MMSYSTEM
+#    include <mmsystem.h>
+#  endif
+#  if USE_NATIVE_TIME_GET_TIME
 //#  include <windowsx.h>
 // we like timeGetTime() instead of GetTickCount()
 //#  include <mmsystem.h>
-#ifdef __cplusplus
+#    ifdef __cplusplus
 extern "C"
-#endif
+#    endif
 __declspec(dllimport) DWORD WINAPI timeGetTime(void);
-#  if defined( NEED_SHLAPI )
-#    include <shlwapi.h>
-#    include <shellapi.h>
 #  endif
-#  ifdef NEED_V4W
-#    include <vfw.h>
+#  ifdef WIN32
+#    if defined( NEED_SHLAPI )
+#      include <shlwapi.h>
+#      include <shellapi.h>
+#    endif
+#    ifdef NEED_V4W
+#      include <vfw.h>
+#    endif
 #  endif
 #  if defined( HAVE_ENVIRONMENT )
 #    define getenv(name)       OSALOT_GetEnvironmentVariable(name)
@@ -199,7 +215,6 @@ __declspec(dllimport) DWORD WINAPI timeGetTime(void);
 #  include <sched.h>
 #  include <unistd.h>
 #  include <sys/time.h>
-#  include <errno.h>
 #  if defined( __ARM__ )
 #    define DebugBreak()
 #  else
@@ -234,6 +249,7 @@ extern __sighandler_t bsd_signal(int, __sighandler_t);
 #  define GetCurrentThreadId() ((uint32_t)getpid())
   // end if( !__LINUX__ )
 #endif
+#include <errno.h>
 #ifndef NEED_MIN_MAX
 #  ifndef NO_MIN_MAX_MACROS
 #    define NO_MIN_MAX_MACROS
@@ -297,13 +313,24 @@ But WHO doesn't have stdint?  BTW is sizeof( size_t ) == sizeof( void* )
 #endif
 #if !defined( __NO_THREAD_LOCAL__ ) && ( defined( _MSC_VER ) || defined( __WATCOMC__ ) )
 #  define HAS_TLS 1
-#  define DeclareThreadLocal static __declspec(thread)
-#  define DeclareThreadVar __declspec(thread)
-#elif !defined( __NO_THREAD_LOCAL__ ) && ( defined( __GNUC__ ) )
-#  define HAS_TLS 1
-#  define DeclareThreadLocal static __thread
-#  define DeclareThreadVar __thread
+#  ifdef __cplusplus
+#    define DeclareThreadLocal static thread_local
+#    define DeclareThreadVar  thread_local
+#  else
+#    define DeclareThreadLocal static __declspec(thread)
+#    define DeclareThreadVar __declspec(thread)
+#  endif
+#elif !defined( __NO_THREAD_LOCAL__ ) && ( defined( __GNUC__ ) || defined( __MAC__ ) )
+#    define HAS_TLS 1
+#    ifdef __cplusplus
+#      define DeclareThreadLocal static thread_local
+#      define DeclareThreadVar thread_local
+#    else
+#    define DeclareThreadLocal static __thread
+#    define DeclareThreadVar __thread
+#  endif
 #else
+// if no HAS_TLS
 #  define DeclareThreadLocal static
 #  define DeclareThreadVar
 #endif
@@ -325,16 +352,11 @@ But WHO doesn't have stdint?  BTW is sizeof( size_t ) == sizeof( void* )
 //#ifndef TARGETNAME
 //#  define TARGETNAME "sack_bag.dll"  //$(TargetFileName)
 //#endif
-#    ifndef __cplusplus_cli
-// cli mode, we use this directly, and build the exports in sack_bag.dll directly
-#    else
-#      define LIBRARY_DEADSTART
-#    endif
-#define MD5_SOURCE
-#define USE_SACK_FILE_IO
+#    define MD5_SOURCE
+#    define USE_SACK_FILE_IO
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define MEM_LIBRARY_SOURCE
+#    define MEM_LIBRARY_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
 #define SYSLOG_SOURCE
@@ -379,70 +401,60 @@ But WHO doesn't have stdint?  BTW is sizeof( size_t ) == sizeof( void* )
 #define SHA1_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define CONSTRUCT_SOURCE
+#    define CONSTRUCT_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define PROCREG_SOURCE
+#    define PROCREG_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define SQLPROXY_LIBRARY_SOURCE
+#    define SQLPROXY_LIBRARY_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define TYPELIB_SOURCE
+#      define TYPELIB_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define JSON_EMITTER_SOURCE
+#      define JSON_EMITTER_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define SERVICE_SOURCE
-#  ifndef __NO_SQL__
-#    ifndef __NO_OPTIONS__
+#    define SERVICE_SOURCE
+#    ifndef __NO_SQL__
+#      ifndef __NO_OPTIONS__
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.    and not NO_SQL and not NO_OPTIONS   */
-#      define SQLGETOPTION_SOURCE
+#        define SQLGETOPTION_SOURCE
+#      endif
 #    endif
-#  endif
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define PSI_SOURCE
-#  ifdef _MSC_VER
-#    ifndef JPEG_SOURCE
-//wouldn't matter... the external things wouldn't need to define this
-//#error projects were not generated with CMAKE, and JPEG_SORUCE needs to be defined
-#    endif
-//#define JPEG_SOURCE
-//#define __PNG_LIBRARY_SOURCE__
-//#define FT2_BUILD_LIBRARY   // freetype is internal
-//#define FREETYPE_SOURCE		// build Dll Export
-#  endif
+#    define PSI_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define MNG_BUILD_DLL
+#    define MNG_BUILD_DLL
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define BAGIMAGE_EXPORTS
+#    define BAGIMAGE_EXPORTS
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
  individual library module once upon a time.           */
-#ifndef IMAGE_LIBRARY_SOURCE
-#  define IMAGE_LIBRARY_SOURCE
-#endif
+#    ifndef IMAGE_LIBRARY_SOURCE
+#      define IMAGE_LIBRARY_SOURCE
+#    endif
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define SYSTRAY_LIBRARAY
+#    define SYSTRAY_LIBRARAY
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define SOURCE_PSI2
+#    define SOURCE_PSI2
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define VIDEO_LIBRARY_SOURCE
+#    define VIDEO_LIBRARY_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
 	/* define RENDER SOURCE when building monolithic. */
-#     ifndef RENDER_LIBRARY_SOURCE
-#       define RENDER_LIBRARY_SOURCE
-#     endif
+#    ifndef RENDER_LIBRARY_SOURCE
+#      define RENDER_LIBRARY_SOURCE
+#    endif
 // define a type that is a public name struct type...
 // good thing that typedef and struct were split
 // during the process of port to /clr option.
@@ -459,9 +471,8 @@ But WHO doesn't have stdint?  BTW is sizeof( size_t ) == sizeof( void* )
 #include <sys/types.h>
 #include <sys/stat.h>
 #if !defined( _WIN32 ) && !defined( __MAC__ )
-#  include <syscall.h>
-#elif defined( __MAC__ )
 #  include <sys/syscall.h>
+#elif defined( __MAC__ )
 #endif
 #ifndef MY_TYPES_INCLUDED
 #  define MY_TYPES_INCLUDED
@@ -482,11 +493,6 @@ But WHO doesn't have stdint?  BTW is sizeof( size_t ) == sizeof( void* )
 #    include <dlfcn.h>
 #  endif
 #  if defined( _MSC_VER )
-// disable pointer conversion warnings - wish I could disable this
-// according to types...
-//#pragma warning( disable:4312; disable:4311 )
-// disable deprication warnings of snprintf, et al.
-//#pragma warning( disable:4996 )
 #    define EMPTY_STRUCT struct { char nothing[]; }
 #  endif
 #  if defined( __WATCOMC__ )
@@ -1154,8 +1160,11 @@ typedef char            TEXTCHAR;
 /* a character rune.  Strings should be interpreted as UTF-8 or 16 depending on UNICODE compile option.
    GetUtfChar() from strings.  */
 typedef uint32_t             TEXTRUNE;
-/* Used to handle returned values that are invalid runes; past end or beginning of string for instance */
-#define INVALID_RUNE  0x80000000
+/* Used to handle returned values that are past end or beginning of string for instance */
+#define RUNE_AFTER_END     0x8000000
+#define RUNE_BEFORE_START  0x8000001
+/* Used to handle returned values that are invalid utf8 encodings. */
+#define BADUTF8            0xFFFD
 //typedef enum { FALSE, TRUE } LOGICAL; // smallest information
 #ifndef FALSE
 #define FALSE 0
@@ -1178,7 +1187,9 @@ SACK_NAMESPACE_END
 //------------------------------------------------------
 // formatting macro defintions for [vsf]printf output of the above types
 #if !defined( _MSC_VER ) || ( _MSC_VER >= 1900 )
-#define __STDC_FORMAT_MACROS
+#ifndef __STDC_FORMAT_MACROS
+#  define __STDC_FORMAT_MACROS
+#endif
 #include <inttypes.h>
 #endif
 SACK_NAMESPACE
@@ -1376,7 +1387,8 @@ typedef uint64_t THREAD_ID;
 // this is now always the case
 // it's a safer solution anyhow...
 #  ifdef __MAC__
-#    define GetMyThreadID()  (( ((uint64_t)getpid()) << 32 ) | ( (uint64_t)( syscall(SYS_thread_selfid) ) ) )
+     DeclareThreadLocal uint64_t tmpThreadid;
+#    define GetMyThreadID()  ((pthread_threadid_np(NULL, &tmpThreadid)),tmpThreadid)
 #  else
 #    ifndef GETPID_RETURNS_PPID
 #      define GETPID_RETURNS_PPID
@@ -1568,7 +1580,7 @@ typedef uint64_t THREAD_ID;
 /* the mast in the dword shifted to the left to overlap the field in the word */
 #define MASK_MASK(n,length)   (MASK_TOP_MASK(length) << (((n)*(length)) & (sizeof(MASKSET_READTYPE) - 1) ) )
 // masks value with the mask size, then applies that mask back to the correct word indexing
-#define MASK_MASK_VAL(n,length,val)   (MASK_TOP_MASK_VAL(length,val) << (((n)*(length))&0x7) )
+#define MASK_MASK_VAL(n,length,val)   (MASK_TOP_MASK_VAL(length,val) << (((n)*(length))&(sizeof(MASKSET_READTYPE) - 1)) )
 /* declare a mask set.
  MASKSET( maskVariableName
         , 32 //number of items
@@ -1578,15 +1590,18 @@ typedef uint64_t THREAD_ID;
 	uint8_t maskVariableName[ (32*5 +(CHAR_BIT-1))/CHAR_BIT ];  //data array used for storage.
    const int askVariableName_mask_size = 5;  // used aautomatically by macros
 */
-#define MASKSET(v,n,r)  MASKSETTYPE  (v)[(((n)*(r))+MASK_MAX_ROUND())/MASKTYPEBITS(MASKSETTYPE)]; const int v##_mask_size = r;
+#define MASKSET(v,n,r)  MASKSETTYPE  (v)[(((n)*(r))+MASK_MAX_ROUND())/MASKTYPEBITS(MASKSETTYPE)]; const int v##_mask_size = r
+#define MASKSET_(v,n,r)  MASKSETTYPE  (v)[(((n)*(r))+MASK_MAX_ROUND())/MASKTYPEBITS(MASKSETTYPE)]
 /* set a field index to a value
     SETMASK( askVariableName, 3, 13 );  // set set member 3 to the value '13'
  */
 #define SETMASK(v,n,val)    (((MASKSET_READTYPE*)((v)+((n)*(v##_mask_size))/MASKTYPEBITS((v)[0])))[0] =    ( ((MASKSET_READTYPE*)((v)+((n)*(v##_mask_size))/MASKTYPEBITS(uint8_t)))[0]                                  & (~(MASK_MASK(n,v##_mask_size))) )	                                                                           | MASK_MASK_VAL(n,v##_mask_size,val) )
+#define SETMASK_(v,v2,n,val)    (((MASKSET_READTYPE*)((v)+((n)*(v2##_mask_size))/MASKTYPEBITS((v)[0])))[0] =    ( ((MASKSET_READTYPE*)((v)+((n)*(v2##_mask_size))/MASKTYPEBITS(uint8_t)))[0]                                  & (~(MASK_MASK(n,v2##_mask_size))) )	                                                                           | MASK_MASK_VAL(n,v2##_mask_size,val) )
 /* get the value of a field
      GETMASK( maskVariableName, 3 );   // returns '13' given the SETMASK() example code.
  */
-#define GETMASK(v,n)  ( ( ((MASKSET_READTYPE*)((v)+((n)*(v##_mask_size))/MASKTYPEBITS((v)[0])))[0]         & MASK_MASK(n,v##_mask_size) )	                                                                           >> (((n)*(v##_mask_size))&0x7))
+#define GETMASK(v,n)  ( ( ((MASKSET_READTYPE*)((v)+((n)*(v##_mask_size))/MASKTYPEBITS((v)[0])))[0]         & MASK_MASK(n,v##_mask_size) )	                                                                           >> (((n)*(v##_mask_size))&(sizeof(MASKSET_READTYPE) - 1)))
+#define GETMASK_(v,v2,n)  ( ( ((MASKSET_READTYPE*)((v)+((n)*(v2##_mask_size))/MASKTYPEBITS((v)[0])))[0]         & MASK_MASK(n,v2##_mask_size) )	                                                                           >> (((n)*(v2##_mask_size))&(sizeof(MASKSET_READTYPE) - 1)))
 /* This type stores data, it has a self-contained length in
    bytes of the data stored.  Length is in characters       */
 _CONTAINER_NAMESPACE
@@ -2014,8 +2029,7 @@ TYPELIB_PROC  POINTER TYPELIB_CALLTYPE    SetDataItemEx ( PDATALIST *ppdl, INDEX
 TYPELIB_PROC  POINTER TYPELIB_CALLTYPE    SetDataItemEx ( PDATALIST *ppdl, INDEX idx, POINTER data DBG_PASS );
 /* \Returns a pointer to the data at a specified index.
    Parameters
-   \ \
-   ppdl :  address of a PDATALIST
+   \    ppdl :  address of a PDATALIST
    idx :   index of element to get                      */
 TYPELIB_PROC  POINTER TYPELIB_CALLTYPE    GetDataItem ( PDATALIST *ppdl, INDEX idx );
 /* Removes a data element from the list (moves all other
@@ -2332,17 +2346,24 @@ TYPELIB_PROC  void TYPELIB_CALLTYPE         EmptyDataQueue ( PDATAQUEUE *pplq );
  * reallocated and moved.
  */
 TYPELIB_PROC  LOGICAL TYPELIB_CALLTYPE  PeekDataQueueEx    ( PDATAQUEUE *pplq, POINTER ResultBuffer, INDEX idx );
-/* <combine sack::containers::data_queue::PeekDataQueueEx@PDATAQUEUE *@POINTER@INDEX>
-   \ \                                                                                */
 #define PeekDataQueueEx( q, type, result, idx ) PeekDataQueueEx( q, (POINTER)result, idx )
 /*
  * Result buffer is filled with the last element, and the result is true, otherwise the return
  * value is FALSE, and the data was not filled in.
  */
 TYPELIB_PROC  LOGICAL TYPELIB_CALLTYPE  PeekDataQueue    ( PDATAQUEUE *pplq, POINTER ResultBuffer );
-/* <combine sack::containers::data_queue::PeekDataQueue@PDATAQUEUE *@POINTER>
-   \ \                                                                        */
-#define PeekDataQueue( q, type, result ) PeekDataQueue( q, (POINTER)result )
+#define PeekDataQueue( q, type, result ) PeekDataQueueEx( q, type, result, 0 )
+/*
+ * gets the address a PDATAQUEUE element at index
+ * result buffer is a pointer to the type of structure expected to be
+ * stored within this.  Index from 0 to N indexes from first ( to be dequeued )
+ * to last item in queue.
+ */
+TYPELIB_PROC POINTER TYPELIB_CALLTYPE  PeekDataInQueueEx    ( PDATAQUEUE *pplq, INDEX idx );
+/*
+ * Results with the first item in the queue, else NULL.
+ */
+TYPELIB_PROC POINTER TYPELIB_CALLTYPE  PeekDataInQueue    ( PDATAQUEUE *pplq );
 /* <combine sack::containers::data_queue::CreateDataQueueEx@INDEX size>
    \ \                                                                  */
 #define     CreateDataQueue(size)     CreateDataQueueEx( size DBG_SRC )
@@ -2548,8 +2569,7 @@ _SETS_NAMESPACE
    array that maps usage of the set, and for the set size of
    elements.
    Remarks
-   \ \
-   Summary
+   \    Summary
    Generic sets are good for tracking lots of tiny structures.
    They track slabs of X structures at a time. They allocate a
    slab of X structures with an array of X bits indicating
@@ -2616,13 +2636,13 @@ typedef struct genericset_tag {
 	struct genericset_tag **me;
 	/* number of spots in this set block that are used. */
 	uint32_t nUsed;
- // hmm if I change this here? we're hozed... so.. we'll do it anyhow :) evil - recompile please
+    // this is the size of the bit pool before the pointer pool
 	uint32_t nBias;
- // after this p * unit must be computed
+ // the bit pool starts here (booleanUsed) after a number of
 	uint32_t bUsed[1];
+	                   // bits begins the aligned pointer pool.
 } GENERICSET, *PGENERICSET;
-/* \ \
-   Parameters
+/* \    Parameters
    pSet :      pointer to a generic set
    nMember :   index of the member
    setsize :   number of elements in each block
@@ -2633,13 +2653,11 @@ TYPELIB_PROC  POINTER  TYPELIB_CALLTYPE GetFromSetEx( GENERICSET **pSet, int set
    \ \                                                                             */
 #define GetFromSeta(ps, ss, us, max) GetFromSetPoolEx( NULL, 0, 0, 0, (ps), (ss), (us), (max) DBG_SRC )
 /* <combine sack::containers::sets::GetFromSetEx@GENERICSET **@int@int@int maxcnt>
-   \ \
-   Parameters
+   \    Parameters
    name :  name of type the set contains.
    pSet :  pointer to a set to get an element from.                                */
 #define GetFromSet( name, pset ) (name*)GetFromSeta( (GENERICSET**)(pset), sizeof( name##SET ), sizeof( name ), MAX##name##SPERSET )
-/* \ \
-   Parameters
+/* \    Parameters
    pSet :      pointer to a generic set
    nMember :   index of the member
    setsize :   number of elements in each block
@@ -2655,8 +2673,7 @@ TYPELIB_PROC  PGENERICSET  TYPELIB_CALLTYPE GetFromSetPoolEx( GENERICSET **pSetS
 /* <combine sack::containers::sets::GetFromSetPoolEx@GENERICSET **@int@int@int@GENERICSET **@int@int@int maxcnt>
    \ \                                                                                                           */
 #define GetFromSetPool( name, pool, pset ) (name*)GetFromSetPoola( (GENERICSET**)(pool)	    , sizeof( name##SETSET ), sizeof( name##SET ), MAX##name##SETSPERSET	, (GENERICSET**)(pset), sizeof( name##SET ), sizeof( name ), MAX##name##SPERSET )
-/* \ \
-   Parameters
+/* \    Parameters
    pSet :      pointer to a generic set
    nMember :   index of the member
    setsize :   number of elements in each block
@@ -2669,8 +2686,7 @@ TYPELIB_PROC  POINTER  TYPELIB_CALLTYPE GetSetMemberEx( GENERICSET **pSet, INDEX
 /* <combine sack::containers::sets::GetSetMemberEx@GENERICSET **@INDEX@int@int@int maxcnt>
    \ \                                                                                     */
 #define GetSetMember( name, pset, member ) ((name*)GetSetMembera( (GENERICSET**)(pset), (member), sizeof( name##SET ), sizeof( name ), MAX##name##SPERSET ))
-/* \ \
-   Parameters
+/* \    Parameters
    pSet :      pointer to a generic set
    nMember :   index of the member
    setsize :   number of elements in each block
@@ -2697,8 +2713,7 @@ TYPELIB_PROC  INDEX TYPELIB_CALLTYPE  GetMemberIndex(GENERICSET **set, POINTER u
 /* <combine sack::containers::sets::GetMemberIndex>
    \ \                                              */
 #define GetIndexFromSet( name, pset ) GetMemberIndex( name, pset, GetFromSet( name, pset ) )
-/* \ \
-   Parameters
+/* \    Parameters
    pSet :      pointer to a generic set
    nMember :   index of the member
    setsize :   number of elements in each block
@@ -2778,8 +2793,7 @@ TYPELIB_PROC  void TYPELIB_CALLTYPE  DeleteSet( GENERICSET **ppSet );
    ForAllinSet Callback - callback fucntion used with
    ForAllInSet                                        */
 typedef uintptr_t (CPROC *FAISCallback)(void*,uintptr_t);
-/* \ \
-   Parameters
+/* \    Parameters
    pSet :      poiner to a set
    unitsize :  size of elements in the array
    max :       count of elements per set block
@@ -3285,8 +3299,7 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateEx( size_t nSize DBG_PASS );
    PTEXT text = SegCreate( 10 );
    </code>                                                     */
 #define SegCreate(s) SegCreateEx(s DBG_SRC)
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromText> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromTextEx( CTEXTSTR text DBG_PASS );
@@ -3296,13 +3309,11 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromTextEx( CTEXTSTR text DBG_PAS
    PTEXT line = SegCreateFromText( "Around the world in a day." );
    </code>                                                         */
 #define SegCreateFromText(t) SegCreateFromTextEx(t DBG_SRC)
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromChar> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromCharLenEx( const char *text, size_t len DBG_PASS );
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromChar> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromCharEx( const char *text DBG_PASS );
@@ -3312,18 +3323,15 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromCharEx( const char *text DBG_
    PTEXT line = SegCreateFromChar( "Around the world in a day." );
    </code>                                                         */
 #define SegCreateFromChar(t) SegCreateFromCharEx(t DBG_SRC)
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromChar> */
 #define SegCreateFromCharLen(t,len) SegCreateFromCharLenEx((t),(len) DBG_SRC)
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromWide> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromWideLenEx( const wchar_t *text, size_t len DBG_PASS );
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromWide> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromWideEx( const wchar_t *text DBG_PASS );
@@ -3333,13 +3341,11 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromWideEx( const wchar_t *text D
    PTEXT line = SegCreateFromWideLen( L"Around the world in a day.", 26 );
    </code>                                                         */
 #define SegCreateFromWideLen(t,len) SegCreateFromWideLenEx((t),(len) DBG_SRC)
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromWide> */
 #define SegCreateFromWide(t) SegCreateFromWideEx(t DBG_SRC)
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateIndirect> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateIndirectEx( PTEXT pText DBG_PASS );
@@ -3358,8 +3364,7 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateIndirectEx( PTEXT pText DBG_PASS 
    length buffer for a TEXT segment.
                                                                                   */
 #define SegCreateIndirect(t) SegCreateIndirectEx(t DBG_SRC)
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegDuplicate> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegDuplicateEx( PTEXT pText DBG_PASS);
@@ -3377,16 +3382,14 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  LineDuplicateEx( PTEXT pText DBG_PASS );
 /* <combine sack::containers::text::LineDuplicateEx@PTEXT pText>
    \ \                                                           */
 #define LineDuplicate(pt) LineDuplicateEx(pt DBG_SRC )
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link TextDuplicate> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  TextDuplicateEx( PTEXT pText, int bSingle DBG_PASS );
 /* Duplicate the whole string of text to another string with
    exactly the same content.                                 */
 #define TextDuplicate(pt,s) TextDuplicateEx(pt,s DBG_SRC )
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromInt> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromIntEx( int value DBG_PASS );
@@ -3402,8 +3405,7 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromIntEx( int value DBG_PASS );
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFrom_64Ex( int64_t value DBG_PASS );
 /* Create a text segment from a uint64_t bit value. (long long int) */
 #define SegCreateFrom_64(v) SegCreateFrom_64Ex( v DBG_SRC )
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromFloat> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromFloatEx( float value DBG_PASS );
@@ -3452,7 +3454,7 @@ TYPELIB_PROC  void TYPELIB_CALLTYPE   LineReleaseEx (PTEXT line DBG_PASS );
    Any segment in the line may be passed, the first segment is
    found, and then all segments in the line are deleted.       */
 #define LineRelease(l) LineReleaseEx(l DBG_SRC )
-/* \ \
+/* \
    <b>See Also</b>
    <link DBG_PASS>
    <link SegRelease> */
@@ -3531,15 +3533,13 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegGrab     (PTEXT segment);
    Returns
    \Returns the '_this' that was substituted.                     */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegSubst    ( PTEXT _this, PTEXT that );
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegSplit> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegSplitEx( PTEXT *pLine, INDEX nPos DBG_PASS);
 /* Split a PTEXT segment.
    Example
-   \ \
-   <code lang="c++">
+   \    <code lang="c++">
    PTEXT result = SegSplit( &amp;old_string, 5 );
    </code>
    Returns
@@ -3649,8 +3649,7 @@ TYPELIB_PROC  INDEX TYPELIB_CALLTYPE  LineLengthExx( PTEXT pt, LOGICAL bSingle,P
 /* <combine sack::containers::text::LineLengthExEx@PTEXT@LOGICAL@int@PTEXT>
    \ \                                                                      */
 #define LineLengthExx(pt,single,eol) LineLengthExEx( pt,single,8,eol)
-/* \ \
-   Parameters
+/* \    Parameters
    Text segment :  PTEXT line or segment to get the length of
    single :        boolean, if set then only a single segment is
                    measured, otherwise all segments from this to
@@ -3697,8 +3696,7 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  BuildLineExx( PTEXT pt, LOGICAL bSingle, P
    \ \                                                                          */
 #define BuildLineEx(from,single) BuildLineExEx( from,single,8,NULL DBG_SRC )
 /* <combine sack::containers::text::BuildLineExEx@PTEXT@LOGICAL@int@PTEXT pEOL>
-   \ \
-    Flattens all segments in a line to a single segment result.
+   \     Flattens all segments in a line to a single segment result.
 */
 #define BuildLine(from) BuildLineExEx( from, FALSE,8,NULL DBG_SRC )
 //
@@ -3881,8 +3879,7 @@ TYPELIB_PROC  void TYPELIB_CALLTYPE  VarTextEmptyEx( PVARTEXT pvt DBG_PASS);
 #define VarTextEmpty(pvt) VarTextEmptyEx( (pvt) DBG_SRC )
 /* Add a single character to a vartext collector.
    Note
-   \ \
-   Parameters
+   \    Parameters
    pvt :       PVARTEXT to add character to
    c :         character to add
    DBG_PASS :  optional debug information         */
@@ -4206,8 +4203,7 @@ TYPELIB_PROC  PTREEROOT TYPELIB_CALLTYPE  CreateBinaryTreeExtended( uint32_t fla
    PTREEROOT tree = CreateBinaryTree();
    </code>                                                      */
 #define CreateBinaryTree() CreateBinaryTreeEx( NULL, NULL )
-/* \ \
-   Example
+/* \    Example
    <code lang="c++">
    PTREEROOT tree = CreateBinaryTree();
    DestroyBinaryTree( tree );
@@ -4215,8 +4211,7 @@ TYPELIB_PROC  PTREEROOT TYPELIB_CALLTYPE  CreateBinaryTreeExtended( uint32_t fla
    </code>                              */
 TYPELIB_PROC  void TYPELIB_CALLTYPE  DestroyBinaryTree( PTREEROOT root );
 /* Drops all the nodes in a tree so it becomes empty...
-   \ \
-   Example
+   \    Example
    <code lang="c++">
    PTREEROOT tree = CreateBinaryTree();
    ResetBinaryTree( tree );
@@ -4235,8 +4230,7 @@ TYPELIB_PROC  void TYPELIB_CALLTYPE  ResetBinaryTree( PTREEROOT root );
    BalanceBinaryTree( tree );
    </code>                                                        */
 TYPELIB_PROC  void TYPELIB_CALLTYPE  BalanceBinaryTree( PTREEROOT root );
-/* \ \
-   See Also
+/* \    See Also
    <link AddBinaryNode>
    <link DBG_PASS>
                         */
@@ -4379,8 +4373,7 @@ TYPELIB_PROC  CPOINTER TYPELIB_CALLTYPE  GetParentNode( PTREEROOT root );
    Binary Trees have a 'current' cursor. These operations may be
    used to browse the tree.
    Example
-   \ \
-   <code>
+   \    <code>
    // this assumes you have a tree, and it's fairly populated, then this demonstrates
    // all steps of browsing.
    POINTER my_data;
@@ -4694,7 +4687,8 @@ SYSLOG_PROC  CTEXTSTR SYSLOG_API  GetPackedTime ( void );
 //    uint64_t epoch_milliseconds : 56;
 //    int64_t timezone : 8; divided by 15... hours * 60 / 15
 // }
-SYSLOG_PROC  int64_t SYSLOG_API GetTimeOfDay( void );
+// returns the nanosecond of the day (since UNIX Epoch) and timezone/15
+SYSLOG_PROC  int64_t SYSLOG_API GetTimeOfDay( uint64_t* tick, int8_t* ptz );
 // binary little endian order; somewhat
 typedef struct sack_expanded_time_tag
 {
@@ -4989,11 +4983,16 @@ LOGGING_NAMESPACE_END
 using namespace sack::logging;
 #endif
 #endif
-#if defined( _MSC_VER ) || (1)
-// huh, apparently all compiles are messed the hell up.
-#  define COMPILER_THROWS_SIGNED_UNSIGNED_MISMATCH
-#endif
-#ifdef COMPILER_THROWS_SIGNED_UNSIGNED_MISMATCH
+// these macros test the the range of integer and unsigned
+// such that an unsigned > integer range is true if it is more than an maxint
+// and signed integer < 0 is less than any unsigned value.
+// the macro prefix SUS  or USS is the comparison type
+// Signed-UnSigned and UnSigned-Signed  depending on the
+// operand order.
+// the arguments passed are variable a and b and the respective types of those
+// if( SUS_GT( 324, int, 545, unsigned int ) ) {
+//    is >
+// }
 #  define SUS_GT(a,at,b,bt)   (((a)<0)?0:(((bt)a)>(b)))
 #  define USS_GT(a,at,b,bt)   (((b)<0)?1:((a)>((at)b)))
 #  define SUS_LT(a,at,b,bt)   (((a)<0)?1:(((bt)a)<(b)))
@@ -5002,7 +5001,8 @@ using namespace sack::logging;
 #  define USS_GTE(a,at,b,bt)  (((b)<0)?1:((a)>=((at)b)))
 #  define SUS_LTE(a,at,b,bt)  (((a)<0)?1:(((bt)a)<=(b)))
 #  define USS_LTE(a,at,b,bt)  (((b)<0)?0:((a)<=((at)b)))
-#else
+#if 0
+// simplified meanings of the macros
 #  define SUS_GT(a,at,b,bt)   ((a)>(b))
 #  define USS_GT(a,at,b,bt)   ((a)>(b))
 #  define SUS_LT(a,at,b,bt)   ((a)<(b))
@@ -5181,8 +5181,16 @@ SYSTEM_PROC( void, OSALOT_PrependEnvironmentVariable )(CTEXTSTR name, CTEXTSTR v
  * Otherwise, the command line needs to have the program name, and arguments passed in the string
  * the parameter to winmain has the program name skipped
  */
-SYSTEM_PROC( void, ParseIntoArgs )( TEXTCHAR *lpCmdLine, int *pArgc, TEXTCHAR ***pArgv );
+SYSTEM_PROC( void, ParseIntoArgs )( TEXTCHAR const *lpCmdLine, int *pArgc, TEXTCHAR ***pArgv );
 #define UnloadFunction(p) UnloadFunctionEx(p DBG_SRC )
+/*
+   Check if task spawning is allowed...
+*/
+SYSTEM_PROC( LOGICAL, sack_system_allow_spawn )( void );
+/*
+   Disallow task spawning.
+*/
+SYSTEM_PROC( void, sack_system_disallow_spawn )( void );
 SACK_SYSTEM_NAMESPACE_END
 #ifdef __cplusplus
 using namespace sack::system;
@@ -5326,7 +5334,6 @@ typedef struct win_sockaddr_in SOCKADDR_IN;
 #else
 //#include "loadsock.h"
 #endif
-//#include <stdlib.h>
 #ifdef __CYGWIN__
  // provided by -lgcc
 // lots of things end up including 'setjmp.h' which lacks sigset_t defined here.
@@ -6475,6 +6482,14 @@ typedef uintptr_t (CPROC*ThreadStartProc)( PTHREAD );
 /* Function signature for a thread entry point passed to
    ThreadToSimple.                                             */
 typedef uintptr_t (*ThreadSimpleStartProc)( POINTER );
+/*
+  OnThreadCreate allows registering a procedure to run
+  when a thread is created.  (Or an existing thread becomes
+  tracked within this library, via MakeThread() ).
+  It is called once per thread, for each thread created
+  after registering the callback.
+*/
+TIMER_PROC( void, OnThreadCreate )( void ( *v )( void ) );
 /* Create a separate thread that starts in the routine
    specified. The uintptr_t value (something that might be a
    pointer), is passed in the PTHREAD structure. (See
@@ -6515,27 +6530,6 @@ TIMER_PROC( PTHREAD, ThreadToSimpleEx )( ThreadSimpleStartProc proc, POINTER par
    thread. If this thread already has this structure created,
    the same one results on subsequent MakeThread calls.        */
 TIMER_PROC( PTHREAD, MakeThread )( void );
-/* Releases resources associated with a PTHREAD. For purposes of
-   waking a thread, and providing a wakeable point for the
-   thread, a system blocking event object is allocated, named
-   with the THREAD_ID so it can be referenced by other
-   processes. This is only allowed to be done by the thread
-   itself.
-   Parameters
-   Param1 :  \Description
-   Param2 :  \Description
-   Example
-   <code lang="c++">
-   int main( void )
-   {
-       PTHREAD myself = MakeThread();
-       // create threads, do stuff...
-       UnmakeThread();
-       At this point the pointer in 'myself' is invalid, and should be cleared.
-       myself = NULL;
-   }
-   </code>                                                                      */
-TIMER_PROC( void, UnmakeThread )( void );
 /* This returns the parameter passed as user data to ThreadTo.
    Parameters
    thread :  thread to get the parameter from.
@@ -6693,7 +6687,8 @@ TIMER_PROC( LOGICAL, EnterCriticalSecEx )( PCRITICALSECTION pcs DBG_PASS );
 TIMER_PROC( LOGICAL, LeaveCriticalSecEx )( PCRITICALSECTION pcs DBG_PASS );
 /* Does nothing. There are no extra resources required for
    critical sections, and the memory is allocated by the
-   application.
+	application; native windows criticalsections allocate an
+   external object; this should be called typically.
    Parameters
    pcs :  pointer to critical section to do nothing with.  */
 TIMER_PROC( void, DeleteCriticalSec )( PCRITICALSECTION pcs );
@@ -6809,6 +6804,32 @@ using namespace sack::timers;
 #    define EndSaneWinMain() } }
 #  endif
 #endif
+/**
+ * https://stackoverflow.com/questions/3585583/convert-unix-linux-time-to-windows-filetime
+ * number of seconds from 1 Jan. 1601 00:00 to 1 Jan 1970 00:00 UTC
+ * subtract from FILETIME to get timespec
+ * add to timespec to get FILETIME ticks.
+ * * 1000000000
+ */
+#define EPOCH_DIFF 11644473600ULL
+#define EPOCH_DIFF_MS 11644473600000ULL
+#define EPOCH_DIFF_NS 11644473600000000000ULL
+#ifdef WIN32
+DeclareThreadLocal FILETIME ft;
+// we want this as fast as possible, so inline always.
+#define timeGetTime64ns( ) ( GetSystemTimeAsFileTime( &ft ),((uint64_t*)&ft)[0]*100-EPOCH_DIFF_NS )
+#define timeGetTime64( ) ( GetSystemTimeAsFileTime( &ft ),((uint64_t*)&ft)[0]/10000-EPOCH_DIFF_MS )
+#define timeGetTime() (uint32_t)(timeGetTime64())
+#else
+DeclareThreadLocal struct timespec global_static_time_ts;
+#define timeGetTime64ns( ) ( clock_gettime(CLOCK_REALTIME, &global_static_time_ts), (uint64_t)global_static_time_ts.tv_sec*(uint64_t)1000000000 + (uint64_t)global_static_time_ts.tv_nsec )
+#define timeGetTime64( ) ( clock_gettime(CLOCK_REALTIME, &global_static_time_ts), (uint64_t)global_static_time_ts.tv_sec*(uint64_t)1000 + (uint64_t)global_static_time_ts.tv_nsec/1000000 )
+#define timeGetTime() (uint32_t)(timeGetTime64())
+#endif
+#define tickToTimeSpec(ts,tick) (((ts).tv_sec = (tick) / 1000ULL),((ts).tv_nsec=((tick)%1000ULL)*1000000ULL))
+#define tickToFileTime(ft,tick) ((((ft).highPart).tv_sec = ((tick*10000)+EPOCH_DIFF_MS)>>32 ),(((ft).lowPart)=((tick*10000)+EPOCH_DIFF_MS) & 0XFFFFFFFF ))
+#define tickNsToTimeSpec(ts,tick) (((ts).tv_sec = (tick) / 1000000000ULL),((ts).tv_nsec=(tick)%1000000000ULL))
+#define tickNsToFileTime(ft,tick) ((((ft).highPart).tv_sec = ((tick)+EPOCH_DIFF_NS)>>32 ),(((ft).lowPart)=((tick)+EPOCH_DIFF_NS) & 0XFFFFFFFF ))
 //  these are rude defines overloading otherwise very practical types
 // but - they have to be dispatched after all standard headers.
 #ifndef FINAL_TYPES
@@ -6988,9 +7009,18 @@ namespace sack {
 #  undef _XOPEN_SOURCE
 #  define _XOPEN_SOURCE 500
 #endif
+#  ifndef _GNU_SOURCE
+#    define _GNU_SOURCE
+#  endif
 #ifndef STANDARD_HEADERS_INCLUDED
 /* multiple inclusion protection symbol */
 #define STANDARD_HEADERS_INCLUDED
+#if _POSIX_C_SOURCE < 200112L
+#  ifdef _POSIX_C_SOURCE
+#    undef _POSIX_C_SOURCE
+#  endif
+#  define _POSIX_C_SOURCE 200112L
+#endif
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -7107,24 +7137,30 @@ namespace sack {
 #    include <shlobj.h>
 #  endif
 #  if _MSC_VER > 1500
-#    define mkdir _mkdir
 #    define fileno _fileno
 #    define stricmp _stricmp
 #    define strdup _strdup
 #  endif
+#  ifdef WANT_MMSYSTEM
+#    include <mmsystem.h>
+#  endif
+#  if USE_NATIVE_TIME_GET_TIME
 //#  include <windowsx.h>
 // we like timeGetTime() instead of GetTickCount()
 //#  include <mmsystem.h>
-#ifdef __cplusplus
+#    ifdef __cplusplus
 extern "C"
-#endif
+#    endif
 __declspec(dllimport) DWORD WINAPI timeGetTime(void);
-#  if defined( NEED_SHLAPI )
-#    include <shlwapi.h>
-#    include <shellapi.h>
 #  endif
-#  ifdef NEED_V4W
-#    include <vfw.h>
+#  ifdef WIN32
+#    if defined( NEED_SHLAPI )
+#      include <shlwapi.h>
+#      include <shellapi.h>
+#    endif
+#    ifdef NEED_V4W
+#      include <vfw.h>
+#    endif
 #  endif
 #  if defined( HAVE_ENVIRONMENT )
 #    define getenv(name)       OSALOT_GetEnvironmentVariable(name)
@@ -7151,7 +7187,6 @@ __declspec(dllimport) DWORD WINAPI timeGetTime(void);
 #  include <sched.h>
 #  include <unistd.h>
 #  include <sys/time.h>
-#  include <errno.h>
 #  if defined( __ARM__ )
 #    define DebugBreak()
 #  else
@@ -7186,6 +7221,7 @@ extern __sighandler_t bsd_signal(int, __sighandler_t);
 #  define GetCurrentThreadId() ((uint32_t)getpid())
   // end if( !__LINUX__ )
 #endif
+#include <errno.h>
 #ifndef NEED_MIN_MAX
 #  ifndef NO_MIN_MAX_MACROS
 #    define NO_MIN_MAX_MACROS
@@ -7249,13 +7285,24 @@ But WHO doesn't have stdint?  BTW is sizeof( size_t ) == sizeof( void* )
 #endif
 #if !defined( __NO_THREAD_LOCAL__ ) && ( defined( _MSC_VER ) || defined( __WATCOMC__ ) )
 #  define HAS_TLS 1
-#  define DeclareThreadLocal static __declspec(thread)
-#  define DeclareThreadVar __declspec(thread)
-#elif !defined( __NO_THREAD_LOCAL__ ) && ( defined( __GNUC__ ) )
-#  define HAS_TLS 1
-#  define DeclareThreadLocal static __thread
-#  define DeclareThreadVar __thread
+#  ifdef __cplusplus
+#    define DeclareThreadLocal static thread_local
+#    define DeclareThreadVar  thread_local
+#  else
+#    define DeclareThreadLocal static __declspec(thread)
+#    define DeclareThreadVar __declspec(thread)
+#  endif
+#elif !defined( __NO_THREAD_LOCAL__ ) && ( defined( __GNUC__ ) || defined( __MAC__ ) )
+#    define HAS_TLS 1
+#    ifdef __cplusplus
+#      define DeclareThreadLocal static thread_local
+#      define DeclareThreadVar thread_local
+#    else
+#    define DeclareThreadLocal static __thread
+#    define DeclareThreadVar __thread
+#  endif
 #else
+// if no HAS_TLS
 #  define DeclareThreadLocal static
 #  define DeclareThreadVar
 #endif
@@ -7277,16 +7324,11 @@ But WHO doesn't have stdint?  BTW is sizeof( size_t ) == sizeof( void* )
 //#ifndef TARGETNAME
 //#  define TARGETNAME "sack_bag.dll"  //$(TargetFileName)
 //#endif
-#    ifndef __cplusplus_cli
-// cli mode, we use this directly, and build the exports in sack_bag.dll directly
-#    else
-#      define LIBRARY_DEADSTART
-#    endif
-#define MD5_SOURCE
-#define USE_SACK_FILE_IO
+#    define MD5_SOURCE
+#    define USE_SACK_FILE_IO
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define MEM_LIBRARY_SOURCE
+#    define MEM_LIBRARY_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
 #define SYSLOG_SOURCE
@@ -7331,70 +7373,60 @@ But WHO doesn't have stdint?  BTW is sizeof( size_t ) == sizeof( void* )
 #define SHA1_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define CONSTRUCT_SOURCE
+#    define CONSTRUCT_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define PROCREG_SOURCE
+#    define PROCREG_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define SQLPROXY_LIBRARY_SOURCE
+#    define SQLPROXY_LIBRARY_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define TYPELIB_SOURCE
+#      define TYPELIB_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define JSON_EMITTER_SOURCE
+#      define JSON_EMITTER_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define SERVICE_SOURCE
-#  ifndef __NO_SQL__
-#    ifndef __NO_OPTIONS__
+#    define SERVICE_SOURCE
+#    ifndef __NO_SQL__
+#      ifndef __NO_OPTIONS__
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.    and not NO_SQL and not NO_OPTIONS   */
-#      define SQLGETOPTION_SOURCE
+#        define SQLGETOPTION_SOURCE
+#      endif
 #    endif
-#  endif
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define PSI_SOURCE
-#  ifdef _MSC_VER
-#    ifndef JPEG_SOURCE
-//wouldn't matter... the external things wouldn't need to define this
-//#error projects were not generated with CMAKE, and JPEG_SORUCE needs to be defined
-#    endif
-//#define JPEG_SOURCE
-//#define __PNG_LIBRARY_SOURCE__
-//#define FT2_BUILD_LIBRARY   // freetype is internal
-//#define FREETYPE_SOURCE		// build Dll Export
-#  endif
+#    define PSI_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define MNG_BUILD_DLL
+#    define MNG_BUILD_DLL
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define BAGIMAGE_EXPORTS
+#    define BAGIMAGE_EXPORTS
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
  individual library module once upon a time.           */
-#ifndef IMAGE_LIBRARY_SOURCE
-#  define IMAGE_LIBRARY_SOURCE
-#endif
+#    ifndef IMAGE_LIBRARY_SOURCE
+#      define IMAGE_LIBRARY_SOURCE
+#    endif
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define SYSTRAY_LIBRARAY
+#    define SYSTRAY_LIBRARAY
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define SOURCE_PSI2
+#    define SOURCE_PSI2
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define VIDEO_LIBRARY_SOURCE
+#    define VIDEO_LIBRARY_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
 	/* define RENDER SOURCE when building monolithic. */
-#     ifndef RENDER_LIBRARY_SOURCE
-#       define RENDER_LIBRARY_SOURCE
-#     endif
+#    ifndef RENDER_LIBRARY_SOURCE
+#      define RENDER_LIBRARY_SOURCE
+#    endif
 // define a type that is a public name struct type...
 // good thing that typedef and struct were split
 // during the process of port to /clr option.
@@ -7411,9 +7443,8 @@ But WHO doesn't have stdint?  BTW is sizeof( size_t ) == sizeof( void* )
 #include <sys/types.h>
 #include <sys/stat.h>
 #if !defined( _WIN32 ) && !defined( __MAC__ )
-#  include <syscall.h>
-#elif defined( __MAC__ )
 #  include <sys/syscall.h>
+#elif defined( __MAC__ )
 #endif
 #ifndef MY_TYPES_INCLUDED
 #  define MY_TYPES_INCLUDED
@@ -7435,11 +7466,6 @@ But WHO doesn't have stdint?  BTW is sizeof( size_t ) == sizeof( void* )
 #    include <dlfcn.h>
 #  endif
 #  if defined( _MSC_VER )
-// disable pointer conversion warnings - wish I could disable this
-// according to types...
-//#pragma warning( disable:4312; disable:4311 )
-// disable deprication warnings of snprintf, et al.
-//#pragma warning( disable:4996 )
 #    define EMPTY_STRUCT struct { char nothing[]; }
 #  endif
 #  if defined( __WATCOMC__ )
@@ -8107,8 +8133,11 @@ typedef char            TEXTCHAR;
 /* a character rune.  Strings should be interpreted as UTF-8 or 16 depending on UNICODE compile option.
    GetUtfChar() from strings.  */
 typedef uint32_t             TEXTRUNE;
-/* Used to handle returned values that are invalid runes; past end or beginning of string for instance */
-#define INVALID_RUNE  0x80000000
+/* Used to handle returned values that are past end or beginning of string for instance */
+#define RUNE_AFTER_END     0x8000000
+#define RUNE_BEFORE_START  0x8000001
+/* Used to handle returned values that are invalid utf8 encodings. */
+#define BADUTF8            0xFFFD
 //typedef enum { FALSE, TRUE } LOGICAL; // smallest information
 #ifndef FALSE
 #define FALSE 0
@@ -8131,7 +8160,9 @@ SACK_NAMESPACE_END
 //------------------------------------------------------
 // formatting macro defintions for [vsf]printf output of the above types
 #if !defined( _MSC_VER ) || ( _MSC_VER >= 1900 )
-#define __STDC_FORMAT_MACROS
+#ifndef __STDC_FORMAT_MACROS
+#  define __STDC_FORMAT_MACROS
+#endif
 #include <inttypes.h>
 #endif
 SACK_NAMESPACE
@@ -8329,7 +8360,8 @@ typedef uint64_t THREAD_ID;
 // this is now always the case
 // it's a safer solution anyhow...
 #  ifdef __MAC__
-#    define GetMyThreadID()  (( ((uint64_t)getpid()) << 32 ) | ( (uint64_t)( syscall(SYS_thread_selfid) ) ) )
+     DeclareThreadLocal uint64_t tmpThreadid;
+#    define GetMyThreadID()  ((pthread_threadid_np(NULL, &tmpThreadid)),tmpThreadid)
 #  else
 #    ifndef GETPID_RETURNS_PPID
 #      define GETPID_RETURNS_PPID
@@ -8521,7 +8553,7 @@ typedef uint64_t THREAD_ID;
 /* the mast in the dword shifted to the left to overlap the field in the word */
 #define MASK_MASK(n,length)   (MASK_TOP_MASK(length) << (((n)*(length)) & (sizeof(MASKSET_READTYPE) - 1) ) )
 // masks value with the mask size, then applies that mask back to the correct word indexing
-#define MASK_MASK_VAL(n,length,val)   (MASK_TOP_MASK_VAL(length,val) << (((n)*(length))&0x7) )
+#define MASK_MASK_VAL(n,length,val)   (MASK_TOP_MASK_VAL(length,val) << (((n)*(length))&(sizeof(MASKSET_READTYPE) - 1)) )
 /* declare a mask set.
  MASKSET( maskVariableName
         , 32 //number of items
@@ -8531,15 +8563,18 @@ typedef uint64_t THREAD_ID;
 	uint8_t maskVariableName[ (32*5 +(CHAR_BIT-1))/CHAR_BIT ];  //data array used for storage.
    const int askVariableName_mask_size = 5;  // used aautomatically by macros
 */
-#define MASKSET(v,n,r)  MASKSETTYPE  (v)[(((n)*(r))+MASK_MAX_ROUND())/MASKTYPEBITS(MASKSETTYPE)]; const int v##_mask_size = r;
+#define MASKSET(v,n,r)  MASKSETTYPE  (v)[(((n)*(r))+MASK_MAX_ROUND())/MASKTYPEBITS(MASKSETTYPE)]; const int v##_mask_size = r
+#define MASKSET_(v,n,r)  MASKSETTYPE  (v)[(((n)*(r))+MASK_MAX_ROUND())/MASKTYPEBITS(MASKSETTYPE)]
 /* set a field index to a value
     SETMASK( askVariableName, 3, 13 );  // set set member 3 to the value '13'
  */
 #define SETMASK(v,n,val)    (((MASKSET_READTYPE*)((v)+((n)*(v##_mask_size))/MASKTYPEBITS((v)[0])))[0] =    ( ((MASKSET_READTYPE*)((v)+((n)*(v##_mask_size))/MASKTYPEBITS(uint8_t)))[0]                                  & (~(MASK_MASK(n,v##_mask_size))) )	                                                                           | MASK_MASK_VAL(n,v##_mask_size,val) )
+#define SETMASK_(v,v2,n,val)    (((MASKSET_READTYPE*)((v)+((n)*(v2##_mask_size))/MASKTYPEBITS((v)[0])))[0] =    ( ((MASKSET_READTYPE*)((v)+((n)*(v2##_mask_size))/MASKTYPEBITS(uint8_t)))[0]                                  & (~(MASK_MASK(n,v2##_mask_size))) )	                                                                           | MASK_MASK_VAL(n,v2##_mask_size,val) )
 /* get the value of a field
      GETMASK( maskVariableName, 3 );   // returns '13' given the SETMASK() example code.
  */
-#define GETMASK(v,n)  ( ( ((MASKSET_READTYPE*)((v)+((n)*(v##_mask_size))/MASKTYPEBITS((v)[0])))[0]         & MASK_MASK(n,v##_mask_size) )	                                                                           >> (((n)*(v##_mask_size))&0x7))
+#define GETMASK(v,n)  ( ( ((MASKSET_READTYPE*)((v)+((n)*(v##_mask_size))/MASKTYPEBITS((v)[0])))[0]         & MASK_MASK(n,v##_mask_size) )	                                                                           >> (((n)*(v##_mask_size))&(sizeof(MASKSET_READTYPE) - 1)))
+#define GETMASK_(v,v2,n)  ( ( ((MASKSET_READTYPE*)((v)+((n)*(v2##_mask_size))/MASKTYPEBITS((v)[0])))[0]         & MASK_MASK(n,v2##_mask_size) )	                                                                           >> (((n)*(v2##_mask_size))&(sizeof(MASKSET_READTYPE) - 1)))
 /* This type stores data, it has a self-contained length in
    bytes of the data stored.  Length is in characters       */
 _CONTAINER_NAMESPACE
@@ -8967,8 +9002,7 @@ TYPELIB_PROC  POINTER TYPELIB_CALLTYPE    SetDataItemEx ( PDATALIST *ppdl, INDEX
 TYPELIB_PROC  POINTER TYPELIB_CALLTYPE    SetDataItemEx ( PDATALIST *ppdl, INDEX idx, POINTER data DBG_PASS );
 /* \Returns a pointer to the data at a specified index.
    Parameters
-   \ \
-   ppdl :  address of a PDATALIST
+   \    ppdl :  address of a PDATALIST
    idx :   index of element to get                      */
 TYPELIB_PROC  POINTER TYPELIB_CALLTYPE    GetDataItem ( PDATALIST *ppdl, INDEX idx );
 /* Removes a data element from the list (moves all other
@@ -9285,17 +9319,24 @@ TYPELIB_PROC  void TYPELIB_CALLTYPE         EmptyDataQueue ( PDATAQUEUE *pplq );
  * reallocated and moved.
  */
 TYPELIB_PROC  LOGICAL TYPELIB_CALLTYPE  PeekDataQueueEx    ( PDATAQUEUE *pplq, POINTER ResultBuffer, INDEX idx );
-/* <combine sack::containers::data_queue::PeekDataQueueEx@PDATAQUEUE *@POINTER@INDEX>
-   \ \                                                                                */
 #define PeekDataQueueEx( q, type, result, idx ) PeekDataQueueEx( q, (POINTER)result, idx )
 /*
  * Result buffer is filled with the last element, and the result is true, otherwise the return
  * value is FALSE, and the data was not filled in.
  */
 TYPELIB_PROC  LOGICAL TYPELIB_CALLTYPE  PeekDataQueue    ( PDATAQUEUE *pplq, POINTER ResultBuffer );
-/* <combine sack::containers::data_queue::PeekDataQueue@PDATAQUEUE *@POINTER>
-   \ \                                                                        */
-#define PeekDataQueue( q, type, result ) PeekDataQueue( q, (POINTER)result )
+#define PeekDataQueue( q, type, result ) PeekDataQueueEx( q, type, result, 0 )
+/*
+ * gets the address a PDATAQUEUE element at index
+ * result buffer is a pointer to the type of structure expected to be
+ * stored within this.  Index from 0 to N indexes from first ( to be dequeued )
+ * to last item in queue.
+ */
+TYPELIB_PROC POINTER TYPELIB_CALLTYPE  PeekDataInQueueEx    ( PDATAQUEUE *pplq, INDEX idx );
+/*
+ * Results with the first item in the queue, else NULL.
+ */
+TYPELIB_PROC POINTER TYPELIB_CALLTYPE  PeekDataInQueue    ( PDATAQUEUE *pplq );
 /* <combine sack::containers::data_queue::CreateDataQueueEx@INDEX size>
    \ \                                                                  */
 #define     CreateDataQueue(size)     CreateDataQueueEx( size DBG_SRC )
@@ -9501,8 +9542,7 @@ _SETS_NAMESPACE
    array that maps usage of the set, and for the set size of
    elements.
    Remarks
-   \ \
-   Summary
+   \    Summary
    Generic sets are good for tracking lots of tiny structures.
    They track slabs of X structures at a time. They allocate a
    slab of X structures with an array of X bits indicating
@@ -9569,13 +9609,13 @@ typedef struct genericset_tag {
 	struct genericset_tag **me;
 	/* number of spots in this set block that are used. */
 	uint32_t nUsed;
- // hmm if I change this here? we're hozed... so.. we'll do it anyhow :) evil - recompile please
+    // this is the size of the bit pool before the pointer pool
 	uint32_t nBias;
- // after this p * unit must be computed
+ // the bit pool starts here (booleanUsed) after a number of
 	uint32_t bUsed[1];
+	                   // bits begins the aligned pointer pool.
 } GENERICSET, *PGENERICSET;
-/* \ \
-   Parameters
+/* \    Parameters
    pSet :      pointer to a generic set
    nMember :   index of the member
    setsize :   number of elements in each block
@@ -9586,13 +9626,11 @@ TYPELIB_PROC  POINTER  TYPELIB_CALLTYPE GetFromSetEx( GENERICSET **pSet, int set
    \ \                                                                             */
 #define GetFromSeta(ps, ss, us, max) GetFromSetPoolEx( NULL, 0, 0, 0, (ps), (ss), (us), (max) DBG_SRC )
 /* <combine sack::containers::sets::GetFromSetEx@GENERICSET **@int@int@int maxcnt>
-   \ \
-   Parameters
+   \    Parameters
    name :  name of type the set contains.
    pSet :  pointer to a set to get an element from.                                */
 #define GetFromSet( name, pset ) (name*)GetFromSeta( (GENERICSET**)(pset), sizeof( name##SET ), sizeof( name ), MAX##name##SPERSET )
-/* \ \
-   Parameters
+/* \    Parameters
    pSet :      pointer to a generic set
    nMember :   index of the member
    setsize :   number of elements in each block
@@ -9608,8 +9646,7 @@ TYPELIB_PROC  PGENERICSET  TYPELIB_CALLTYPE GetFromSetPoolEx( GENERICSET **pSetS
 /* <combine sack::containers::sets::GetFromSetPoolEx@GENERICSET **@int@int@int@GENERICSET **@int@int@int maxcnt>
    \ \                                                                                                           */
 #define GetFromSetPool( name, pool, pset ) (name*)GetFromSetPoola( (GENERICSET**)(pool)	    , sizeof( name##SETSET ), sizeof( name##SET ), MAX##name##SETSPERSET	, (GENERICSET**)(pset), sizeof( name##SET ), sizeof( name ), MAX##name##SPERSET )
-/* \ \
-   Parameters
+/* \    Parameters
    pSet :      pointer to a generic set
    nMember :   index of the member
    setsize :   number of elements in each block
@@ -9622,8 +9659,7 @@ TYPELIB_PROC  POINTER  TYPELIB_CALLTYPE GetSetMemberEx( GENERICSET **pSet, INDEX
 /* <combine sack::containers::sets::GetSetMemberEx@GENERICSET **@INDEX@int@int@int maxcnt>
    \ \                                                                                     */
 #define GetSetMember( name, pset, member ) ((name*)GetSetMembera( (GENERICSET**)(pset), (member), sizeof( name##SET ), sizeof( name ), MAX##name##SPERSET ))
-/* \ \
-   Parameters
+/* \    Parameters
    pSet :      pointer to a generic set
    nMember :   index of the member
    setsize :   number of elements in each block
@@ -9650,8 +9686,7 @@ TYPELIB_PROC  INDEX TYPELIB_CALLTYPE  GetMemberIndex(GENERICSET **set, POINTER u
 /* <combine sack::containers::sets::GetMemberIndex>
    \ \                                              */
 #define GetIndexFromSet( name, pset ) GetMemberIndex( name, pset, GetFromSet( name, pset ) )
-/* \ \
-   Parameters
+/* \    Parameters
    pSet :      pointer to a generic set
    nMember :   index of the member
    setsize :   number of elements in each block
@@ -9731,8 +9766,7 @@ TYPELIB_PROC  void TYPELIB_CALLTYPE  DeleteSet( GENERICSET **ppSet );
    ForAllinSet Callback - callback fucntion used with
    ForAllInSet                                        */
 typedef uintptr_t (CPROC *FAISCallback)(void*,uintptr_t);
-/* \ \
-   Parameters
+/* \    Parameters
    pSet :      poiner to a set
    unitsize :  size of elements in the array
    max :       count of elements per set block
@@ -10238,8 +10272,7 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateEx( size_t nSize DBG_PASS );
    PTEXT text = SegCreate( 10 );
    </code>                                                     */
 #define SegCreate(s) SegCreateEx(s DBG_SRC)
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromText> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromTextEx( CTEXTSTR text DBG_PASS );
@@ -10249,13 +10282,11 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromTextEx( CTEXTSTR text DBG_PAS
    PTEXT line = SegCreateFromText( "Around the world in a day." );
    </code>                                                         */
 #define SegCreateFromText(t) SegCreateFromTextEx(t DBG_SRC)
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromChar> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromCharLenEx( const char *text, size_t len DBG_PASS );
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromChar> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromCharEx( const char *text DBG_PASS );
@@ -10265,18 +10296,15 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromCharEx( const char *text DBG_
    PTEXT line = SegCreateFromChar( "Around the world in a day." );
    </code>                                                         */
 #define SegCreateFromChar(t) SegCreateFromCharEx(t DBG_SRC)
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromChar> */
 #define SegCreateFromCharLen(t,len) SegCreateFromCharLenEx((t),(len) DBG_SRC)
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromWide> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromWideLenEx( const wchar_t *text, size_t len DBG_PASS );
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromWide> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromWideEx( const wchar_t *text DBG_PASS );
@@ -10286,13 +10314,11 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromWideEx( const wchar_t *text D
    PTEXT line = SegCreateFromWideLen( L"Around the world in a day.", 26 );
    </code>                                                         */
 #define SegCreateFromWideLen(t,len) SegCreateFromWideLenEx((t),(len) DBG_SRC)
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromWide> */
 #define SegCreateFromWide(t) SegCreateFromWideEx(t DBG_SRC)
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateIndirect> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateIndirectEx( PTEXT pText DBG_PASS );
@@ -10311,8 +10337,7 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateIndirectEx( PTEXT pText DBG_PASS 
    length buffer for a TEXT segment.
                                                                                   */
 #define SegCreateIndirect(t) SegCreateIndirectEx(t DBG_SRC)
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegDuplicate> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegDuplicateEx( PTEXT pText DBG_PASS);
@@ -10330,16 +10355,14 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  LineDuplicateEx( PTEXT pText DBG_PASS );
 /* <combine sack::containers::text::LineDuplicateEx@PTEXT pText>
    \ \                                                           */
 #define LineDuplicate(pt) LineDuplicateEx(pt DBG_SRC )
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link TextDuplicate> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  TextDuplicateEx( PTEXT pText, int bSingle DBG_PASS );
 /* Duplicate the whole string of text to another string with
    exactly the same content.                                 */
 #define TextDuplicate(pt,s) TextDuplicateEx(pt,s DBG_SRC )
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromInt> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromIntEx( int value DBG_PASS );
@@ -10355,8 +10378,7 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromIntEx( int value DBG_PASS );
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFrom_64Ex( int64_t value DBG_PASS );
 /* Create a text segment from a uint64_t bit value. (long long int) */
 #define SegCreateFrom_64(v) SegCreateFrom_64Ex( v DBG_SRC )
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegCreateFromFloat> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromFloatEx( float value DBG_PASS );
@@ -10405,7 +10427,7 @@ TYPELIB_PROC  void TYPELIB_CALLTYPE   LineReleaseEx (PTEXT line DBG_PASS );
    Any segment in the line may be passed, the first segment is
    found, and then all segments in the line are deleted.       */
 #define LineRelease(l) LineReleaseEx(l DBG_SRC )
-/* \ \
+/* \
    <b>See Also</b>
    <link DBG_PASS>
    <link SegRelease> */
@@ -10484,15 +10506,13 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegGrab     (PTEXT segment);
    Returns
    \Returns the '_this' that was substituted.                     */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegSubst    ( PTEXT _this, PTEXT that );
-/* \ \
-   See Also
+/* \    See Also
    <link DBG_PASS>
    <link SegSplit> */
 TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegSplitEx( PTEXT *pLine, INDEX nPos DBG_PASS);
 /* Split a PTEXT segment.
    Example
-   \ \
-   <code lang="c++">
+   \    <code lang="c++">
    PTEXT result = SegSplit( &amp;old_string, 5 );
    </code>
    Returns
@@ -10602,8 +10622,7 @@ TYPELIB_PROC  INDEX TYPELIB_CALLTYPE  LineLengthExx( PTEXT pt, LOGICAL bSingle,P
 /* <combine sack::containers::text::LineLengthExEx@PTEXT@LOGICAL@int@PTEXT>
    \ \                                                                      */
 #define LineLengthExx(pt,single,eol) LineLengthExEx( pt,single,8,eol)
-/* \ \
-   Parameters
+/* \    Parameters
    Text segment :  PTEXT line or segment to get the length of
    single :        boolean, if set then only a single segment is
                    measured, otherwise all segments from this to
@@ -10650,8 +10669,7 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  BuildLineExx( PTEXT pt, LOGICAL bSingle, P
    \ \                                                                          */
 #define BuildLineEx(from,single) BuildLineExEx( from,single,8,NULL DBG_SRC )
 /* <combine sack::containers::text::BuildLineExEx@PTEXT@LOGICAL@int@PTEXT pEOL>
-   \ \
-    Flattens all segments in a line to a single segment result.
+   \     Flattens all segments in a line to a single segment result.
 */
 #define BuildLine(from) BuildLineExEx( from, FALSE,8,NULL DBG_SRC )
 //
@@ -10834,8 +10852,7 @@ TYPELIB_PROC  void TYPELIB_CALLTYPE  VarTextEmptyEx( PVARTEXT pvt DBG_PASS);
 #define VarTextEmpty(pvt) VarTextEmptyEx( (pvt) DBG_SRC )
 /* Add a single character to a vartext collector.
    Note
-   \ \
-   Parameters
+   \    Parameters
    pvt :       PVARTEXT to add character to
    c :         character to add
    DBG_PASS :  optional debug information         */
@@ -11159,8 +11176,7 @@ TYPELIB_PROC  PTREEROOT TYPELIB_CALLTYPE  CreateBinaryTreeExtended( uint32_t fla
    PTREEROOT tree = CreateBinaryTree();
    </code>                                                      */
 #define CreateBinaryTree() CreateBinaryTreeEx( NULL, NULL )
-/* \ \
-   Example
+/* \    Example
    <code lang="c++">
    PTREEROOT tree = CreateBinaryTree();
    DestroyBinaryTree( tree );
@@ -11168,8 +11184,7 @@ TYPELIB_PROC  PTREEROOT TYPELIB_CALLTYPE  CreateBinaryTreeExtended( uint32_t fla
    </code>                              */
 TYPELIB_PROC  void TYPELIB_CALLTYPE  DestroyBinaryTree( PTREEROOT root );
 /* Drops all the nodes in a tree so it becomes empty...
-   \ \
-   Example
+   \    Example
    <code lang="c++">
    PTREEROOT tree = CreateBinaryTree();
    ResetBinaryTree( tree );
@@ -11188,8 +11203,7 @@ TYPELIB_PROC  void TYPELIB_CALLTYPE  ResetBinaryTree( PTREEROOT root );
    BalanceBinaryTree( tree );
    </code>                                                        */
 TYPELIB_PROC  void TYPELIB_CALLTYPE  BalanceBinaryTree( PTREEROOT root );
-/* \ \
-   See Also
+/* \    See Also
    <link AddBinaryNode>
    <link DBG_PASS>
                         */
@@ -11332,8 +11346,7 @@ TYPELIB_PROC  CPOINTER TYPELIB_CALLTYPE  GetParentNode( PTREEROOT root );
    Binary Trees have a 'current' cursor. These operations may be
    used to browse the tree.
    Example
-   \ \
-   <code>
+   \    <code>
    // this assumes you have a tree, and it's fairly populated, then this demonstrates
    // all steps of browsing.
    POINTER my_data;
@@ -11647,7 +11660,8 @@ SYSLOG_PROC  CTEXTSTR SYSLOG_API  GetPackedTime ( void );
 //    uint64_t epoch_milliseconds : 56;
 //    int64_t timezone : 8; divided by 15... hours * 60 / 15
 // }
-SYSLOG_PROC  int64_t SYSLOG_API GetTimeOfDay( void );
+// returns the nanosecond of the day (since UNIX Epoch) and timezone/15
+SYSLOG_PROC  int64_t SYSLOG_API GetTimeOfDay( uint64_t* tick, int8_t* ptz );
 // binary little endian order; somewhat
 typedef struct sack_expanded_time_tag
 {
@@ -11942,11 +11956,16 @@ LOGGING_NAMESPACE_END
 using namespace sack::logging;
 #endif
 #endif
-#if defined( _MSC_VER ) || (1)
-// huh, apparently all compiles are messed the hell up.
-#  define COMPILER_THROWS_SIGNED_UNSIGNED_MISMATCH
-#endif
-#ifdef COMPILER_THROWS_SIGNED_UNSIGNED_MISMATCH
+// these macros test the the range of integer and unsigned
+// such that an unsigned > integer range is true if it is more than an maxint
+// and signed integer < 0 is less than any unsigned value.
+// the macro prefix SUS  or USS is the comparison type
+// Signed-UnSigned and UnSigned-Signed  depending on the
+// operand order.
+// the arguments passed are variable a and b and the respective types of those
+// if( SUS_GT( 324, int, 545, unsigned int ) ) {
+//    is >
+// }
 #  define SUS_GT(a,at,b,bt)   (((a)<0)?0:(((bt)a)>(b)))
 #  define USS_GT(a,at,b,bt)   (((b)<0)?1:((a)>((at)b)))
 #  define SUS_LT(a,at,b,bt)   (((a)<0)?1:(((bt)a)<(b)))
@@ -11955,7 +11974,8 @@ using namespace sack::logging;
 #  define USS_GTE(a,at,b,bt)  (((b)<0)?1:((a)>=((at)b)))
 #  define SUS_LTE(a,at,b,bt)  (((a)<0)?1:(((bt)a)<=(b)))
 #  define USS_LTE(a,at,b,bt)  (((b)<0)?0:((a)<=((at)b)))
-#else
+#if 0
+// simplified meanings of the macros
 #  define SUS_GT(a,at,b,bt)   ((a)>(b))
 #  define USS_GT(a,at,b,bt)   ((a)>(b))
 #  define SUS_LT(a,at,b,bt)   ((a)<(b))
@@ -12134,8 +12154,16 @@ SYSTEM_PROC( void, OSALOT_PrependEnvironmentVariable )(CTEXTSTR name, CTEXTSTR v
  * Otherwise, the command line needs to have the program name, and arguments passed in the string
  * the parameter to winmain has the program name skipped
  */
-SYSTEM_PROC( void, ParseIntoArgs )( TEXTCHAR *lpCmdLine, int *pArgc, TEXTCHAR ***pArgv );
+SYSTEM_PROC( void, ParseIntoArgs )( TEXTCHAR const *lpCmdLine, int *pArgc, TEXTCHAR ***pArgv );
 #define UnloadFunction(p) UnloadFunctionEx(p DBG_SRC )
+/*
+   Check if task spawning is allowed...
+*/
+SYSTEM_PROC( LOGICAL, sack_system_allow_spawn )( void );
+/*
+   Disallow task spawning.
+*/
+SYSTEM_PROC( void, sack_system_disallow_spawn )( void );
 SACK_SYSTEM_NAMESPACE_END
 #ifdef __cplusplus
 using namespace sack::system;
@@ -12279,7 +12307,6 @@ typedef struct win_sockaddr_in SOCKADDR_IN;
 #else
 //#include "loadsock.h"
 #endif
-//#include <stdlib.h>
 #ifdef __CYGWIN__
  // provided by -lgcc
 // lots of things end up including 'setjmp.h' which lacks sigset_t defined here.
@@ -13428,6 +13455,14 @@ typedef uintptr_t (CPROC*ThreadStartProc)( PTHREAD );
 /* Function signature for a thread entry point passed to
    ThreadToSimple.                                             */
 typedef uintptr_t (*ThreadSimpleStartProc)( POINTER );
+/*
+  OnThreadCreate allows registering a procedure to run
+  when a thread is created.  (Or an existing thread becomes
+  tracked within this library, via MakeThread() ).
+  It is called once per thread, for each thread created
+  after registering the callback.
+*/
+TIMER_PROC( void, OnThreadCreate )( void ( *v )( void ) );
 /* Create a separate thread that starts in the routine
    specified. The uintptr_t value (something that might be a
    pointer), is passed in the PTHREAD structure. (See
@@ -13468,27 +13503,6 @@ TIMER_PROC( PTHREAD, ThreadToSimpleEx )( ThreadSimpleStartProc proc, POINTER par
    thread. If this thread already has this structure created,
    the same one results on subsequent MakeThread calls.        */
 TIMER_PROC( PTHREAD, MakeThread )( void );
-/* Releases resources associated with a PTHREAD. For purposes of
-   waking a thread, and providing a wakeable point for the
-   thread, a system blocking event object is allocated, named
-   with the THREAD_ID so it can be referenced by other
-   processes. This is only allowed to be done by the thread
-   itself.
-   Parameters
-   Param1 :  \Description
-   Param2 :  \Description
-   Example
-   <code lang="c++">
-   int main( void )
-   {
-       PTHREAD myself = MakeThread();
-       // create threads, do stuff...
-       UnmakeThread();
-       At this point the pointer in 'myself' is invalid, and should be cleared.
-       myself = NULL;
-   }
-   </code>                                                                      */
-TIMER_PROC( void, UnmakeThread )( void );
 /* This returns the parameter passed as user data to ThreadTo.
    Parameters
    thread :  thread to get the parameter from.
@@ -13646,7 +13660,8 @@ TIMER_PROC( LOGICAL, EnterCriticalSecEx )( PCRITICALSECTION pcs DBG_PASS );
 TIMER_PROC( LOGICAL, LeaveCriticalSecEx )( PCRITICALSECTION pcs DBG_PASS );
 /* Does nothing. There are no extra resources required for
    critical sections, and the memory is allocated by the
-   application.
+	application; native windows criticalsections allocate an
+   external object; this should be called typically.
    Parameters
    pcs :  pointer to critical section to do nothing with.  */
 TIMER_PROC( void, DeleteCriticalSec )( PCRITICALSECTION pcs );
@@ -13762,6 +13777,32 @@ using namespace sack::timers;
 #    define EndSaneWinMain() } }
 #  endif
 #endif
+/**
+ * https://stackoverflow.com/questions/3585583/convert-unix-linux-time-to-windows-filetime
+ * number of seconds from 1 Jan. 1601 00:00 to 1 Jan 1970 00:00 UTC
+ * subtract from FILETIME to get timespec
+ * add to timespec to get FILETIME ticks.
+ * * 1000000000
+ */
+#define EPOCH_DIFF 11644473600ULL
+#define EPOCH_DIFF_MS 11644473600000ULL
+#define EPOCH_DIFF_NS 11644473600000000000ULL
+#ifdef WIN32
+DeclareThreadLocal FILETIME ft;
+// we want this as fast as possible, so inline always.
+#define timeGetTime64ns( ) ( GetSystemTimeAsFileTime( &ft ),((uint64_t*)&ft)[0]*100-EPOCH_DIFF_NS )
+#define timeGetTime64( ) ( GetSystemTimeAsFileTime( &ft ),((uint64_t*)&ft)[0]/10000-EPOCH_DIFF_MS )
+#define timeGetTime() (uint32_t)(timeGetTime64())
+#else
+DeclareThreadLocal struct timespec global_static_time_ts;
+#define timeGetTime64ns( ) ( clock_gettime(CLOCK_REALTIME, &global_static_time_ts), (uint64_t)global_static_time_ts.tv_sec*(uint64_t)1000000000 + (uint64_t)global_static_time_ts.tv_nsec )
+#define timeGetTime64( ) ( clock_gettime(CLOCK_REALTIME, &global_static_time_ts), (uint64_t)global_static_time_ts.tv_sec*(uint64_t)1000 + (uint64_t)global_static_time_ts.tv_nsec/1000000 )
+#define timeGetTime() (uint32_t)(timeGetTime64())
+#endif
+#define tickToTimeSpec(ts,tick) (((ts).tv_sec = (tick) / 1000ULL),((ts).tv_nsec=((tick)%1000ULL)*1000000ULL))
+#define tickToFileTime(ft,tick) ((((ft).highPart).tv_sec = ((tick*10000)+EPOCH_DIFF_MS)>>32 ),(((ft).lowPart)=((tick*10000)+EPOCH_DIFF_MS) & 0XFFFFFFFF ))
+#define tickNsToTimeSpec(ts,tick) (((ts).tv_sec = (tick) / 1000000000ULL),((ts).tv_nsec=(tick)%1000000000ULL))
+#define tickNsToFileTime(ft,tick) ((((ft).highPart).tv_sec = ((tick)+EPOCH_DIFF_NS)>>32 ),(((ft).lowPart)=((tick)+EPOCH_DIFF_NS) & 0XFFFFFFFF ))
 //  these are rude defines overloading otherwise very practical types
 // but - they have to be dispatched after all standard headers.
 #ifndef FINAL_TYPES
@@ -13981,14 +14022,20 @@ SACK_NAMESPACE
    external things linking here are _import.               */
 #    define DEADSTART_PROC IMPORT_METHOD
 #  endif
+     // 28 (thread ID for critical sections used to allocate memory)
+#define TIMER_MODULE_PRELOAD_PRIORITY  (CONFIG_SCRIPT_PRELOAD_PRIORITY-3)
+     // 30 specify where to load external resources from... like the option database
+#define VIRTUAL_FILESYSTEM_PRELOAD_PRIORITY (CONFIG_SCRIPT_PRELOAD_PRIORITY-1)
    /* this is just a global space initializer (shared, named
       region, allows static link plugins to share information)
       Allocates its shared memory global region, so if this library
       is built statically and referenced in multiple plugins
       ConfigScript can share the same symbol tables. This also
-      provides sharing between C++ and C.                           */
+		provides sharing between C++ and C.                           */
+         // 31
 #define CONFIG_SCRIPT_PRELOAD_PRIORITY    (SQL_PRELOAD_PRIORITY-3)
-   // this is just a global space initializer (shared, named region, allows static link plugins to share information)
+			// this is just a global space initializer (shared, named region, allows static link plugins to share information)
+         // 34
 #define SQL_PRELOAD_PRIORITY    (SYSLOG_PRELOAD_PRIORITY-1)
 /* Level at which logging is initialized. Nothing under this
    should be doing logging, if it does, the behavior is not as
@@ -14131,10 +14178,10 @@ DEADSTART_PROC  void DEADSTART_CALLTYPE  DispelDeadstart ( void );
    </code>
    See Also
    <link sack::app::deadstart, deadstart Namespace>                         */
-#define PRIORITY_PRELOAD(name,priority) static void CPROC name(void);    static class pastejunk(schedule_,name) {        public:pastejunk(schedule_,name)() {	    RegisterPriorityStartupProc( name,TOSTR(name),priority,(void*)this DBG_SRC);	  }	  } pastejunk(do_schedule_,name);	     static void name(void)
+#define PRIORITY_PRELOAD(name,priority) static void CPROC name(void);	 namespace { static class pastejunk(schedule_,name) {        public:pastejunk(schedule_,name)() {	    RegisterPriorityStartupProc( name,TOSTR(name),priority,(void*)this DBG_SRC);	  }	  } pastejunk(do_schedule_,name);   }	  static void name(void)
 /* This is used once in deadstart_prog.c which is used to invoke
    startups when the program finishes loading.                   */
-#define MAGIC_PRIORITY_PRELOAD(name,priority) static void CPROC name(void);    static class pastejunk(schedule_,name) {	     public:pastejunk(schedule_,name)() {	  name();	    }	  } pastejunk(do_schedul_,name);	     static void name(void)
+#define MAGIC_PRIORITY_PRELOAD(name,priority) static void CPROC name(void);	 namespace { static class pastejunk(schedule_,name) {	     public:pastejunk(schedule_,name)() {	  name();	    }	  } pastejunk(do_schedul_,name);   }	  static void name(void)
 /* A macro to define some code to run during program shutdown. An
    additional priority may be specified if the order matters. Higher
    numbers are called first.
@@ -14302,12 +14349,12 @@ struct rt_init
 #ifdef __MANUAL_PRELOAD__
 #define PRIORITY_PRELOAD(name,pr) static void name(void);	 RTINIT_STATIC struct rt_init pastejunk(name,_ctor_label)		__attribute__((section(DEADSTART_SECTION))) __attribute__((used))	 =	 {0,0,pr INIT_PADDING, __LINE__, name PASS_FILENAME	, TOSTR(name) JUNKINIT(name)} ;	 void name(void);	 void pastejunk(registerStartup,name)(void) __attribute__((constructor));	 void pastejunk(registerStartup,name)(void) {	 RegisterPriorityStartupProc(name,TOSTR(name),pr,NULL DBG_SRC); }	 void name(void)
 #else
-#if defined( _WIN32 ) && defined( __GNUC__ )
+#if defined( _WIN32 ) || defined( __GNUC__ )
 #  define HIDDEN_VISIBILITY
 #else
 #  define HIDDEN_VISIBILITY  __attribute__((visibility("hidden")))
 #endif
-#define PRIORITY_PRELOAD(name,pr) static void name(void);	         RTINIT_STATIC struct rt_init pastejunk(name,_ctor_label)	         __attribute__((section(DEADSTART_SECTION))) __attribute__((used)) HIDDEN_VISIBILITY	 ={0,0,pr INIT_PADDING	                                           ,__LINE__,name	                                                 PASS_FILENAME	                                                 ,TOSTR(name)	                                                   JUNKINIT(name)};	                                               static void name(void) __attribute__((used)) HIDDEN_VISIBILITY;	 void name(void)
+#define PRIORITY_PRELOAD(name,pr) static void name(void);	         RTINIT_STATIC struct rt_init pastejunk(name,_ctor_label)	         __attribute__((section(DEADSTART_SECTION))) __attribute__((used))	  ={0,0,pr INIT_PADDING	                                           ,__LINE__,name	                                                 PASS_FILENAME	                                                 ,TOSTR(name)	                                                   JUNKINIT(name)};	                                               static void name(void) __attribute__((used));	 void name(void)
 #endif
 typedef void(*atexit_priority_proc)(void (*)(void),CTEXTSTR,int DBG_PASS);
 #define PRIORITY_ATEXIT(name,priority) static void name(void);           static void pastejunk(atexit,name)(void) __attribute__((constructor));   void pastejunk(atexit,name)(void)                                        {	                                                                        RegisterPriorityShutdownProc(name,TOSTR(name),priority,NULL DBG_SRC); }                                                                        void name(void)
@@ -15453,11 +15500,11 @@ PDATALIST ExpandDataListEx( PDATALIST *ppdl, INDEX entries DBG_PASS )
 POINTER SetDataItemEx( PDATALIST *ppdl, INDEX idx, POINTER data DBG_PASS )
 {
 	POINTER p = NULL;
-	if( !ppdl || !(*ppdl) || idx > 0x100000 )
+	if( !ppdl || !(*ppdl) || idx > 0x1000000 )
 		return NULL;
 	if( idx >= (*ppdl)->Avail )
 	{
-		ExpandDataListEx( ppdl, (idx-(*ppdl)->Avail)+32 DBG_RELAY );
+		ExpandDataListEx( ppdl, idx+32 DBG_RELAY );
 	}
 	p = (*ppdl)->data + ( (*ppdl)->Size * idx );
 	MemCpy( p, data, (*ppdl)->Size );
@@ -16401,6 +16448,43 @@ PDATAQUEUE  CreateLargeDataQueueEx( INDEX size, INDEX entries, INDEX expand DBG_
 {
 	return PeekDataQueueEx( ppdq, result, 0 );
 }
+// zero is the first,
+POINTER  PeekDataInQueueEx ( PDATAQUEUE *ppdq, INDEX idx )
+{
+	INDEX top;
+	if( ppdq && *ppdq )
+		while( LockedExchange( data_queue_local_lock, 1 ) )
+			Relinquish();
+	else
+		return 0;
+	// cannot get invalid id.
+	if( idx != INVALID_INDEX )
+	{
+		for( top = (*ppdq)->Bottom;
+			 idx != INVALID_INDEX && top != (*ppdq)->Top
+			 ; )
+		{
+			idx--;
+			if( idx != INVALID_INDEX )
+			{
+				top++;
+				if( (top) >= (*ppdq)->Cnt )
+					top = top-(*ppdq)->Cnt;
+			}
+		}
+		if( idx == INVALID_INDEX )
+		{
+			data_queue_local_lock[0] = 0;
+			return (*ppdq)->data + top * (*ppdq)->Size;
+		}
+	}
+	data_queue_local_lock[0] = 0;
+	return NULL;
+}
+POINTER  PeekDataInQueue ( PDATAQUEUE *ppdq )
+{
+	return PeekDataInQueueEx( ppdq, 0 );
+}
 void  EmptyDataQueue ( PDATAQUEUE *ppdq )
 {
 	if( ppdq && *ppdq )
@@ -16628,10 +16712,17 @@ PRIORITY_PRELOAD( InitLocals, NAMESPACE_PRELOAD_PRIORITY + 1 )
  *
  */
 #define NO_UNICODE_C
- // derefecing NULL pointers; the function wouldn't be called with a NULL.
- // and partial expressions in lower precision
+#ifdef _MSC_VER
+// derefecing NULL pointers; the function wouldn't be called with a NULL.
+// and partial expressions in lower precision
 // and NULL math because never NULL.
-#pragma warning( disable:6011 26451 28182)
+#  pragma warning( disable:6011 26451 28182)
+//Warning C26451: Arithmetic overflow: Using operator '%operator%'
+// on a %size1% byte value and then casting the result to a
+// %size2% byte value. Cast the value to the wider type
+// before calling operator '%operator%' to avoid overflow
+#  pragma warning( disable:26451 )
+#endif
 #ifdef __cplusplus
 namespace sack {
 namespace containers {
@@ -16640,7 +16731,6 @@ namespace text {
 	using namespace sack::logging;
 	using namespace sack::containers::queue;
 #endif
-#pragma warning( disable:26451 )
 typedef PTEXT (CPROC*GetTextOfProc)( uintptr_t, POINTER );
 typedef struct text_exension_tag {
 	uint32_t bits;
@@ -17216,18 +17306,20 @@ PTEXT SegSplitEx( PTEXT *pLine, INDEX nPos  DBG_PASS)
 	return here;
 }
 //----------------------------------------------------------------------
-TEXTCHAR NextCharEx( PTEXT input, size_t idx )
+TEXTRUNE NextCharEx( PTEXT input, size_t idx )
 {
 	if( ( ++idx ) >= input->data.size )
 	{
 		idx -= input->data.size;
 		input = NEXTLINE( input );
 	}
-	if( input )
-		return input->data.data[idx];
+	if( input ) {
+		return GetUtfCharIndexed( input->data.data, &idx, input->data.size );
+		//return input->data.data[idx];
+	}
 	return 0;
 }
-#define NextChar() NextCharEx( input, index )
+#define NextChar() NextCharEx( input, tempText-tempText_ )
 //----------------------------------------------------------------------
 // In this final implementation - it was decided that for a general
 // library, that expressions, escapes of expressions, apostrophes
@@ -17247,12 +17339,11 @@ PTEXT TextParse( PTEXT input, CTEXTSTR punctuation, CTEXTSTR filter_space, int b
 	VARTEXT out;
 	PTEXT outdata=(PTEXT)NULL,
 	      word;
-	TEXTSTR tempText;
+	TEXTSTR tempText, tempText_;
 	int has_minus = -1;
 	int has_plus = -1;
-	uint32_t index;
 	INDEX size;
-	TEXTCHAR character;
+	TEXTRUNE character;
 	uint32_t elipses = FALSE,
 	   spaces = 0, tabs = 0;
         // if nothing new to process- return nothing processed.
@@ -17275,7 +17366,7 @@ PTEXT TextParse( PTEXT input, CTEXTSTR punctuation, CTEXTSTR filter_space, int b
 			continue;
 		}
   // point to the data to process...
-		tempText = GetText(input);
+		tempText_ = tempText = GetText(input);
 		size = GetTextSize(input);
 		if( input->format.position.offset.spaces || input->format.position.offset.tabs )
 		{
@@ -17289,9 +17380,9 @@ PTEXT TextParse( PTEXT input, CTEXTSTR punctuation, CTEXTSTR filter_space, int b
 		spaces += input->format.position.offset.spaces;
 		tabs += input->format.position.offset.tabs;
 		//Log1( "Assuming %d spaces... ", spaces );
-		for (index=0;(character = tempText[index]),
+		for (;(character = GetUtfChar( (char const**)&tempText ) ),
  // while not at the
-                   (index < size); index++)
+                   ((tempText-tempText_) <= (int)size); )
                                          // end of the line.
 		{
 			if( elipses && character != '.' )
@@ -17312,7 +17403,7 @@ PTEXT TextParse( PTEXT input, CTEXTSTR punctuation, CTEXTSTR filter_space, int b
  // elipses and character is . - continue
 			else if( elipses )
 			{
-				VarTextAddCharacterEx( &out, character DBG_OVERRIDE );
+				VarTextAddRuneEx( &out, character, FALSE DBG_OVERRIDE );
 				continue;
 			}
 		if( StrChr( filter_space, character ) )
@@ -17325,13 +17416,13 @@ PTEXT TextParse( PTEXT input, CTEXTSTR punctuation, CTEXTSTR filter_space, int b
 			{
 				outdata = SegAppend( outdata, word );
 				SET_SPACES();
-				VarTextAddCharacterEx( &out, character DBG_OVERRIDE );
+				VarTextAddRuneEx( &out, character, FALSE DBG_OVERRIDE );
 				word = VarTextGetEx( &out DBG_OVERRIDE );
 				outdata = SegAppend( outdata, word );
 			}
 			else
 			{
-				VarTextAddCharacterEx( &out, character DBG_OVERRIDE );
+				VarTextAddRuneEx( &out, character, FALSE DBG_OVERRIDE );
 				word = VarTextGetEx( &out DBG_OVERRIDE );
 				SET_SPACES();
 				outdata = SegAppend( outdata, word );
@@ -17349,6 +17440,8 @@ PTEXT TextParse( PTEXT input, CTEXTSTR punctuation, CTEXTSTR filter_space, int b
 			outdata = SegAppend( outdata, SegCreate( 0 ) );
 			break;
 		case ' ':
+// case '\xa0': // &nbsp;
+		case 160 :
 			if( bSpaces )
 			{
 			is_a_space:
@@ -17413,7 +17506,7 @@ PTEXT TextParse( PTEXT input, CTEXTSTR punctuation, CTEXTSTR filter_space, int b
 							( c >= '0' && c <= '9' ) )
 						{
 							// gather together as a floating point number...
-							VarTextAddCharacterEx( &out, character DBG_OVERRIDE );
+							VarTextAddRuneEx( &out, character, FALSE DBG_OVERRIDE );
 							break;
 						}
 					}
@@ -17454,7 +17547,7 @@ PTEXT TextParse( PTEXT input, CTEXTSTR punctuation, CTEXTSTR filter_space, int b
 							SET_SPACES();
 							// gather together as a sign indication on a number.
 						}
-						VarTextAddCharacterEx( &out, character DBG_OVERRIDE );
+						VarTextAddRuneEx( &out, character, FALSE DBG_OVERRIDE );
 						break;
 					}
 				}
@@ -17463,13 +17556,13 @@ PTEXT TextParse( PTEXT input, CTEXTSTR punctuation, CTEXTSTR filter_space, int b
 				{
 					outdata = SegAppend( outdata, word );
 					SET_SPACES();
-					VarTextAddCharacterEx( &out, character DBG_OVERRIDE );
+					VarTextAddRuneEx( &out, character, FALSE DBG_OVERRIDE );
 					word = VarTextGetEx( &out DBG_OVERRIDE );
 					outdata = SegAppend( outdata, word );
 				}
 				else
 				{
-					VarTextAddCharacterEx( &out, character DBG_OVERRIDE );
+					VarTextAddRuneEx( &out, character, FALSE DBG_OVERRIDE );
 					word = VarTextGetEx( &out DBG_OVERRIDE );
 					SET_SPACES();
 					outdata = SegAppend( outdata, word );
@@ -17486,7 +17579,7 @@ PTEXT TextParse( PTEXT input, CTEXTSTR punctuation, CTEXTSTR filter_space, int b
 					}
 					elipses = FALSE;
 				}
-				VarTextAddCharacterEx( &out, character DBG_OVERRIDE );
+				VarTextAddRuneEx( &out, character, FALSE DBG_OVERRIDE );
 				break;
 			}
 		}
@@ -17512,10 +17605,9 @@ PTEXT burstEx( PTEXT input DBG_PASS )
 	VARTEXT out;
 	PTEXT outdata=(PTEXT)NULL,
 			word;
-	TEXTSTR tempText;
-	uint32_t index;
+	TEXTSTR tempText, tempText_;
 	size_t size;
-	TEXTCHAR character;
+	TEXTRUNE character;
 	uint32_t elipses = FALSE,
 		spaces = 0, tabs = 0;
 		  // if nothing new to process- return nothing processed.
@@ -17538,7 +17630,7 @@ PTEXT burstEx( PTEXT input DBG_PASS )
 			continue;
 		}
   // point to the data to process...
-		tempText = GetText(input);
+		tempText_ = tempText = GetText(input);
 		size = GetTextSize(input);
 		if( input->format.position.offset.spaces || input->format.position.offset.tabs )
 		{
@@ -17552,9 +17644,9 @@ PTEXT burstEx( PTEXT input DBG_PASS )
 		spaces += input->format.position.offset.spaces;
 		tabs += input->format.position.offset.tabs;
 		//Log1( "Assuming %d spaces... ", spaces );
-		for (index=0;(character = tempText[index]),
+		for (;(character = GetUtfChar( (char const**)&tempText ) ),
  // while not at the
-		             (index < size); index++)
+		             ((tempText-tempText_) <= (int)size); )
 		                                      // end of the line.
 		{
 			if( elipses && character != '.' )
@@ -17575,7 +17667,7 @@ PTEXT burstEx( PTEXT input DBG_PASS )
  // elipses and character is . - continue
 			else if( elipses )
 			{
-				VarTextAddCharacterEx( &out, character DBG_OVERRIDE );
+				VarTextAddRuneEx( &out, character, FALSE DBG_OVERRIDE );
 				continue;
 			}
 			switch(character)
@@ -17590,6 +17682,8 @@ PTEXT burstEx( PTEXT input DBG_PASS )
 				outdata = SegAppend( outdata, SegCreate( 0 ) );
 				break;
 			case ' ':
+// '\xa0': // nbsp
+			case 160 :
 				if( ( word = VarTextGetEx( &out DBG_OVERRIDE ) ) )
 				{
 					SET_SPACES();
@@ -17640,7 +17734,7 @@ PTEXT burstEx( PTEXT input DBG_PASS )
 						 ( c >= '0' && c <= '9' ) )
 					{
 						// gather together as a floating point number...
-						VarTextAddCharacterEx( &out, character DBG_OVERRIDE );
+						VarTextAddRuneEx( &out, character, FALSE DBG_OVERRIDE );
 						break;
 					}
 				}
@@ -17658,7 +17752,7 @@ PTEXT burstEx( PTEXT input DBG_PASS )
 							SET_SPACES();
 						}
 						// gather together as a sign indication on a number.
-						VarTextAddCharacterEx( &out, character DBG_OVERRIDE );
+						VarTextAddRuneEx( &out, character, FALSE DBG_OVERRIDE );
 						break;
 					}
 				}
@@ -17701,13 +17795,13 @@ PTEXT burstEx( PTEXT input DBG_PASS )
 				{
 					outdata = SegAppend( outdata, word );
 					SET_SPACES();
-					VarTextAddCharacterEx( &out, character DBG_OVERRIDE );
+					VarTextAddRuneEx( &out, character, FALSE DBG_OVERRIDE );
 					word = VarTextGetEx( &out DBG_OVERRIDE );
 					outdata = SegAppend( outdata, word );
 				}
 				else
 				{
-					VarTextAddCharacterEx( &out, character DBG_OVERRIDE );
+					VarTextAddRuneEx( &out, character, FALSE DBG_OVERRIDE );
 					word = VarTextGetEx( &out DBG_OVERRIDE );
 					SET_SPACES();
 					outdata = SegAppend( outdata, word );
@@ -17723,7 +17817,7 @@ PTEXT burstEx( PTEXT input DBG_PASS )
 					}
 					elipses = FALSE;
 				}
-				VarTextAddCharacterEx( &out, character DBG_OVERRIDE );
+				VarTextAddRuneEx( &out, character, FALSE DBG_OVERRIDE );
 				break;
 			}
 		}
@@ -18283,7 +18377,7 @@ int64_t IntCreateFromTextRef( CTEXTSTR *p_ )
 		}
 		else
 		{
-			if( ( !altBase ) && (*p == '0') ) { altBase = TRUE; base = 8; }
+			if( ( !altBase ) && (*p == '0') ) { altBase = TRUE; base = 10; }
 			else { if( (*p - '0') >= base ) { break; } altBase = TRUE; }
 			num *= base;
 			num += *p - '0';
@@ -19214,7 +19308,7 @@ int ConvertToUTF8( char *output, TEXTRUNE rune )
 	else if( !( rune & 0xFFE00000 ) )
 	{
 		// 21 bits
-		(*output++) = 0xF0 | ( ( ( rune & 0x1C0000 ) >> 15 ) & 0xFF );
+		(*output++) = 0xF0 | ( ( ( rune & 0x1C0000 ) >> 18 ) & 0xFF );
 		goto plus3;
 	}
 	else if( !( rune & 0xFC000000 ) )
@@ -19262,7 +19356,7 @@ int ConvertToUTF8Ex( char *output, TEXTRUNE rune, LOGICAL overlong )
 	else if( !(rune & 0xFFFF0000) )
 	{
 		// 21 bits
-		(*output++) = 0xF0 | (((rune & 0x1C0000) >> 15) & 0xFF);
+		(*output++) = 0xF0 | (((rune & 0x1C0000) >> 18) & 0xFF);
 		goto plus3;
 	}
 	else if( !(rune & 0xFFE00000) )
@@ -19775,7 +19869,7 @@ TEXTRUNE GetPriorUtfCharIndexed( const char *pc, size_t *n )
 			return result;
 		}
 	}
-	return INVALID_RUNE;
+	return RUNE_BEFORE_START;
 }
 //---------------------------------------------------------------------------
 TEXTRUNE GetUtfCharW( const wchar_t * *from )
@@ -19965,13 +20059,13 @@ static TEXTCHAR u8xor_table[256][256];
 static TEXTCHAR b64xor_table2[256][256];
 static TEXTCHAR u8xor_table2[256][256];
 PRELOAD( initTables ) {
-	int n, m;
+	size_t n, m;
 	for( n = 0; n < (sizeof( encodings )-1); n++ )
 		for( m = 0; m < (sizeof( encodings )-1); m++ ) {
 			b64xor_table[(uint8_t)encodings[n]][(uint8_t)encodings[m]] = encodings[n^m];
-			u8xor_table[n][(uint8_t)encodings[m]] = n^m;
+			u8xor_table[n][(uint8_t)encodings[m]] = (TEXTCHAR)(n^m);
 			b64xor_table2[(uint8_t)encodings2[n]][(uint8_t)encodings2[m]] = encodings2[n^m];
-			u8xor_table2[n][(uint8_t)encodings2[m]] = n^m;
+			u8xor_table2[n][(uint8_t)encodings2[m]] = (TEXTCHAR)(n^m);
 	}
 	//LogBinary( (uint8_t*)u8xor_table[0], sizeof( u8xor_table ) );
 	b64xor_table['=']['='] = '=';
@@ -20015,7 +20109,8 @@ char * u8xor( const char *a, size_t alen, const char *b, size_t blen, int *ofs )
 		else if( (v & 0xFE) == 0xFC ) { if( l )
   // 6(4) + 2 + 0 == 26 //-V640
 			lprintf( "short utf8 sequence found" ); l = 5; mask = 0;  _mask = 0x03; }
-		char bchar = b[(n+o)%(keylen)];
+		// B is a base64 key; it would never be > 128 so char index is OK.
+		char bchar = b[(n+o)%(keylen)]&0x7f;
 		(*out) = (v & ~mask ) | ( u8xor_table[v & mask ][bchar] & mask );
 		out++;
 	}
@@ -20080,41 +20175,41 @@ TEXTCHAR *EncodeBase64Ex( const uint8_t* buf, size_t length, size_t *outsize, co
 static void setupDecodeBytes( const char *code ) {
 	int n = 0;
 	// default all of these, allow code to override them.
-	// allow nul terminators (sortof)
- // = ix 64 (0x40) and mask is & 0x3F dropping the upper bit.
-	_base64_r[0] = 64;
- // = ix 64 (0x40) and mask is & 0x3F dropping the upper bit.
-	_base64_r['~'] = 64;
- // = ix 64 (0x40) and mask is & 0x3F dropping the upper bit.
-	_base64_r['='] = 64;
-	// My JS Encoding $_ and = at the end.  allows most to be identifiers too.
-	// 'standard' encoding +/
-	// variants -/
-	//          +,
-	//          ._
-	// variants -_
- // = ix 64 (0x40) and mask is & 0x3F dropping the upper bit.
-	_base64_r['$'] = 62;
- // = ix 64 (0x40) and mask is & 0x3F dropping the upper bit.
-	_base64_r['+'] = 62;
- // = ix 64 (0x40) and mask is & 0x3F dropping the upper bit.
-	_base64_r['-'] = 62;
- // = ix 64 (0x40) and mask is & 0x3F dropping the upper bit.
-	_base64_r['.'] = 62;
- // = ix 64 (0x40) and mask is & 0x3F dropping the upper bit.
-	_base64_r['_'] = 63;
- // = ix 64 (0x40) and mask is & 0x3F dropping the upper bit.
-	_base64_r['/'] = 63;
- // = ix 64 (0x40) and mask is & 0x3F dropping the upper bit.
-	_base64_r[','] = 63;
 	if( _last_base64_set != code ) {
 		_last_base64_set = code;
 		memset( _base64_r, 0, 256 );
-		while( *code ) {
-			_base64_r[*code] = n++;
-			code++;
-		}
-	}
+                // allow nul terminators (sortof)
+ // = ix 64 (0x40) and mask is & 0x3F dropping the upper bit.
+                _base64_r[0] = 64;
+ // = ix 64 (0x40) and mask is & 0x3F dropping the upper bit.
+                _base64_r['~'] = 64;
+ // = ix 64 (0x40) and mask is & 0x3F dropping the upper bit.
+                _base64_r['='] = 64;
+                // My JS Encoding $_ and = at the end.  allows most to be identifiers too.
+                // 'standard' encoding +/
+                // variants -/
+                //          +,
+                //          ._
+                // variants -_
+ // = ix 64 (0x40) and mask is & 0x3F dropping the upper bit.
+                _base64_r['$'] = 62;
+ // = ix 64 (0x40) and mask is & 0x3F dropping the upper bit.
+                _base64_r['+'] = 62;
+ // = ix 64 (0x40) and mask is & 0x3F dropping the upper bit.
+                _base64_r['-'] = 62;
+ // = ix 64 (0x40) and mask is & 0x3F dropping the upper bit.
+                _base64_r['.'] = 62;
+ // = ix 64 (0x40) and mask is & 0x3F dropping the upper bit.
+                _base64_r['_'] = 63;
+ // = ix 64 (0x40) and mask is & 0x3F dropping the upper bit.
+                _base64_r['/'] = 63;
+ // = ix 64 (0x40) and mask is & 0x3F dropping the upper bit.
+                _base64_r[','] = 63;
+                while( *code ) {
+                    _base64_r[*code] = n++;
+                    code++;
+                }
+        }
 }
 uint8_t *DecodeBase64Ex( const char* buf, size_t length, size_t *outsize, const char *base64 )
 {
@@ -20167,6 +20262,10 @@ uint8_t *DecodeBase64Ex( const char* buf, size_t length, size_t *outsize, const 
 }
  // namespace sack {
 }
+#endif
+#ifdef _MSC_VER
+#  pragma warning( default:6011 26451 28182)
+#  pragma warning( default:26451 )
 #endif
 /*
  *
@@ -22632,16 +22731,63 @@ void BalanceBinaryTree( PTREEROOT root )
 	//Log( "=========" );;
 }
 //---------------------------------------------------------------------------
+#ifdef DEBUG_AVL_VALIDATION
+//-------------------------------------------------------------------------- -
+void ValidateTreeNode( PTREENODE node ) {
+	if( node->parent && !node->parent->flags.bRoot ) {
+		if( node->parent->children != ( ( node->parent->lesser ? ( node->parent->lesser->children + 1 ) : 0 )
+			+ ( node->parent->greater ? ( node->parent->greater->children + 1 ) : 0 )
+			) ) {
+			lprintf( "child account is failed." );
+			DebugBreak();
+		}
+		if( node->parent->depth <= node->depth ) {
+			lprintf( "Depth tracking is failure." );
+			DebugBreak();
+		}
+		else if( ( node->parent->depth - node->depth ) > 2 ) {
+			lprintf( "Depth tracking is failure(2)." );
+			DebugBreak();
+		}
+		if( node->parent->lesser != node && node->parent->greater != node ) {
+			lprintf( "My parent is not pointing at me." );
+			DebugBreak();
+		}
+	}
+	if( node->lesser ) {
+		if( node->lesser->parent != node ) {
+			lprintf( "My Lesser does not point back to me as a parent." );
+			DebugBreak();
+		}
+		ValidateTreeNode( node->lesser );
+	}
+	if( node->greater ) {
+		if( node->greater->parent != node ) {
+			lprintf( "My Greater does not point back to me as a parent." );
+			DebugBreak();
+		}
+		ValidateTreeNode( node->greater );
+	}
+}
+//-------------------------------------------------------------------------- -
+void ValidateTree( PTREEROOT root ) {
+	//lprintf( "--------------------------- VALIDATE TREE -----------------------------" );
+	//DumpTree( root, NULL );
+	ValidateTreeNode( root->tree );
+}
+#endif
 //---------------------------------------------------------------------------
 //static PTREENODE AVL_RotateToRight( PTREENODE node )
+                                    /*lprintf( "RTR %p %p %p", node, left, T2 );     */
 	                                                                                                              /* Perform rotation*/
 	                                                                                                   /* Update heights */
-#define AVL_RotateToRight(node)                                          {	                                                                        PTREENODE left = node->lesser;	                                   PTREENODE T2 = left->greater;	                                                                                                             node->children -= (left->children + 1);	                                                                                                   node->me[0] = left;	                                              left->me = node->me;	                                             left->parent = node->parent;	                                            left->greater = node;	                                            node->me = &left->greater;	                                       node->parent = left;	                                                                                                                      node->lesser = T2;	                                               if( T2 ) {		                                                       T2->me = &node->lesser;		                                  T2->parent = node;		                                       node->children += (left->greater->children + 1);		         left->children -= (left->greater->children + 1);	         }	                                                                left->children += (node->children + 1);	                                             {		                                                                int leftDepth, rightDepth;		                               leftDepth = node->lesser ? node->lesser->depth : 0;		      rightDepth = node->greater ? node->greater->depth : 0;		   if( leftDepth > rightDepth )			                             node->depth = leftDepth + 1;		                     else			                                                     node->depth = rightDepth + 1;		                                                                                             leftDepth = left->lesser ? left->lesser->depth : 0;		      rightDepth = left->greater ? left->greater->depth : 0;		   if( leftDepth > rightDepth ) {			                           left->depth = leftDepth + 1;		                     }		                                                        else			                                                     left->depth = rightDepth + 1;	                    }                                                                }
+#define AVL_RotateToRight(node)                                          {	                                                                        PTREENODE left = node->lesser;	                                   PTREENODE T2 = left->greater;	                   node->children -= (left->children + 1);	                                                                                                   node->me[0] = left;	                                              left->me = node->me;	                                             left->parent = node->parent;	                                            left->greater = node;	                                            node->me = &left->greater;	                                       node->parent = left;	                                                                                                                      node->lesser = T2;	                                               if( T2 ) {		                                                       T2->me = &node->lesser;		                                  T2->parent = node;		                                       node->children += (T2->children + 1);		         left->children -= (T2->children + 1);	         }	                                                                left->children += (node->children + 1);	                                             {		                                                                int leftDepth, rightDepth;		                               leftDepth = node->lesser ? node->lesser->depth : 0;		      rightDepth = node->greater ? node->greater->depth : 0;		   if( leftDepth > rightDepth )			                             node->depth = leftDepth + 1;		                     else			                                                     node->depth = rightDepth + 1;		                                                                                             leftDepth = left->lesser ? left->lesser->depth : 0;		      rightDepth = left->greater ? left->greater->depth : 0;		   if( leftDepth > rightDepth ) {			                           left->depth = leftDepth + 1;		                     }		                                                        else			                                                     left->depth = rightDepth + 1;	                    }                                                                }
 //---------------------------------------------------------------------------
 //static PTREENODE AVL_RotateToLeft( PTREENODE node )
+	                                    /*lprintf( "RTL %p %p %p", node, right, T2 );  */
 	                                                                                                             /* Perform rotation  */
 	                         /*  Update heights */
-#define AVL_RotateToLeft(node)                                           {	                                                                        PTREENODE right = node->greater;	                                 PTREENODE T2 = right->lesser;	                                                                                                             node->children -= (right->children + 1);	                                                                                                  node->me[0] = right;	                                             right->me = node->me;	                                            right->parent = node->parent;	                                          right->lesser = node;	                                            node->me = &right->lesser;	                                       node->parent = right;	                                            node->greater = T2;	                                              if( T2 ) {		                                                       T2->me = &node->greater;		                                 T2->parent = node;		                                       node->children += (right->lesser->children + 1);		         right->children -= (right->lesser->children + 1);	        }	                                                                right->children += (node->children + 1);	                                            {		                                                                int left, rightDepth;		                                    left = node->lesser ? node->lesser->depth : 0;		           rightDepth = node->greater ? node->greater->depth : 0;		   if( left > rightDepth )			                                  node->depth = left + 1;		                          else			                                                     node->depth = rightDepth + 1;		                                                                                             left = right->lesser ? right->lesser->depth : 0;		         rightDepth = right->greater ? right->greater->depth : 0;		 if( left > rightDepth )			                                  right->depth = left + 1;		                         else			                                                     right->depth = rightDepth + 1;	                   }                                                                }
+#define AVL_RotateToLeft(node)                                           {	                                                                        PTREENODE right = node->greater;	                                 PTREENODE T2 = right->lesser;	                node->children -= (right->children + 1);	                                                                                                  node->me[0] = right;	                                             right->me = node->me;	                                            right->parent = node->parent;	                                          right->lesser = node;	                                            node->me = &right->lesser;	                                       node->parent = right;	                                            node->greater = T2;	                                              if( T2 ) {		                                                       T2->me = &node->greater;		                                 T2->parent = node;		                                       node->children += (T2->children + 1);		         right->children -= (T2->children + 1);	        }	                                                                right->children += (node->children + 1);	                                            {		                                                                int left, rightDepth;		                                    left = node->lesser ? node->lesser->depth : 0;		           rightDepth = node->greater ? node->greater->depth : 0;		   if( left > rightDepth )			                                  node->depth = left + 1;		                          else			                                                     node->depth = rightDepth + 1;		                                                                                             left = right->lesser ? right->lesser->depth : 0;		         rightDepth = right->greater ? right->greater->depth : 0;		 if( left > rightDepth )			                                  right->depth = left + 1;		                         else			                                                     right->depth = rightDepth + 1;	                   }                                                                }
 //---------------------------------------------------------------------------
 #ifdef DEFINE_BINARYLIST_PERF_COUNTERS
 int zz;
@@ -22768,6 +22914,9 @@ int HangBinaryNode( PTREEROOT root, PTREENODE node )
 		root->tree = node;
 		node->me = &root->tree;
 		node->parent = (PTREENODE)root;
+#ifdef DEBUG_AVL_VALIDATION
+		ValidateTree( root );
+#endif
 		return 1;
 	}
 	 check = root->tree;
@@ -22815,14 +22964,6 @@ int HangBinaryNode( PTREEROOT root, PTREENODE node )
 		}
 		else
 		{
-#if SACK_BINARYLIST_USE_CHILD_COUNTS
-			int leftchildren = 0, rightchildren = 0;
-			if( check->lesser )
-				leftchildren = check->lesser->children;
-			if( check->greater )
-				rightchildren = check->greater->children;
-			if( leftchildren <= rightchildren )
-#else
 			// allow duplicates; but link in as a near node, either left
 			// or right... depending on the depth.
 			int leftdepth = 0, rightdepth = 0;
@@ -22831,7 +22972,6 @@ int HangBinaryNode( PTREEROOT root, PTREENODE node )
 			if( check->greater )
 				rightdepth = check->greater->depth;
 			if( leftdepth < rightdepth )
-#endif
 			{
 				if( check->lesser )
 					check = check->lesser;
@@ -22861,6 +23001,9 @@ int HangBinaryNode( PTREEROOT root, PTREENODE node )
 		*(int*)0 = 0;
 	}
 	AVLbalancer( root, node );
+#ifdef DEBUG_AVL_VALIDATION
+	ValidateTree( root );
+#endif
 	return 1;
 }
 //---------------------------------------------------------------------------
@@ -22923,51 +23066,103 @@ static void NativeRemoveBinaryNode( PTREEROOT root, PTREENODE node )
 			bottom->parent = node->parent;
 		} else {
 			node->children--;
+			bottom = node;
 			// have a lesser and a greater.
 			if( node->lesser->depth > node->greater->depth ) {
 				least = node->lesser;
-				while( least->greater ) least = least->greater;
+				while( least->greater ) { bottom = least; least = least->greater; }
 				if( least->lesser ) {
 					(*(least->lesser->me =least->me)) = least->lesser;
 					least->lesser->parent  = least->parent;
-					bottom = least->lesser;
 				} else {
 					(*(least->me)) = NULL;
-					bottom = least->parent;
 				}
 			} else {
 				least = node->greater;
-				while( least->lesser ) least = least->lesser;
+				while( least->lesser ) { bottom = least; least = least->lesser; }
 				if( least->greater ) {
 					(*(least->greater->me = least->me)) = least->greater;
 					least->greater->parent  = least->parent;
-					bottom = least->greater;
 				} else {
 					(*(least->me)) = NULL;
-					bottom = least->parent;
 				}
 			}
 		}
 		{
+			LOGICAL updating = 1;
 			backtrack = bottom;
 			do {
 				backtrack = backtrack->parent;
 				while( backtrack && ( no_children || backtrack != node ) ) {
 					backtrack->children--;
-					if( backtrack->lesser )
-						if( backtrack->greater ) {
-							int tmp1, tmp2;
-							if( (tmp1=backtrack->lesser->depth) > (tmp2=backtrack->greater->depth) )
-								backtrack->depth = tmp1 + 1;
-							else
-								backtrack->depth = tmp2 + 1;
-						} else
-							backtrack->depth = backtrack->lesser->depth + 1;
-					else
-						if( backtrack->greater )
-							backtrack->depth = backtrack->greater->depth + 1;
+					if( updating )
+						if( backtrack->lesser )
+							if( backtrack->greater ) {
+								int tmp1, tmp2;
+								PTREENODE z_, y_, x_;
+								if( (tmp1=backtrack->lesser->depth) > (tmp2=backtrack->greater->depth) ) {
+									if( backtrack->depth != ( tmp1 + 1 ) )
+										backtrack->depth = tmp1 + 1;
+									else
+										updating = 0;
+									if( (tmp1-tmp2) > 1 ) {
+										// unblanced here...
+										int tmp3, tmp4;
+										tmp3 = backtrack->lesser->lesser?backtrack->lesser->lesser->depth:0;
+										tmp4 = backtrack->lesser->greater?backtrack->lesser->greater->depth:0;
+										z_ = backtrack;
+										y_ = backtrack->lesser;
+										if( tmp3 > tmp4 ) {
+											x_ = backtrack->lesser->lesser;
+											// left-left Rotate Right(Z)
+											AVL_RotateToRight( z_ );
+										} else {
+											// left-right
+											x_ = backtrack->lesser->greater;
+											AVL_RotateToLeft( y_ );
+											AVL_RotateToRight( z_ );
+										}
+									}
+								} else {
+									if( backtrack->depth != ( tmp2 + 1 ) )
+										backtrack->depth = tmp2 + 1;
+									else
+										updating = 0;
+									if( (tmp2-tmp1) > 1 ) {
+										// unblanced here...
+										int tmp3, tmp4;
+										tmp3 = backtrack->greater->lesser?backtrack->greater->lesser->depth:0;
+										tmp4 = backtrack->greater->greater?backtrack->greater->greater->depth:0;
+										z_ = backtrack;
+										y_ = backtrack->greater;
+										if( tmp4 > tmp3 ) {
+											x_ = y_->greater;
+											// right-right Rotate Right(Z)
+											AVL_RotateToLeft( y_ );
+										} else {
+											// right-left
+											x_ = y_->lesser;
+											AVL_RotateToRight( y_ );
+											AVL_RotateToLeft( z_ );
+										}
+									}
+								}
+							} else
+									if( backtrack->depth != ( backtrack->lesser->depth + 1 ) )
+										backtrack->depth = backtrack->lesser->depth + 1;
+									else
+										updating = 0;
 						else
-							backtrack->depth = 0;
+							if( backtrack->greater )
+									if( backtrack->depth != ( backtrack->greater->depth + 1 ) )
+										backtrack->depth = backtrack->greater->depth + 1;
+									else
+										updating = 0;
+							else
+									if( backtrack->depth != 0 )
+										backtrack->depth = 0;
+									else
+										updating = 0;
 					backtrack = backtrack->parent;
 				}
 				if( least ) {
@@ -22984,6 +23179,9 @@ static void NativeRemoveBinaryNode( PTREEROOT root, PTREENODE node )
 			root->Destroy( userdata, userkey );
 		if( node )
 			DeleteFromSet( TREENODE, TreeNodeSet, node );
+#ifdef DEBUG_AVL_VALIDATION
+		ValidateTree( root );
+#endif
 		return;
 	}
 	lprintf( "Fatal RemoveBinaryNode could not find the root!" );
@@ -23032,7 +23230,9 @@ static void DestroyBinaryTreeNode( PTREEROOT root, PTREENODE node )
 			DestroyBinaryTreeNode( root, node->lesser );
 		if( node->greater )
 			DestroyBinaryTreeNode( root, node->greater );
-		NativeRemoveBinaryNode( root, node );
+		if( root->Destroy )
+			root->Destroy( node->userdata, node->key );
+		DeleteFromSet( TREENODE, TreeNodeSet, node );
 	}
 }
 void DestroyBinaryTree( PTREEROOT root )
@@ -25123,9 +25323,11 @@ TEXT_NAMESPACE_END
 using namespace sack::containers::text::http;
 #endif
 #endif
+#ifdef _MSC_VER
 // derefecing NULL pointers; the function wouldn't be called with a NULL.
 // and partial expressions in lower precision
-#pragma warning( disable:6011 26451)
+#  pragma warning( disable:6011 26451)
+#endif
 HTTP_NAMESPACE
 enum ReadChunkState {
 	READ_VALUE, READ_VALUE_CR, READ_VALUE_LF, READ_CR, READ_LF, READ_BYTES
@@ -25144,6 +25346,8 @@ struct HttpState {
 	PLIST fields;
  // list of HttpField *, taken in from the URL or content (get or post)
 	PLIST cgi_fields;
+ // parsed anchor (err... doesn't actually get this?)
+	PLIST anchor_fields;
 	int bLine;
 	size_t content_length;
  // content of the message, POST,PUT,PATCH and replies have this.
@@ -25179,7 +25383,7 @@ struct HttpState {
 		BIT_FIELD ssl : 1;
 		BIT_FIELD success : 1;
 	}flags;
-	uint32_t lock;
+	CRITICALSECTION lock;
 };
 struct HttpServer {
 	PCLIENT server;
@@ -25207,13 +25411,16 @@ PRELOAD( loadOption ) {
 #endif
 }
 static void lockHttp( struct HttpState *state ) {
-	while( LockedExchange( &state->lock, 1 ) );
+	EnterCriticalSec( &state->lock );
+	//while( LockedExchange( &state->lock, 1 ) );
 }
 static void unlockHttp( struct HttpState *state ) {
-	state->lock = 0;
+	LeaveCriticalSec( &state->lock );
+	//state->lock = 0;
 }
 void GatherHttpData( struct HttpState *pHttpState )
 {
+	lockHttp( pHttpState );
 	if( pHttpState->content_length )
 	{
 		PTEXT pMergedLine;
@@ -25245,6 +25452,7 @@ void GatherHttpData( struct HttpState *pHttpState )
 		//lprintf( "Setting content to partial... " );
 		pHttpState->content = pHttpState->partial;
 	}
+	unlockHttp( pHttpState );
 }
 static PTEXT  resolvePercents( PTEXT urlword ) {
 	PTEXT  url = BuildLine( urlword );
@@ -25253,7 +25461,6 @@ static PTEXT  resolvePercents( PTEXT urlword ) {
 	{
 		char *_url = GetText(url);
 		TEXTRUNE ch;
-		int outchar = 0;
 		char *newUrl = _url;
 		int decode = 0;
 		while( _url[0] ) {
@@ -25292,7 +25499,7 @@ static PTEXT  resolvePercents( PTEXT urlword ) {
 	}
 	return url;
 }
-void ProcessURL_CGI( struct HttpState *pHttpState, PTEXT params )
+void ProcessURL_CGI( struct HttpState *pHttpState, PLIST *cgi_fields,PTEXT params )
 {
 	PTEXT start = TextParse( params, "&=", NULL, 1, 1 DBG_SRC );
 	PTEXT next = start;
@@ -25301,16 +25508,19 @@ void ProcessURL_CGI( struct HttpState *pHttpState, PTEXT params )
 		if( tmp->format.position.offset.spaces ) {
 			SegBreak( tmp );
 			LineRelease( tmp );
+ // weren't actually any parameters.
 			if( tmp == start )
 				return;
+			else
+  // okay, stripped the end off, use the start...
+            break;
 		}
 	}
 	//lprintf( "Input was %s", GetText( params ) );
 	while( ( tmp = next ) )
 	{
 		PTEXT name = tmp;
-		/*PTEXT equals = */
-(next = NEXTLINE( tmp ));
+		next = NEXTLINE( tmp );
 		while( next && GetText( next )[0] != '=' )
 			next = NEXTLINE( next );
 		SegBreak( next );
@@ -25322,11 +25532,11 @@ void ProcessURL_CGI( struct HttpState *pHttpState, PTEXT params )
 		field->name = name?resolvePercents( name ):NULL;
 		field->value = value?resolvePercents( value ):NULL;
 		//lprintf( "Added %s=%s", GetText( field->name ), GetText( field->value ) );
-		AddLink( &pHttpState->cgi_fields, field );
+		AddLink( cgi_fields, field );
 		next = NEXTLINE( next );
 	}
  // otherwise it will have been relesaed with the assignment.
-	if( !GetLinkCount( pHttpState->cgi_fields ) )
+	if( !GetLinkCount( cgi_fields[0] ) )
 		LineRelease( start );
 }
 //int ProcessHttp( struct HttpState *pHttpState )
@@ -25556,11 +25766,12 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
 											}
 											else if( GetText(tmp)[0] == '?' )
 											{
-												ProcessURL_CGI( pHttpState, next );
+												ProcessURL_CGI( pHttpState, &pHttpState->cgi_fields, next );
 												next = NEXTLINE( next );
 											}
 											else if( GetText(tmp)[0] == '#' )
 											{
+												ProcessURL_CGI( pHttpState, &pHttpState->anchor_fields, next );
 												lprintf( "Page anchor of URL is lost(not saved)...%s %s"
 													, GetText( tmp )
 													, GetText( next ) );
@@ -25579,7 +25790,9 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
 												}
 											}
 										}
-										pHttpState->resource = resource_path;
+										if( resource_path ) resource_path->format.position.offset.spaces = 0;
+										pHttpState->resource = BuildLine( resource_path );
+										LineRelease( resource_path );
 									}
 									LineRelease( request );
 								}
@@ -25848,6 +26061,7 @@ struct HttpState *CreateHttpState( PCLIENT *pc )
 	struct HttpState *pHttpState;
 	pHttpState = New( struct HttpState );
 	MemSet( pHttpState, 0, sizeof( struct HttpState ) );
+	InitializeCriticalSec( &pHttpState->lock );
 	pHttpState->pvt_collector = VarTextCreate();
 	pHttpState->pc = pc;
 	return pHttpState;
@@ -25901,6 +26115,7 @@ void EndHttp( struct HttpState *pHttpState )
 }
 PTEXT GetHttpContent( struct HttpState *pHttpState )
 {
+	lockHttp( pHttpState );
 	if( pHttpState->read_chunks )
 	{
 		/* did a timeout happen? */
@@ -25908,6 +26123,7 @@ PTEXT GetHttpContent( struct HttpState *pHttpState )
 			return pHttpState->content;
 		return NULL;
 	}
+	unlockHttp( pHttpState );
 	if( pHttpState->content_length )
 		return pHttpState->content;
 	return NULL;
@@ -25916,29 +26132,35 @@ void ProcessHttpFields( struct HttpState *pHttpState, void (CPROC*f)( uintptr_t 
 {
 	INDEX idx;
 	struct HttpField *field;
+	lockHttp( pHttpState );
 	LIST_FORALL( pHttpState->fields, idx, struct HttpField *, field )
 	{
 		f( psv, field->name, field->value );
 	}
+	unlockHttp( pHttpState );
 }
 void ProcessCGIFields( struct HttpState *pHttpState, void (CPROC*f)( uintptr_t psv, PTEXT name, PTEXT value ), uintptr_t psv )
 {
 	INDEX idx;
 	struct HttpField *field;
+	lockHttp( pHttpState );
 	LIST_FORALL( pHttpState->cgi_fields, idx, struct HttpField *, field )
 	{
 		f( psv, field->name, field->value );
 	}
+	unlockHttp( pHttpState );
 }
 PTEXT GetHttpField( struct HttpState *pHttpState, CTEXTSTR name )
 {
 	INDEX idx;
 	struct HttpField *field;
+	lockHttp( pHttpState );
 	LIST_FORALL( pHttpState->fields, idx, struct HttpField *, field )
 	{
 		if( StrCaseCmp( GetText( field->name ), name ) == 0 )
 			return field->value;
 	}
+	unlockHttp( pHttpState );
 	return NULL;
 }
 PTEXT GetHttpResponce( struct HttpState *pHttpState )
@@ -25967,6 +26189,7 @@ PTEXT GetHttpMethod( struct HttpState *pHttpState )
 }
 void DestroyHttpStateEx( struct HttpState *pHttpState DBG_PASS )
 {
+	lockHttp( pHttpState );
 	//_lprintf(DBG_RELAY)( "Destroy http state... (should clear content too?" );
  // empties variables
 	EndHttp( pHttpState );
@@ -25976,6 +26199,8 @@ void DestroyHttpStateEx( struct HttpState *pHttpState DBG_PASS )
 	VarTextDestroy( &pHttpState->pvt_collector );
 	if( pHttpState->buffer )
 		Release( pHttpState->buffer );
+	unlockHttp( pHttpState );
+	DeleteCriticalSec( &pHttpState->lock );
 	Release( pHttpState );
 }
 void DestroyHttpState( struct HttpState *pHttpState ) {
@@ -26185,7 +26410,7 @@ PTEXT PostHttp( PTEXT address, PTEXT url, PTEXT content )
 }
 static void httpConnected( PCLIENT pc, int error ) {
 	if( error ) {
-		struct HttpState *state = (struct HttpState *)GetNetworkLong( pc, 0 );
+		//struct HttpState *state = (struct HttpState *)GetNetworkLong( pc, 0 );
 		RemoveClient( pc );
 		return;
 	}
@@ -26547,6 +26772,9 @@ HTTPState GetHttpState( PCLIENT pc ) {
 }
 HTTP_NAMESPACE_END
 #undef l
+#ifdef _MSC_VER
+#  pragma warning( default:6011 26451)
+#endif
 // not really, but close enough
 #define HTTP_SOURCE
 HTTP_NAMESPACE
@@ -27961,6 +28189,12 @@ struct file_system_interface {
 	uintptr_t (CPROC *fs_ioctl)(uintptr_t psvInstance, uintptr_t opCode, va_list args);
 	uint64_t( CPROC *find_get_ctime )(struct find_cursor *cursor);
 	uint64_t( CPROC *find_get_wtime )(struct find_cursor *cursor);
+	int ( CPROC* _mkdir )( uintptr_t psvInstance, const char* );
+	int ( CPROC* _rmdir )( uintptr_t psvInstance, const char* );
+                //file *
+    int (CPROC* _lock)(void*);
+              //file *
+    int (CPROC* _unlock)(void*);
 };
 /* \ \
    Parameters
@@ -28133,6 +28367,7 @@ FILESYS_PROC uint64_t FILESYS_API ConvertFileTimeToInt( const FILETIME *filetime
 #endif
 //# endif
 #ifndef __LINUX__
+// legacy 3.1 support.  Please use a FILE* instead.
 FILESYS_PROC  HANDLE FILESYS_API  sack_open ( INDEX group, CTEXTSTR filename, int opts, ... );
 FILESYS_PROC  LOGICAL FILESYS_API  sack_set_eof ( HANDLE file_handle );
 FILESYS_PROC  long  FILESYS_API   sack_tell( INDEX file_handle );
@@ -28151,14 +28386,38 @@ FILESYS_PROC  int FILESYS_API  sack_iclose ( INDEX file_handle );
 FILESYS_PROC  int FILESYS_API  sack_ilseek ( INDEX file_handle, size_t pos, int whence );
 FILESYS_PROC  int FILESYS_API  sack_iread ( INDEX file_handle, POINTER buffer, int size );
 FILESYS_PROC  int FILESYS_API  sack_iwrite ( INDEX file_handle, CPOINTER buffer, int size );
+/*
+	Enable per-thread mounts.
+	once you do this, you will have to provide the thread with some mounts.
+*/
+FILESYS_PROC void FILESYS_API sack_filesys_enable_thread_mounts( void );
 /* internal (c library) file system is registered as prority 1000.... lower priorities are checked first for things like
   ScanFiles(), fopen( ..., "r" ), ... exists(), */
 FILESYS_PROC struct file_system_mounted_interface * FILESYS_API sack_mount_filesystem( const char *name, struct file_system_interface *, int priority, uintptr_t psvInstance, LOGICAL writable );
+/*
+  Mount filesystem again, using an existing mount as a reference.
+  name is not required (NULL)
+  priority, if 0, will use the priority of the existing mount.
+  writeable will apply for writes through this mount.  If the previous mount
+  is writable and writable != 0, the new mount can be written, if either
+  is 0, this mount will not be writable.  (cannnot remount-write)
+*/
+FILESYS_PROC struct file_system_mounted_interface* FILESYS_API sack_remount_filesystem( const char* name, struct file_system_mounted_interface* oldMount, int priority, LOGICAL writable );
+/*
+  Remove a mount from chain of mounts.
+*/
 FILESYS_PROC void FILESYS_API sack_unmount_filesystem( struct file_system_mounted_interface *mount );
-// get a mounted filesystem by name
+/*
+   get a mounted filesystem by name.
+*/
 FILESYS_PROC struct file_system_mounted_interface * FILESYS_API sack_get_mounted_filesystem( const char *name );
-// returrn inteface used on the mounted filesystem.
+/*
+   returrn inteface used on the mounted filesystem.
+*/
 FILESYS_PROC struct file_system_interface * FILESYS_API sack_get_mounted_filesystem_interface( struct file_system_mounted_interface * );
+/*
+   Some file system interfaces might use this(?), This is probably already deprecated.
+*/
 FILESYS_PROC uintptr_t FILESYS_API sack_get_mounted_filesystem_instance( struct file_system_mounted_interface *mount );
 /* sometimes you want scanfiles to only scan external files...
   so this is how to get that mount */
@@ -28175,6 +28434,10 @@ FILESYS_PROC  FILE* FILESYS_API  sack_fsopenEx ( INDEX group, CTEXTSTR filename,
 FILESYS_PROC  FILE* FILESYS_API  sack_fsopen ( INDEX group, CTEXTSTR filename, CTEXTSTR opts, int share_mode );
 FILESYS_PROC  struct file_system_interface * FILESYS_API sack_get_filesystem_interface( CTEXTSTR name );
 FILESYS_PROC  void FILESYS_API sack_set_default_filesystem_interface( struct file_system_interface *fsi );
+/*
+ register a name for a file system interface object.
+ This interface provides all the callbacks used to access file and directory objects
+ */
 FILESYS_PROC  void FILESYS_API sack_register_filesystem_interface( CTEXTSTR name, struct file_system_interface *fsi );
 FILESYS_PROC  int FILESYS_API  sack_fclose ( FILE *file_file );
 FILESYS_PROC  size_t FILESYS_API  sack_fseekEx ( FILE *file_file, size_t pos, int whence, struct file_system_mounted_interface *mount );
@@ -28197,13 +28460,18 @@ FILESYS_PROC int FILESYS_API sack_fprintf( FILE *file, const char *format, ... )
 FILESYS_PROC int FILESYS_API sack_fputs( const char *format, FILE *file );
 FILESYS_PROC  int FILESYS_API  sack_unlinkEx ( INDEX group, CTEXTSTR filename, struct file_system_mounted_interface *mount );
 FILESYS_PROC  int FILESYS_API  sack_unlink ( INDEX group, CTEXTSTR filename );
+FILESYS_PROC  int FILESYS_API  sack_rmdirEx( INDEX group, CTEXTSTR filename, struct file_system_mounted_interface* mount );
 FILESYS_PROC  int FILESYS_API  sack_rmdir( INDEX group, CTEXTSTR filename );
+FILESYS_PROC  int FILESYS_API  sack_mkdirEx( INDEX group, CTEXTSTR filename, struct file_system_mounted_interface* mount );
+FILESYS_PROC  int FILESYS_API  sack_mkdir( INDEX group, CTEXTSTR filename );
 FILESYS_PROC  int FILESYS_API  sack_renameEx ( CTEXTSTR file_source, CTEXTSTR new_name, struct file_system_mounted_interface *mount );
 FILESYS_PROC  int FILESYS_API  sack_rename ( CTEXTSTR file_source, CTEXTSTR new_name );
 FILESYS_PROC  void FILESYS_API sack_set_common_data_application( CTEXTSTR name );
 FILESYS_PROC  void FILESYS_API sack_set_common_data_producer( CTEXTSTR name );
 FILESYS_PROC  uintptr_t FILESYS_API  sack_ioctl( FILE *file, uintptr_t opCode, ... );
 FILESYS_PROC  uintptr_t FILESYS_API  sack_fs_ioctl( struct file_system_mounted_interface *mount, uintptr_t opCode, ... );
+FILESYS_PROC int FILESYS_API sack_flock( FILE* file );
+FILESYS_PROC int FILESYS_API sack_funlock( FILE* file );
 #ifndef NO_FILEOP_ALIAS
 #  ifndef NO_OPEN_MACRO
 # define open(a,...) sack_iopen(0,a,##__VA_ARGS__)
@@ -28229,6 +28497,8 @@ FILESYS_PROC  uintptr_t FILESYS_API  sack_fs_ioctl( struct file_system_mounted_i
 # define _lcreat(a,b) sack_creat(0,a,b)
 # define remove(a)   sack_unlink(0,a)
 # define unlink(a)   sack_unlink(0,a)
+# define rmdir(a)   sack_rmdir(0,a)
+# define mkdir(a)   sack_mkdir(0,a)
 #endif
 #endif
  //NO_FILEOP_ALIAS
@@ -28389,50 +28659,52 @@ namespace sack {
 #    pragma pack (push, 1)
 #  endif
 // custom allocer, use heap_chunk_tag
-PREFIX_PACKED struct malloc_chunk_tag
+struct malloc_chunk_tag
 {
-   // if 0 - block is free
-	uint16_t dwOwners;
-      // extra bytes 4/12 typical, sometimes pad untill next. (alignment extra bytes)
-	uint16_t dwPad;
-#ifdef __64__
-	uint32_t pad;
-#endif
-  // limited to allocating 4 billion bytes...
 	uintptr_t dwSize;
 #ifdef ENABLE_NATIVE_MALLOC_PROTECTOR
 	uint32_t LeadProtect[2];
 #endif
+	PREFIX_PACKED struct {
+   // if 0 - block is free
+		uint16_t dwOwners;
+      // extra bytes 4/12 typical, sometimes pad untill next. (alignment extra bytes)
+		uint16_t dwPad;
  // this is additional to subtract to get back to start (aligned allocate)
-	uint16_t alignment;
+		uint16_t alignment;
  // this is additional to subtract to get back to start (aligned allocate)
-	uint16_t to_chunk_start;
+		uint16_t to_chunk_start;
+	} PACKED info;
  // uint8_t is the smallest valid datatype could be _0
 	uint8_t byData[1];
-} PACKED;
-PREFIX_PACKED struct heap_chunk_tag
+};
+struct heap_chunk_tag
 {
-            // if 0 - block is free
-	uint16_t dwOwners;
-   // extra bytes 4/12 typical, sometimes pad untill next.
-	uint16_t dwPad;
+ // *next, **me; &next is also &this block.
+	DeclareLink( struct heap_chunk_tag );
 	// which is < ( CHUNK_SIZE + nMinAllocate )
 	// real size is then dwSize - dwPad.
 	// this is actually where the end of block tag(s) should begin!
-  // limited to allocating 4 billion bytes...
 	uintptr_t dwSize;
          // save some math backwards...
 	struct heap_chunk_tag *pPrior;
+   // needed for release to find free linked list head
   // pointer to master allocation struct (pMEM)
-	struct memory_block_tag * pRoot;
-	DeclareLink( struct heap_chunk_tag );
+	struct memory_block_tag *pRoot;
+	PREFIX_PACKED struct {
+            // if 0 - block is free
+		uint16_t dwOwners;
+   // extra bytes 4/12 typical, sometimes pad untill next.
+		uint16_t dwPad;
  // this is additional to subtract to get back to start (aligned allocate)
-	uint16_t alignment;
+		uint16_t alignment;
+      // to_chunk_start is computed from byData offset by alignment minus a uin16_t.
  // this is additional to subtract to get back to start (aligned allocate)
-	uint16_t to_chunk_start;
+		uint16_t to_chunk_start;
+	} PACKED info;
  // uint8_t is the smallest valid datatype could be _0
 	uint8_t byData[1];
-} PACKED;
+};
 // a chunk of memory in a heap space, heaps are also tracked, so extents
 // of that space are known, therefore one can identify a heap chunk
 // from a non-heap (malloc?) chunk.
@@ -28669,12 +28941,12 @@ struct global_memory_tag global_memory_data = { 0x10000 * 0x08, 1, 1
 #endif
 #define MAGIC_SIZE sizeof( void* )
 #ifdef __64__
-#define BLOCK_TAG(pc)  (*(uint64_t*)((pc)->byData + (pc)->dwSize - (pc)->dwPad ))
+#define BLOCK_TAG(pc)  (*(uint64_t*)((pc)->byData + (pc)->dwSize - (pc)->info.dwPad ))
 // so when we look at memory this stamp is 0123456789ABCDEF
 #define TAG_FORMAT_MODIFIER "ll"
 #define BLOCK_TAG_ID 0xefcdab8967452301LL
 #else
-#define BLOCK_TAG(pc)  (*(uint32_t*)((pc)->byData + (pc)->dwSize - (pc)->dwPad ))
+#define BLOCK_TAG(pc)  (*(uint32_t*)((pc)->byData + (pc)->dwSize - (pc)->info.dwPad ))
 // so when we look at memory this stamp is 12345678
 #define TAG_FORMAT_MODIFIER "l"
 #define BLOCK_TAG_ID 0x78563412L
@@ -28850,111 +29122,34 @@ static void DumpSection( PCRITICALSECTION pcs )
 		int32_t  EnterCriticalSecNoWaitEx( PCRITICALSECTION pcs, THREAD_ID *prior DBG_PASS )
 		{
 			THREAD_ID dwCurProc;
-#ifdef LOG_DEBUG_CRITICAL_SECTIONS
-#  ifndef NO_LOGGING
-			if( g.bLogCritical > 0 && g.bLogCritical < 2 )
-				ll__lprintf( DBG_RELAY )("Attempt enter critical Section %" _64fx " %" _64fx " %" _64fx " %08" _32fx
-					, pcs->dwThreadID
-					, pcs->dwThreadWaiting
-					, (prior?(*prior):-1)
-					, pcs->dwLocks);
-#  endif
-#endif
 			// need to aquire lock on section...
 			// otherwise our old mechanism allowed an enter in another thread
 			// to falsely identify the section as its own while the real owner
 			// tried to exit...
-			if( XCHG( &pcs->dwUpdating, 1 ) )
-				return -1;
-#ifdef USE_CUSTOM_ALLOCER
-			dwCurProc = _GetMyThreadID();
-#else
-			dwCurProc = GetMyThreadID();
-#endif
-			if( !AND_NOT_SECTION_LOGGED_WAIT(pcs->dwLocks) )
-			{
+			if( XCHG( &pcs->dwUpdating, 1 ) ) return -1;
+			dwCurProc = GetThisThreadID();
+			if( !pcs->dwLocks ) {
 				// section is unowned...
-				if( pcs->dwThreadWaiting )
-				{
+				if( pcs->dwThreadWaiting ) {
 					// someone was waiting for it...
-					if( pcs->dwThreadWaiting != dwCurProc )
-					{
+					if( pcs->dwThreadWaiting != dwCurProc ) {
 						if( prior ) {
-							if( !(*prior) ) {
-#ifdef LOG_DEBUG_CRITICAL_SECTIONS
-								ll__lprintf( DBG_RELAY )("waiter is not myself... this is more recent than him... claim now. %" _64fx " %" _64fx " %" _64fx, pcs->dwThreadWaiting, prior ? (*prior) : -1LL, pcs->dwThreadID);
-#endif
-								// this would stack me on top anyway so just allow the waitier to keep waiting....
-#ifdef DEBUG_CRITICAL_SECTIONS
-#  ifdef _DEBUG
-								pcs->pFile[pcs->nPrior] = pFile;
-								pcs->nLine[pcs->nPrior] = nLine;
-#  else
-								pcs->pFile[pcs->nPrior] = __FILE__;
-								pcs->nLine[pcs->nPrior] = __LINE__;
-#  endif
-								pcs->nLineCS[pcs->nPrior] = __LINE__;
-								pcs->isLock[pcs->nPrior] = 1;
-								pcs->dwThreadPrior[pcs->nPrior] = dwCurProc;
-								pcs->nPrior = (pcs->nPrior + 1) % MAX_SECTION_LOG_QUEUE;
-#endif
-							}
-							else {
-#ifdef LOG_DEBUG_CRITICAL_SECTIONS
-								ll__lprintf( DBG_RELAY )("waiter is not myself... AND am in stack of waiter. %" _64fx " %" _64fx " %" _64fx, pcs->dwThreadWaiting, prior ? (*prior) : -1LL, pcs->dwThreadID);
-#endif
+							if( *prior ) {
 								// prior is set, so someone has set their prior to me....
 								pcs->dwUpdating = 0;
 								return 0;
 							}
 						}
-						else {
-#ifdef LOG_DEBUG_CRITICAL_SECTIONS
-							ll__lprintf( DBG_RELAY )("Waiter which is quick-wait does not sleep; claiming section... %" _64fx " %" _64fx " %" _64fx, pcs->dwThreadWaiting, prior ? (*prior) : -1LL, pcs->dwThreadID);
-#endif
-#ifdef DEBUG_CRITICAL_SECTIONS
-#  ifdef _DEBUG
-							pcs->pFile[pcs->nPrior] = pFile;
-							pcs->nLine[pcs->nPrior] = nLine;
-#  else
-							pcs->pFile[pcs->nPrior] = __FILE__;
-							pcs->nLine[pcs->nPrior] = __LINE__;
-#  endif
-							pcs->nLineCS[pcs->nPrior] = __LINE__;
-							pcs->isLock[pcs->nPrior] = 1;
-							pcs->dwThreadPrior[pcs->nPrior] = dwCurProc;
-							pcs->nPrior = (pcs->nPrior + 1) % MAX_SECTION_LOG_QUEUE;
-#endif
-						}
 					}
  //  waiting is me
 					else {
-#ifdef LOG_DEBUG_CRITICAL_SECTIONS
-						ll_lprintf( "@@@ Woke up after waiting, set prior waiter as next waiter... %" _64fx, prior ? (*prior) : -1LL );
-#endif
 						if( prior && (*prior) ) {
-							if( (*prior) == 1 ) {
-								pcs->dwThreadWaiting = 0;
-							}
-							else
-								pcs->dwThreadWaiting = (*prior);
+							if( (*prior) == 1 ) pcs->dwThreadWaiting = 0;
+							else pcs->dwThreadWaiting = (*prior);
 							(*prior) = 0;
 						}
 						else
 							pcs->dwThreadWaiting = 0;
-#ifdef DEBUG_CRITICAL_SECTIONS
-#  ifdef _DEBUG
-						pcs->pFile[pcs->nPrior] = pFile;
-						pcs->nLine[pcs->nPrior] = nLine;
-#  else
-						pcs->pFile[pcs->nPrior] = __FILE__;
-						pcs->nLine[pcs->nPrior] = __LINE__;
-#  endif
-						pcs->nLineCS[pcs->nPrior] = __LINE__;
-						pcs->isLock[pcs->nPrior] = 1;
-						pcs->dwThreadPrior[pcs->nPrior] = dwCurProc;
-						pcs->nPrior = (pcs->nPrior + 1) % MAX_SECTION_LOG_QUEUE;
-#endif
 					}
 				}
 				else {
@@ -28963,22 +29158,7 @@ static void DumpSection( PCRITICALSECTION pcs )
 						if( *prior != 1 )
 							DebugBreak();
 					}
-#ifdef LOG_DEBUG_CRITICAL_SECTIONS
-					ll_lprintf( "Claimed critical section." );
-#endif
-#ifdef DEBUG_CRITICAL_SECTIONS
-#  ifdef _DEBUG
-					pcs->pFile[pcs->nPrior] = pFile;
-					pcs->nLine[pcs->nPrior] = nLine;
-#  else
-					pcs->pFile[pcs->nPrior] = __FILE__;
-					pcs->nLine[pcs->nPrior] = __LINE__;
-#  endif
-					pcs->nLineCS[pcs->nPrior] = __LINE__;
-					pcs->isLock[pcs->nPrior] = 1;
-					pcs->dwThreadPrior[pcs->nPrior] = dwCurProc;
-					pcs->nPrior = (pcs->nPrior + 1) % MAX_SECTION_LOG_QUEUE;
-#endif
+					//ll_lprintf( "Claimed critical section." );
 				}
  // claim the section and return success
 				pcs->dwThreadID = dwCurProc;
@@ -28990,42 +29170,8 @@ static void DumpSection( PCRITICALSECTION pcs )
 			{
 				// otherwise 1) I won the thread already... (threadID == me )
 				pcs->dwLocks++;
-#ifdef DEBUG_CRITICAL_SECTIONS
-#  ifndef NO_LOGGING
-#    ifdef LOG_DEBUG_CRITICAL_SECTIONS
-				if( g.bLogCritical > 0 && g.bLogCritical < 2 )
-					ll_lprintf( "Locks are %08" _32fx, pcs->dwLocks );
-#    endif
-				if( (pcs->dwLocks & 0xFFFFF) > 1 )
-				{
-#    ifdef LOG_DEBUG_CRITICAL_SECTIONS
-					if( g.bLogCritical > 0 && g.bLogCritical < 2 )
-						_xlprintf( 1 DBG_RELAY )("!!!!  %p  Multiple Double entry! %" _32fx, pcs, pcs->dwLocks);
-#    endif
-				}
-#  endif
-#  ifdef _DEBUG
-				pcs->pFile[pcs->nPrior] = pFile;
-				pcs->nLine[pcs->nPrior] = nLine;
-#  else
-				pcs->pFile[pcs->nPrior] = __FILE__;
-				pcs->nLine[pcs->nPrior] = __LINE__;
-#  endif
-				pcs->nLineCS[pcs->nPrior] = __LINE__;
-				pcs->isLock[pcs->nPrior] = 1;
-				pcs->dwThreadPrior[pcs->nPrior] = dwCurProc;
-				pcs->nPrior = (pcs->nPrior + 1) % MAX_SECTION_LOG_QUEUE;
-#endif
 				pcs->dwUpdating = 0;
 				return 1;
-			}
-			//if( !(AND_SECTION_LOGGED_WAIT(pcs->dwLocks)) )
-			{
-#ifdef LOG_DEBUG_CRITICAL_SECTIONS
-				pcs->dwLocks |= SECTION_LOGGED_WAIT;
-				if( g.bLogCritical )
-					ll_lprintf( "Waiting on critical section owned by %s(%d) %08lx %." _64fx, (pcs->pFile) ? (pcs->pFile) : "Unknown", pcs->nLine, pcs->dwLocks, pcs->dwThreadID );
-#endif
 			}
 			// if the prior is wanted to be saved...
 			if( prior )
@@ -29046,11 +29192,6 @@ static void DumpSection( PCRITICALSECTION pcs )
 								DebugBreak();
 								(*prior) = 0;
 							}
-							else {
-#ifdef LOG_DEBUG_CRITICAL_SECTIONS
-								ll_lprintf( "Someone stole the critical section that we were wiating on before we reentered. fail. %" _64fx " %" _64fx " %" _64fx, pcs->dwThreadWaiting, dwCurProc, *prior );
-#endif
-							}
 						}
 						// assume that someone else kept our waiting ID...
 						// cause we're not the one waiting, and we have someone elses ID..
@@ -29058,33 +29199,15 @@ static void DumpSection( PCRITICALSECTION pcs )
 						pcs->dwUpdating = 0;
 						return 0;
 					}
-					else {
-						// waiting is the current threadproc; but someone claimed the section ahead of this.
-					}
 				}
 				else if( pcs->dwThreadWaiting != dwCurProc )
 				{
-					if( pcs->dwThreadWaiting ) {
-#ifdef LOG_DEBUG_CRITICAL_SECTIONS
-						if( g.bLogCritical )
-							ll_lprintf( "@@@ Setting prior to % " _64fx " and prior was %" _64fx, pcs->dwThreadWaiting, (*prior) );
-#endif
-						*prior = pcs->dwThreadWaiting;
-					}
-					else {
-#ifdef LOG_DEBUG_CRITICAL_SECTIONS
-						if( g.bLogCritical )
-							ll_lprintf( "@@@ Setting prior to % " _64fx " and prior was %" _64fx, pcs->dwThreadWaiting, (*prior) );
-#endif
-						*prior = 1;
-					}
+					if( pcs->dwThreadWaiting ) *prior = pcs->dwThreadWaiting;
+					else *prior = 1;
 					pcs->dwThreadWaiting = dwCurProc;
 				}
 			}
-			else
-			{
-				// else no prior... so don't set the dwthreadwaiting...
-			}
+			// else no prior... so don't set the dwthreadwaiting...
 			pcs->dwUpdating = 0;
 			return 0;
 		}
@@ -29100,96 +29223,33 @@ static void DumpSection( PCRITICALSECTION pcs )
 			THREAD_ID dwCurProc;
 			while( XCHG( &pcs->dwUpdating, 1 ) )
 				Relinquish();
-#ifdef USE_CUSTOM_ALLOCER
-			dwCurProc = _GetMyThreadID();
-#else
-			dwCurProc = GetMyThreadID();
-#endif
-#  ifdef LOG_DEBUG_CRITICAL_SECTIONS
-#    ifndef NO_LOGGING
-			if( g.bLogCritical > 0 && g.bLogCritical < 2 )
-				ll__lprintf( DBG_RELAY )("Locked %p for leaving...", pcs);
-#    endif
-#  endif
-			if( !AND_NOT_SECTION_LOGGED_WAIT(pcs->dwLocks) )
+			dwCurProc = GetThisThreadID();
+			if( !pcs->dwLocks )
 			{
-				if( g.bLogCritical > 0 && g.bLogCritical < 2 )
-					ll_lprintf( DBG_FILELINEFMT "Leaving a blank critical section" DBG_RELAY );
+				ll_lprintf( DBG_FILELINEFMT "Leaving a blank critical section (excessive leaves?)" DBG_RELAY );
 				DebugBreak();
-				//while( 1 );
 				pcs->dwUpdating = 0;
 				return FALSE;
 			}
-#ifdef DEBUG_CRITICAL_SECTIONS
-			//if( g.bLogCritical > 1 )
-			// ll_lprintf( DBG_FILELINEFMT ( "Leaving %" _64fx"x %" _64fx"x %p" ) DBG_RELAY ,pcs->dwThreadID, dwCurProc, pcs );
-#endif
 			if( pcs->dwThreadID == dwCurProc )
 			{
 				pcs->dwLocks--;
-				if( AND_SECTION_LOGGED_WAIT(pcs->dwLocks) )
+				if( !pcs->dwLocks )
 				{
-					if( !AND_NOT_SECTION_LOGGED_WAIT(pcs->dwLocks) )
+					pcs->dwThreadID = 0;
+					if( pcs->dwThreadWaiting )
 					{
-#ifdef DEBUG_CRITICAL_SECTIONS
-#  ifdef _DEBUG
-						pcs->pFile[pcs->nPrior] = pFile;
-						pcs->nLine[pcs->nPrior] = nLine;
-#  else
-						pcs->pFile[pcs->nPrior] = __FILE__;
-						pcs->nLine[pcs->nPrior] = __LINE__;
-#  endif
-						pcs->nLineCS[pcs->nPrior] = __LINE__;
-						pcs->isLock[pcs->nPrior] = 0;
-						pcs->dwThreadPrior[pcs->nPrior] = dwCurProc;
-						pcs->nPrior = (pcs->nPrior + 1) % MAX_SECTION_LOG_QUEUE;
-#endif
-#ifdef LOG_DEBUG_CRITICAL_SECTIONS
-						pcs->dwLocks = 0;
-#endif
-						pcs->dwThreadID = 0;
 						pcs->dwUpdating = 0;
  // allow whoever was waiting to go now...
 						Relinquish();
 						return TRUE;
 					}
 				}
-				else
-				{
-					if( !pcs->dwLocks ) {
-#ifdef DEBUG_CRITICAL_SECTIONS
-#  ifdef _DEBUG
-						pcs->pFile[pcs->nPrior] = pFile;
-						pcs->nLine[pcs->nPrior] = nLine;
-#  else
-						pcs->pFile[pcs->nPrior] = __FILE__;
-						pcs->nLine[pcs->nPrior] = __LINE__;
-#  endif
-						pcs->nLineCS[pcs->nPrior] = __LINE__;
-						pcs->isLock[pcs->nPrior] = 1;
-						pcs->dwThreadPrior[pcs->nPrior] = dwCurProc;
-						pcs->nPrior = (pcs->nPrior + 1) % MAX_SECTION_LOG_QUEUE;
-#endif
-						pcs->dwThreadID = 0;
-					}
-				}
-				// don't wake the prior (if there is one sleeping)
-				// pcs->dwThreadID = 0;
 			}
 			else
 			{
-#ifdef DEBUG_CRITICAL_SECTIONS
-				{
-					_xlprintf( 0 DBG_RELAY )("Sorry - you can't leave a section owned by %" _64fx " %08lx %s(%d)..."
-						, pcs->dwThreadID
-						, pcs->dwLocks
-						, (pcs->pFile[(pcs->nPrior + 15) % MAX_SECTION_LOG_QUEUE]) ? (pcs->pFile[(pcs->nPrior + 15) % MAX_SECTION_LOG_QUEUE]) : "Unknown", pcs->nLine[(pcs->nPrior + 15) % MAX_SECTION_LOG_QUEUE]);
-					DebugBreak();
-				}
-#else
-				lprintf( "Sorry - you can't leave a section you don't own..." );
+				lprintf( "Sorry - you can't leave a section you don't own...(shouldn't have been past your Enter anyway?)" );
 				DebugBreak();
-#endif
 				pcs->dwUpdating = 0;
 				return FALSE;
 			}
@@ -29984,7 +30044,12 @@ uintptr_t GetFileSize( int fd )
 #ifdef DEBUG_OPEN_SPACE
 					ll_lprintf( "Setting size to size of file (which was larger.." );
 #endif
-					(*dwSize) = (uintptr_t)(lSize.QuadPart);
+					if( *dwSize ) {
+						SetFilePointer( hFile, (LONG) * (int32_t*)dwSize, (sizeof( dwSize[0] ) > 4) ? (PLONG)(((int32_t*)dwSize) + 1) : NULL, FILE_BEGIN );
+						SetEndOfFile( hFile );
+					}
+					else
+						(*dwSize) = (uintptr_t)(lSize.QuadPart);
 				}
 			}
 			else
@@ -30147,11 +30212,14 @@ uintptr_t GetFileSize( int fd )
 	pMem->dwHeapID = 0xbab1f1ea;
 	pMem->pFirstFree = NULL;
 	pMem->dwFlags = 0;
+        // this uses the address of next to assign a member.
+        // next is the first member of this structure;
+        // even if it is packed, there's no issue surely with taking the address of the first member?
 	LinkThing( pMem->pFirstFree, pMem->pRoot );
 	InitializeCriticalSec( &pMem->cs );
 	pMem->pRoot[0].dwSize = dwSize - MEM_SIZE - CHUNK_SIZE;
-	pMem->pRoot[0].dwPad = MAGIC_SIZE;
-	pMem->pRoot[0].dwOwners = 0;
+	pMem->pRoot[0].info.dwPad = MAGIC_SIZE;
+	pMem->pRoot[0].info.dwOwners = 0;
 	pMem->pRoot[0].pRoot  = pMem;
 	pMem->pRoot[0].pPrior = NULL;
 #ifdef _DEBUG
@@ -30166,7 +30234,7 @@ uintptr_t GetFileSize( int fd )
 		BLOCK_TAG( pMem->pRoot ) = BLOCK_TAG_ID;
 	}
 	{
-		pMem->pRoot[0].dwPad += 2*MAGIC_SIZE;
+		pMem->pRoot[0].info.dwPad += 2*MAGIC_SIZE;
 		BLOCK_FILE( pMem->pRoot ) = __FILE__;
 		BLOCK_LINE( pMem->pRoot ) = __LINE__;
 	}
@@ -30296,6 +30364,9 @@ POINTER HeapAllocateAlignedEx( PMEM pHeap, size_t dwSize, uint16_t alignment DBG
 {
    // if a heap is passed, it's a private heap, and allocation is as normal...
 	uint32_t dwAlignPad = 0;
+#if defined( __64__ )
+	if( !alignment ) alignment = 8;
+#endif
 	if( alignment ) {
 		dwSize += (alignment - 1);
 		dwAlignPad = (alignment - 1);
@@ -30313,9 +30384,9 @@ POINTER HeapAllocateAlignedEx( PMEM pHeap, size_t dwSize, uint16_t alignment DBG
 #else
 		pc = (PMALLOC_CHUNK)malloc( sizeof( MALLOC_CHUNK ) - 1 + dwSize );
 #endif
-		pc->dwOwners = 1;
+		pc->info.dwOwners = 1;
+		pc->info.dwPad = dwAlignPad;
 		pc->dwSize = dwSize;
-		pc->dwPad = dwAlignPad;
 #ifndef NO_LOGGING
 #  ifdef _DEBUG
 		if( g.bLogAllocate )
@@ -30330,18 +30401,16 @@ POINTER HeapAllocateAlignedEx( PMEM pHeap, size_t dwSize, uint16_t alignment DBG
 			mask = masks[alignment];
 		if( alignment && ( (uintptr_t)pc->byData & ~mask) ) {
 			uintptr_t retval = ((((uintptr_t)pc->byData) + (alignment - 1)) & mask);
-			//pc->dwPad = (uint16_t)( dwAlignPad - sizeof(uintptr_t) );
+			//pc->info.dwPad = (uint16_t)( dwAlignPad - sizeof(uintptr_t) );
 			// to_chunk_start is the last thing in chunk, so it's pre-allocated space
- /*pc->alignemnt = */
-			((uint16_t*)(retval - sizeof(uint32_t)))[0] =alignment;
- /*pc->to_chunk_start = */
-			((uint16_t*)(retval - sizeof(uint32_t)))[1] =(uint16_t)(((((uintptr_t)pc->byData) + (alignment - 1)) & mask) - (uintptr_t)pc->byData);
+			((uint16_t*)(retval - sizeof(uint32_t)))[0] = alignment;
+			((uint16_t*)(retval - sizeof(uint32_t)))[1] = (uint16_t)(((((uintptr_t)pc->byData) + (alignment - 1)) & mask) - (uintptr_t)pc->byData);
  //-V773
 			return (POINTER)retval;
 		}
 		else {
-			pc->alignment = 0;
-			pc->to_chunk_start = 0;
+			pc->info.alignment = 0;
+			pc->info.to_chunk_start = 0;
 			return pc->byData;
 		}
 	}
@@ -30353,6 +30422,11 @@ POINTER HeapAllocateAlignedEx( PMEM pHeap, size_t dwSize, uint16_t alignment DBG
 		PSPACE pMemSpace;
 		uint32_t dwPad = 0;
 		uint32_t dwMin = 0;
+		intptr_t mask;
+		if( alignment > ( sizeof( masks ) / sizeof( masks[0] ) ) )
+			mask = ( ~( (uintptr_t)( alignment - 1 ) ) );
+		else
+			mask = masks[alignment];
 		//ll__lprintf(DBG_RELAY)( "..." );
 #ifdef _DEBUG
 		if( !g.bDisableAutoCheck )
@@ -30368,16 +30442,15 @@ POINTER HeapAllocateAlignedEx( PMEM pHeap, size_t dwSize, uint16_t alignment DBG
 		if( !pHeap )
 			pHeap = g.pMemInstance;
 		pMem = GrabMem( pHeap );
+		dwPad = dwAlignPad;
 #ifdef __64__
-		dwPad = (((dwSize + 7) & 0xFFFFFFFFFFFFFFF8) - dwSize);
- // fix size to allocate at least _32s which
-		dwSize += 7;
-		dwSize &= 0xFFFFFFFFFFFFFFF8;
+		//dwPad = (uint32_t)( (((dwSize + 7) & 0xFFFFFFFFFFFFFFF8) - dwSize) );
+		//dwSize += 7; // fix size to allocate at least _32s which
+		//dwSize &= 0xFFFFFFFFFFFFFFF8;
 #else
-		dwPad = (((dwSize + 3) & 0xFFFFFFFC) -dwSize);
- // fix size to allocate at least _32s which
-		dwSize += 3;
-		dwSize &= 0xFFFFFFFC;
+		//dwPad = (((dwSize + 3) & 0xFFFFFFFC) -dwSize);
+		//dwSize += 3; // fix size to allocate at least _32s which
+		//dwSize &= 0xFFFFFFFC;
 #endif
 #ifdef _DEBUG
 		if( pMem && !(pMem->dwFlags & HEAP_FLAG_NO_DEBUG) )
@@ -30417,9 +30490,9 @@ POINTER HeapAllocateAlignedEx( PMEM pHeap, size_t dwSize, uint16_t alignment DBG
  // must allocate it all.
 					if( ( pc->dwSize - dwSize ) <= ( dwMin + CHUNK_SIZE + g.nMinAllocateSize ) )
 					{
-						pc->dwPad = (uint16_t)(dwPad + ( pc->dwSize - dwSize ));
+						pc->info.dwPad = (uint16_t)(dwPad + ( pc->dwSize - dwSize ));
 						UnlinkThing( pc );
-						pc->dwOwners = 1;
+						pc->info.dwOwners = 1;
  // successful allocation....
 						break;
 					}
@@ -30430,18 +30503,18 @@ POINTER HeapAllocateAlignedEx( PMEM pHeap, size_t dwSize, uint16_t alignment DBG
 						PHEAP_CHUNK next;
 						next = (PHEAP_CHUNK)( pc->byData + pc->dwSize );
 						pNew = (PHEAP_CHUNK)(pc->byData + dwSize);
-						pNew->dwPad = 0;
+						pNew->info.dwPad = 0;
 						pNew->dwSize = ((pc->dwSize - CHUNK_SIZE) - dwSize);
 #ifdef _DEBUG
 						if( pNew->dwSize > 0x80000000 )
 							DebugBreak();
 						if( pMem && !(pMem->dwFlags & HEAP_FLAG_NO_DEBUG) )
 						{
-							pNew->dwPad += MAGIC_SIZE * 2;
+							pNew->info.dwPad += MAGIC_SIZE * 2;
 						}
 						if( !g.bDisableDebug )
 						{
-							pNew->dwPad += MAGIC_SIZE;
+							pNew->info.dwPad += MAGIC_SIZE;
 							BLOCK_TAG( pNew ) = BLOCK_TAG_ID;
 						}
 						if( pMem && !(pMem->dwFlags & HEAP_FLAG_NO_DEBUG) )
@@ -30450,7 +30523,7 @@ POINTER HeapAllocateAlignedEx( PMEM pHeap, size_t dwSize, uint16_t alignment DBG
 							BLOCK_LINE( pNew ) = nLine;
 						}
 #endif
-						pc->dwPad = (uint16_t)dwPad;
+						pc->info.dwPad = (uint16_t)dwPad;
  // set old size?  this can wait until we have the block.
 						pc->dwSize = dwSize;
 						if( pc->dwSize & 0x80000000 )
@@ -30458,15 +30531,17 @@ POINTER HeapAllocateAlignedEx( PMEM pHeap, size_t dwSize, uint16_t alignment DBG
   // not beyond end of memory...
 						if( (uintptr_t)next - (uintptr_t)pCurMem < (uintptr_t)pCurMem->dwSize )
 							next->pPrior = pNew;
-						pNew->dwOwners = 0;
+						pNew->info.dwOwners = 0;
+#ifdef _DEBUG
 						pNew->pRoot = pc->pRoot;
+#endif
 						pNew->pPrior = pc;
 						// copy link...
 						if( ( pNew->next = pc->next ) )
 							pNew->next->me = &pNew->next;
 						*( pNew->me = pc->me ) = pNew;
   // set owned block.
-						pc->dwOwners = 1;
+						pc->info.dwOwners = 1;
  // successful allocation....
 						break;
 					}
@@ -30484,7 +30559,7 @@ POINTER HeapAllocateAlignedEx( PMEM pHeap, size_t dwSize, uint16_t alignment DBG
 			{
 				// after 1 allocation, need a free chunk at end...
 				// and let's just have a couple more to spaere.
-				if( ExpandSpace( pMem, dwSize + (CHUNK_SIZE*4) + MEM_SIZE + 8 * MAGIC_SIZE ) )
+				if( ExpandSpace( pMem, dwSize + 4096 + (CHUNK_SIZE*4) + MEM_SIZE + 8 * MAGIC_SIZE ) )
 				{
 #ifndef NO_LOGGING
 					//ll__lprintf(DBG_RELAY)( "Creating a new expanded space... %" _size_fs, dwSize + (CHUNK_SIZE*4) + MEM_SIZE + 8 * MAGIC_SIZE );
@@ -30513,7 +30588,7 @@ POINTER HeapAllocateAlignedEx( PMEM pHeap, size_t dwSize, uint16_t alignment DBG
 		}
 		if( !(pMem->dwFlags & HEAP_FLAG_NO_DEBUG ) )
 		{
-			if( pc->dwPad < 2*sizeof( uintptr_t) )
+			if( pc->info.dwPad < 2*sizeof( uintptr_t) )
 				DebugBreak();
 			BLOCK_FILE(pc) = pFile;
 			BLOCK_LINE(pc) = nLine;
@@ -30531,17 +30606,15 @@ POINTER HeapAllocateAlignedEx( PMEM pHeap, size_t dwSize, uint16_t alignment DBG
 #  endif
 #endif
 		//#endif
-		if( alignment && ((uintptr_t)pc->byData & ~masks[alignment]) ) {
-			uintptr_t retval = ((((uintptr_t)pc->byData) + (alignment - 1)) & masks[alignment]);
- /*pc->alignemnt =*/
+		if( alignment && ((uintptr_t)pc->byData & ~mask ) ) {
+			uintptr_t retval = ((((uintptr_t)pc->byData) + (alignment - 1)) & mask );
 			((uint16_t*)(retval - sizeof( uint32_t )))[0] = alignment;
- /*pc->to_chunk_start =*/
-			((uint16_t*)(retval - sizeof( uint32_t )))[1] = (uint16_t)(((((uintptr_t)pc->byData) + (alignment - 1)) & masks[alignment]) - (uintptr_t)pc->byData);
+			((uint16_t*)(retval - sizeof( uint32_t )))[1] = (uint16_t)(((((uintptr_t)pc->byData) + (alignment - 1)) & mask ) - (uintptr_t)pc->byData);
 			return (POINTER)retval;
 		}
 		else {
-			pc->alignment = 0;
-			pc->to_chunk_start = 0;
+			pc->info.alignment = 0;
+			pc->info.to_chunk_start = 0;
 			return pc->byData;
 		}
 	}
@@ -30622,6 +30695,7 @@ POINTER  HeapPreallocateEx ( PMEM pHeap, POINTER source, uintptr_t size DBG_PASS
 	return HeapPreallocateAlignedEx( g.pMemInstance, source, size, AlignOfMemBlock( source ) DBG_RELAY );
 }
 //------------------------------------------------------------------------------------------------------
+#if USE_CUSTOM_ALLOCER
 static void Bubble( PMEM pMem )
 {
 	// handle sorting free memory to be least signficant first...
@@ -30659,6 +30733,7 @@ static void Bubble( PMEM pMem )
 		}
 	}
 }
+#endif
 //------------------------------------------------------------------------------------------------------
  uintptr_t  SizeOfMemBlock ( CPOINTER pData )
 {
@@ -30667,12 +30742,12 @@ static void Bubble( PMEM pMem )
 		if( USE_CUSTOM_ALLOCER )
 		{
 			PCHUNK pc = (PCHUNK)(((uintptr_t)pData) - (((uint16_t*)pData)[-1] + offsetof( CHUNK, byData )));
-			return pc->dwSize - pc->dwPad;
+			return pc->dwSize - pc->info.dwPad;
 		}
 		else
 		{
 			PMALLOC_CHUNK pc = (PMALLOC_CHUNK)(((uintptr_t)pData) - MALLOC_CHUNK_SIZE(pData));
-			return pc->dwSize - pc->dwPad;
+			return pc->dwSize - pc->info.dwPad;
 		}
 	}
 	return 0;
@@ -30703,6 +30778,7 @@ uint16_t  AlignOfMemBlock( CPOINTER pData )
 //------------------------------------------------------------------------------------------------------
 POINTER ReleaseEx ( POINTER pData DBG_PASS )
 {
+	if( !g.bInit ) return NULL;
 	if( pData )
 	{
 #ifndef __NO_MMAP__
@@ -30723,8 +30799,8 @@ POINTER ReleaseEx ( POINTER pData DBG_PASS )
 		{
 			//PMEM pMem = (PMEM)(pData - offsetof( MEM, pRoot ));
 			PMALLOC_CHUNK pc = (PMALLOC_CHUNK)(((uintptr_t)pData) - MALLOC_CHUNK_SIZE(pData) );
-			pc->dwOwners--;
-			if( !pc->dwOwners )
+			pc->info.dwOwners--;
+			if( !pc->info.dwOwners )
 			{
 				extern int  MemChk ( POINTER p, uintptr_t val, size_t sz );
 #ifndef NO_LOGGING
@@ -30782,15 +30858,18 @@ POINTER ReleaseEx ( POINTER pData DBG_PASS )
 #  endif
 #endif
 			pMem = GrabMem( pc->pRoot );
+#ifdef _DEBUG
 			if( !pMem )
 			{
-#ifndef NO_LOGGING
+#  ifndef NO_LOGGING
 				ll__lprintf( DBG_RELAY )( "ERROR: Chunk to free does not reference a heap!" );
-#endif
+#  endif
 				DebugDumpHeapMemEx( pc->pRoot, 1 );
 				DebugBreak();
 			}
+#endif
 			pMemSpace = FindSpace( pMem );
+#ifdef _DEBUG
 			while( pMemSpace && ( ( pCurMem = (PMEM)pMemSpace->pMem ),
 										(	( (uintptr_t)pData < (uintptr_t)pCurMem )
 										||  ( (uintptr_t)pData > ( (uintptr_t)pCurMem + pCurMem->dwSize ) ) )
@@ -30800,6 +30879,7 @@ POINTER ReleaseEx ( POINTER pData DBG_PASS )
 				Log( "ERROR: This block should have immediatly referenced it's correct heap!" );
 				pMemSpace = pMemSpace->next;
 			}
+#endif
 			if( !pMemSpace )
 			{
 #ifndef NO_LOGGING
@@ -30813,10 +30893,12 @@ POINTER ReleaseEx ( POINTER pData DBG_PASS )
 				DropMem( pMem );
 				return NULL;
 			}
+#ifdef _DEBUG
 			pCurMem = (PMEM)pMemSpace->pMem;
+#endif
 			if( pData && pc )
 			{
-				if( !pc->dwOwners )
+				if( !pc->info.dwOwners )
 				{
 #ifndef NO_LOGGING
 #  ifdef _DEBUG
@@ -30844,8 +30926,8 @@ POINTER ReleaseEx ( POINTER pData DBG_PASS )
 						DebugBreak();
 					}
 #endif
-				pc->dwOwners--;
-				if( pc->dwOwners )
+				pc->info.dwOwners--;
+				if( pc->info.dwOwners )
 				{
 #ifdef _DEBUG
 					if( !(pCurMem->dwFlags & HEAP_FLAG_NO_DEBUG ) )
@@ -30875,10 +30957,13 @@ POINTER ReleaseEx ( POINTER pData DBG_PASS )
 					if( !g.bDisableDebug )
 					{
 						BLOCK_TAG(pc)=BLOCK_TAG_ID;
-						MemSet( pc->byData, FREE_MEMORY_TAG, pc->dwSize - pc->dwPad );
+						MemSet( pc->byData, FREE_MEMORY_TAG, pc->dwSize - pc->info.dwPad );
 					}
 #endif
 					next = (PCHUNK)(pc->byData + pc->dwSize);
+#ifndef _DEBUG
+					pCurMem = (PMEM)pMemSpace->pMem;
+#endif
 					if( (nNext = (uintptr_t)next - (uintptr_t)pCurMem) >= pCurMem->dwSize )
 					{
 						// if next is NOT within valid memory...
@@ -30888,7 +30973,7 @@ POINTER ReleaseEx ( POINTER pData DBG_PASS )
 					if( ( pPrior = pc->pPrior ) )
 					{
  // prior physical is free
-						if( !pPrior->dwOwners )
+						if( !pPrior->info.dwOwners )
 						{
  // add this header plus size
 							pPrior->dwSize += CHUNK_SIZE + pc->dwSize;
@@ -30899,25 +30984,25 @@ POINTER ReleaseEx ( POINTER pData DBG_PASS )
 							}
 							if( !g.bDisableDebug )
 							{
-								pPrior->dwPad = MAGIC_SIZE;
+								pPrior->info.dwPad = MAGIC_SIZE;
 								if( !(pMem->dwFlags & HEAP_FLAG_NO_DEBUG) )
 								{
-									pPrior->dwPad += 2 * MAGIC_SIZE;
+									pPrior->info.dwPad += 2 * MAGIC_SIZE;
 									BLOCK_FILE( pPrior ) = pFile;
 									BLOCK_LINE( pPrior ) = nLine;
 								}
 								BLOCK_TAG( pPrior ) = BLOCK_TAG_ID;
-								MemSet( pPrior->byData, FREE_MEMORY_TAG, pPrior->dwSize - pPrior->dwPad );
+								MemSet( pPrior->byData, FREE_MEMORY_TAG, pPrior->dwSize - pPrior->info.dwPad );
 							}
 							else
 #endif
 							{
  // *** NEEDFILELINE ***
-								pPrior->dwPad = 0;
+								pPrior->info.dwPad = 0;
 #ifdef _DEBUG
 								if( !(pMem->dwFlags & HEAP_FLAG_NO_DEBUG) )
 								{
-									pPrior->dwPad += 2 * MAGIC_SIZE;
+									pPrior->info.dwPad += 2 * MAGIC_SIZE;
 									BLOCK_FILE( pPrior ) = pFile;
 									BLOCK_LINE( pPrior ) = nLine;
 								}
@@ -30935,7 +31020,7 @@ POINTER ReleaseEx ( POINTER pData DBG_PASS )
 					// begin checking NEXT physical memory block for conglomerating
 					if( next )
 					{
-						if( !next->dwOwners )
+						if( !next->info.dwOwners )
 						{
 							pc->dwSize += CHUNK_SIZE + next->dwSize;
 							if( bCollapsed )
@@ -30957,25 +31042,25 @@ POINTER ReleaseEx ( POINTER pData DBG_PASS )
 								//ll_lprintf( "Collapsing freed block with next block...%p %p", pc, next );
 							if( !g.bDisableDebug )
 							{
-								pc->dwPad = MAGIC_SIZE;
+								pc->info.dwPad = MAGIC_SIZE;
 								if( !(pMem->dwFlags & HEAP_FLAG_NO_DEBUG) )
 								{
-									pc->dwPad += 2 * MAGIC_SIZE;
+									pc->info.dwPad += 2 * MAGIC_SIZE;
 									BLOCK_FILE( pc ) = pFile;
 									BLOCK_LINE( pc ) = nLine;
 								}
 								BLOCK_TAG( pc ) = BLOCK_TAG_ID;
-								MemSet( pc->byData, FREE_MEMORY_TAG, pc->dwSize - pc->dwPad );
+								MemSet( pc->byData, FREE_MEMORY_TAG, pc->dwSize - pc->info.dwPad );
 							}
 							else
 #endif
 							{
- // *** NEEDFILELINE ***
-								pc->dwPad = 0;
+								pc->info.dwPad = 0;
 #ifdef _DEBUG
 								if( !(pMem->dwFlags & HEAP_FLAG_NO_DEBUG) )
 								{
-									pc->dwPad += 2 * MAGIC_SIZE;
+                            // *** NEEDFILELINE ***
+									pc->info.dwPad += 2 * MAGIC_SIZE;
 									BLOCK_FILE( pc ) = pFile;
 									BLOCK_LINE( pc ) = nLine;
 								}
@@ -30999,10 +31084,10 @@ POINTER ReleaseEx ( POINTER pData DBG_PASS )
 			}
 			Bubble( pMem );
 			DropMem( pMem );
-#ifdef _DEBUG
+#  ifdef _DEBUG
 			if( !g.bDisableAutoCheck )
 				GetHeapMemStatsEx(pMem, &dwFree,&dwAllocated,&dwBlocks,&dwFreeBlocks DBG_RELAY);
-#endif
+#  endif
 		}
 #endif
 	}
@@ -31021,11 +31106,12 @@ POINTER ReleaseEx ( POINTER pData DBG_PASS )
 			if( g.bLogAllocate && g.bLogAllocateWithHold )
 				_xlprintf( 2 DBG_RELAY)( "Hold	 : %p - %" _PTRSZVALfs " bytes",pc, pc->dwSize );
 #endif
-			pc->dwOwners++;
+			pc->info.dwOwners++;
 		}
 		else
 		{
-			PCHUNK pc = (PCHUNK)((char*)pData - CHUNK_SIZE);
+			PCHUNK pc = (PCHUNK)(((uintptr_t)pData) - ( ( (uint16_t*)pData)[-1] +
+													offsetof( CHUNK, byData ) ) );
 			PMEM pMem = GrabMem( pc->pRoot );
 #ifndef NO_LOGGING
 			if( g.bLogAllocate )
@@ -31033,14 +31119,14 @@ POINTER ReleaseEx ( POINTER pData DBG_PASS )
 				_xlprintf( 2 DBG_RELAY)( "Hold	 : %p - %" _PTRSZVALfs " bytes",pc, pc->dwSize );
 			}
 #endif
-			if( !pc->dwOwners )
+			if( !pc->info.dwOwners )
 			{
 				ll_lprintf( "Held block has already been released!  too late to hold it!" );
 				DebugBreak();
 				DropMem( pMem );
 				return pData;
 			}
-			pc->dwOwners++;
+			pc->info.dwOwners++;
 			DropMem(pMem );
 #ifdef _DEBUG
 			if( !g.bDisableAutoCheck )
@@ -31086,7 +31172,7 @@ void  DebugDumpHeapMemEx ( PMEM pHeap, LOGICAL bVerbose )
 				Relinquish();
 #endif
 				nChunks++;
-				if( !pc->dwOwners )
+				if( !pc->info.dwOwners )
 				{
 					nTotalFree += pc->dwSize;
 #ifndef NO_LOGGING
@@ -31186,7 +31272,7 @@ void  DebugDumpHeapMemEx ( PMEM pHeap, LOGICAL bVerbose )
 			{
 				//Relinquish(); // allow debug log to work...
 				nChunks++;
-				if( !pc->dwOwners )
+				if( !pc->info.dwOwners )
 				{
 					nTotalFree += pc->dwSize;
 					snprintf( byDebug, sizeof(byDebug), "Free at %p size: %" cPTRSZVALfs "(%" cPTRSZVALfx ") Prior:%p NF:%p",
@@ -31291,9 +31377,9 @@ void  DebugDumpHeapMemEx ( PMEM pHeap, LOGICAL bVerbose )
 		// should be collapsed into this one...
 	pPrior = pc->pPrior;
  // not HELD by others... no way to update their pointers
-	if( ( pc->dwOwners == 1 ) &&
+	if( ( pc->info.dwOwners == 1 ) &&
 		pPrior &&
-		!pPrior->dwOwners )
+		!pPrior->info.dwOwners )
 	{
 		CHUNK Free = *pPrior;
 		CHUNK Allocated, *pNew;
@@ -31302,7 +31388,7 @@ void  DebugDumpHeapMemEx ( PMEM pHeap, LOGICAL bVerbose )
 		MemCpy( pPrior->byData, pc->byData, Allocated.dwSize );
 		pNew = (PCHUNK)(pPrior->byData + Allocated.dwSize);
 		pNew->dwSize = Free.dwSize;
-		pNew->dwOwners = 0;
+		pNew->info.dwOwners = 0;
  // now pAllocated...
 		pNew->pPrior = pPrior;
 		pNew->pRoot = Free.pRoot;
@@ -31318,7 +31404,7 @@ void  DebugDumpHeapMemEx ( PMEM pHeap, LOGICAL bVerbose )
 		}
 #endif
 		pPrior->dwSize = Allocated.dwSize;
-		pPrior->dwOwners = 1;
+		pPrior->info.dwOwners = 1;
 		pPrior->next = NULL;
 		pPrior->me = NULL;
 		// update NEXT NEXT real block...
@@ -31328,7 +31414,7 @@ void  DebugDumpHeapMemEx ( PMEM pHeap, LOGICAL bVerbose )
 			if( (((uintptr_t)next) - ((uintptr_t)pMem)) < (uintptr_t)pMem->dwSize )
 			{
  // if next is free.....
-				if( !next->dwOwners )
+				if( !next->info.dwOwners )
 				{
 					// consolidate...
 					if( (pNew->next = next->next) )
@@ -31380,7 +31466,7 @@ void  DebugDumpHeapMemEx ( PMEM pHeap, LOGICAL bVerbose )
 		while( (((uintptr_t)pc) - ((uintptr_t)pMemCheck)) < (uintptr_t)pMemCheck->dwSize )
 		{
 			nChunks++;
-			if( !pc->dwOwners )
+			if( !pc->info.dwOwners )
 			{
 				nFree += pc->dwSize;
 				nFreeChunks++;
@@ -31401,7 +31487,7 @@ void  DebugDumpHeapMemEx ( PMEM pHeap, LOGICAL bVerbose )
 						int minPad = MAGIC_SIZE;
 						if( pMem && !(pMem->dwFlags & HEAP_FLAG_NO_DEBUG) )
 							minPad += MAGIC_SIZE * 2;
-						if( ( pc->dwPad >= minPad ) && ( BLOCK_TAG(pc) != BLOCK_TAG_ID ) )
+						if( ( pc->info.dwPad >= minPad ) && ( BLOCK_TAG(pc) != BLOCK_TAG_ID ) )
 						{
 #ifndef NO_LOGGING
 							ll_lprintf( "memory block: %p(%p) %08" TAG_FORMAT_MODIFIER "x instead of %08" TAG_FORMAT_MODIFIER "x", pc, pc->byData, BLOCK_TAG(pc), BLOCK_TAG_ID );
@@ -31453,7 +31539,7 @@ void  DebugDumpHeapMemEx ( PMEM pHeap, LOGICAL bVerbose )
 		pc = pMemCheck->pFirstFree;
 		while( pc )
 		{
-			if( pc->dwOwners )
+			if( pc->info.dwOwners )
   // owned block is in free memory chain ! ?
 			{
 				ll_lprintf( "Owned block %p is in free memory chain!", pc );
@@ -32419,6 +32505,7 @@ RENDER_NAMESPACE_END
 #  define BIT_7           0x80
 #  define KEY_TAB          9
 #  define KEY_CENTER       12
+#  define KEY_KP5       12
 #  define KEY_PAD5         12
 #  define KEY_ENTER        13
 #  define KEY_LSHIFT       16
@@ -32818,7 +32905,7 @@ Double quote	"""	222
      */
 #  endif
 // if any key...
-#if !defined( KEY_1 )
+#if 1 || !defined( KEY_1 )
 #  if defined( __ANDROID__ )
 #    include <android/keycodes.h>
 #    define KEY_SHIFT        AKEYCODE_SHIFT_LEFT
@@ -32987,15 +33074,64 @@ Double quote	"""	222
 #    define KEY_X   AKEYCODE_X
 #    define KEY_Y   AKEYCODE_Y
 #    define KEY_Z   AKEYCODE_Z
-#  elif defined( __LINUX__ )
+#  elif defined( __LINUX__ ) && !defined( __MAC__ ) && !defined( __ANDROID__ )
+#include <linux/input-event-codes.h>
+#undef BTN_START
+#define KEY_ESCAPE KEY_ESC
+#define KEY_PGDN KEY_PAGEDOWN
+#define KEY_PAGE_DOWN  KEY_PAGEDOWN
+#define KEY_PGUP KEY_PAGEUP
+#define KEY_PAGE_UP  KEY_PAGEUP
+#define KEY_DASH KEY_MINUS
+#define KEY_QUOTE KEY_APOSTROPHE
+#define KEY_PAD_PLUS KEY_KPPLUS
+#define KEY_PAD_ENTER KEY_KPENTER
+#define KEY_PAD_MINUS KEY_KPMINUS
+#define KEY_PAD_DOT   KEY_KPDOT
+#define KEY_PAD_DIV   KEY_KPSLASH
+//#define KEY_DASH
+#define KEY_LEFT_BRACKET KEY_LEFTBRACE
+#define KEY_RIGHT_BRACKET KEY_RIGHTBRACE
+#define KEY_PAD_MULT  KEY_KPASTERISK
+#define KEY_PAD_9   KEY_KP9
+#define KEY_PAD_8   KEY_KP8
+#define KEY_PAD_7   KEY_KP7
+#define KEY_PAD_6   KEY_KP6
+#define KEY_PAD_5   KEY_KP5
+#define KEY_PAD_4   KEY_KP4
+#define KEY_PAD_3   KEY_KP3
+#define KEY_PAD_2   KEY_KP2
+#define KEY_PAD_1   KEY_KP1
+#define KEY_PAD_0   KEY_KP0
+#define KEY_CENTER  KEY_KPPLUSMINUS
+#define KEY_LESS   KEY_COMMA
+#define KEY_PAD_DELETE KEY_KPDOT
+#define KEY_GREY_INSERT KEY_INSERT
+#define KEY_GREY_DELETE KEY_DELETE
+#define KEY_PERIOD KEY_DOT
+#define KEY_CAPS_LOCK KEY_CAPSLOCK
+#define KEY_LEFT_SHIFT KEY_LEFTSHIFT
+#define KEY_RIGHT_SHIFT KEY_RIGHTSHIFT
+#define KEY_ALT KEY_LEFTALT
+#define KEY_LEFT_ALT KEY_LEFTALT
+#define KEY_RIGHT_ALT KEY_RIGHTALT
+#define KEY_CTRL KEY_LEFTCTRL
+#define KEY_LEFT_CONTROL KEY_LEFTCTRL
+#define KEY_RIGHT_CONTROL KEY_RIGHTCTRL
+#define KEY_SCROLL_LOCK KEY_SCROLLLOCK
+#define KEY_SHIFT KEY_LEFTSHIFT
+#define KEY_DEL KEY_BACKSPACE
+//#define
+#define KEY_ACCENT KEY_GRAVE
 	  //#define USE_SDL_KEYSYM
 // ug - KEYSYMS are too wide...
 // so - we fall back to x scancode tables - and translate sym to these
 // since the scancodes which come from X are not the same as from console Raw
 // but - perhaps we should re-translate these to REAL scancodes... but in either
 // case - these fall to under 256 characters, and can therefore be used...
-#    define USE_X_RAW_SCANCODES
+//#    define USE_X_RAW_SCANCODES
 #    ifdef USE_X_RAW_SCANCODES
+//#pragma message( "XRAW")
 #      define KEY_SHIFT        0xFF
 #      define KEY_LEFT_SHIFT   50
  // maybe?
@@ -33080,6 +33216,7 @@ Double quote	"""	222
 #      define KEY_WINDOW_1      115
  // windows keys keys
 #      define KEY_WINDOW_2      117
+//#pragma message("GOOD DEFINE")
 #      define KEY_TAB           23
 #      define KEY_SLASH         61
 #      define KEY_BACKSPACE     22
@@ -33485,6 +33622,7 @@ Double quote	"""	222
 #      define KEY_MINUS     0x0C
 #      define KEY_PLUS         0x0D
 #      define  KEY_BKSP        0x0E
+#pragma error BAD DEFINE
 #      define KEY_TAB       0x0F
 #      define KEY_Q         0x10
 #      define KEY_W         0x11
@@ -37876,6 +38014,13 @@ enum ButtonFlags {
 // please do validate that the code gives them to you all the way
 // from the initial mouse message through all layers to the final
 // application handler.
+enum sizeDisplayValues {
+	wrsdv_one  = 0,
+	wrsdv_top = 1,
+	wrsdv_bottom = 2,
+	wrsdv_left = 4,
+	wrsdv_right = 8,
+};
 //----------------------------------------------------------
 enum DisplayAttributes {
    /* when used by the Display Lib manager, this describes how to manage the subsurface */
@@ -37942,8 +38087,7 @@ enum DisplayAttributes {
        See Also
        <link sack::image::render::GetDisplaySizeEx@int@int32_t *@int32_t *@uint32_t *@uint32_t *, GetDisplaySizeEx> */
     RENDER_PROC( void , GetDisplaySize)      ( uint32_t *width, uint32_t *height );
-	 /* \ \
-	    Parameters
+	 /* \	     Parameters
 	    nDisplay :  display to get the coordinates of. 0 is the
 	                default display from GetDesktopWindow(). 1\-n are
 	                displays for multiple display systems, 1,2,3,4
@@ -38283,8 +38427,7 @@ enum DisplayAttributes {
        display :  display to check the key state in
        key :      KEY_ symbol to check.                    */
     RENDER_PROC( uint32_t, IsKeyDown )              ( PRENDERER display, int key );
-    /* \ \
-       Parameters
+    /* \        Parameters
        display :  display to test the key status in
        key :      KEY_ symbol to check if the key is pressed
        Returns
@@ -38858,6 +39001,12 @@ struct render_interface_tag
 	RENDER_PROC_PTR( void, ReplyCloseDisplay )( void );
 		/* Clipboard Callback */
 	RENDER_PROC_PTR( void, SetClipboardEventCallback )(PRENDERER pRenderer, ClipboardCallback callback, uintptr_t psv);
+	// where ever the current mouse is, lock the mouse to the window, and allow the mouse to move it.
+	//
+	RENDER_PROC_PTR( void, BeginMoveDisplay )(PRENDERER pRenderer );
+	// where ever the current mouse is, lock the mouse to the window, and allow the mouse to move it.
+	//
+	RENDER_PROC_PTR( void, BeginSizeDisplay )(PRENDERER pRenderer, enum sizeDisplayValues sizeFrom );
 };
 #ifdef DEFINE_DEFAULT_RENDER_INTERFACE
 #define USE_RENDER_INTERFACE GetDisplayInterface()
@@ -38976,6 +39125,8 @@ typedef int check_this_variable;
 #define RenderIsInstanced()       ((USE_RENDER_INTERFACE)?((USE_RENDER_INTERFACE)->_RenderIsInstanced)?(USE_RENDER_INTERFACE)->_RenderIsInstanced():0:0)
 #define SetDisplayCursor(n)           {if((USE_RENDER_INTERFACE)&&(USE_RENDER_INTERFACE)->_SetDisplayCursor)REND_PROC_ALIAS(SetDisplayCursor)(n);}
 #define IsDisplayRedrawForced(r)    ((USE_RENDER_INTERFACE)?((USE_RENDER_INTERFACE)->_IsDisplayRedrawForced)?(USE_RENDER_INTERFACE)->_IsDisplayRedrawForced(r):0:0)
+#define BeginMoveDisplay(r)   ((USE_RENDER_INTERFACE)?((USE_RENDER_INTERFACE)->_BeginMoveDisplay)?((USE_RENDER_INTERFACE)->_BeginMoveDisplay(r),1):0:0)
+#define BeginSizeDisplay(r,m)   ((USE_RENDER_INTERFACE)?((USE_RENDER_INTERFACE)->_BeginSizeDisplay)?((USE_RENDER_INTERFACE)->_BeginSizeDisplay(r,m),1):0:0)
 #endif
 	_INTERFACE_NAMESPACE_END
 #ifdef __cplusplus
@@ -39171,50 +39322,52 @@ namespace sack {
 #    pragma pack (push, 1)
 #  endif
 // custom allocer, use heap_chunk_tag
-PREFIX_PACKED struct malloc_chunk_tag
+struct malloc_chunk_tag
 {
-   // if 0 - block is free
-	uint16_t dwOwners;
-      // extra bytes 4/12 typical, sometimes pad untill next. (alignment extra bytes)
-	uint16_t dwPad;
-#ifdef __64__
-	uint32_t pad;
-#endif
-  // limited to allocating 4 billion bytes...
 	uintptr_t dwSize;
 #ifdef ENABLE_NATIVE_MALLOC_PROTECTOR
 	uint32_t LeadProtect[2];
 #endif
+	PREFIX_PACKED struct {
+   // if 0 - block is free
+		uint16_t dwOwners;
+      // extra bytes 4/12 typical, sometimes pad untill next. (alignment extra bytes)
+		uint16_t dwPad;
  // this is additional to subtract to get back to start (aligned allocate)
-	uint16_t alignment;
+		uint16_t alignment;
  // this is additional to subtract to get back to start (aligned allocate)
-	uint16_t to_chunk_start;
+		uint16_t to_chunk_start;
+	} PACKED info;
  // uint8_t is the smallest valid datatype could be _0
 	uint8_t byData[1];
-} PACKED;
-PREFIX_PACKED struct heap_chunk_tag
+};
+struct heap_chunk_tag
 {
-            // if 0 - block is free
-	uint16_t dwOwners;
-   // extra bytes 4/12 typical, sometimes pad untill next.
-	uint16_t dwPad;
+ // *next, **me; &next is also &this block.
+	DeclareLink( struct heap_chunk_tag );
 	// which is < ( CHUNK_SIZE + nMinAllocate )
 	// real size is then dwSize - dwPad.
 	// this is actually where the end of block tag(s) should begin!
-  // limited to allocating 4 billion bytes...
 	uintptr_t dwSize;
          // save some math backwards...
 	struct heap_chunk_tag *pPrior;
+   // needed for release to find free linked list head
   // pointer to master allocation struct (pMEM)
-	struct memory_block_tag * pRoot;
-	DeclareLink( struct heap_chunk_tag );
+	struct memory_block_tag *pRoot;
+	PREFIX_PACKED struct {
+            // if 0 - block is free
+		uint16_t dwOwners;
+   // extra bytes 4/12 typical, sometimes pad untill next.
+		uint16_t dwPad;
  // this is additional to subtract to get back to start (aligned allocate)
-	uint16_t alignment;
+		uint16_t alignment;
+      // to_chunk_start is computed from byData offset by alignment minus a uin16_t.
  // this is additional to subtract to get back to start (aligned allocate)
-	uint16_t to_chunk_start;
+		uint16_t to_chunk_start;
+	} PACKED info;
  // uint8_t is the smallest valid datatype could be _0
 	uint8_t byData[1];
-} PACKED;
+};
 // a chunk of memory in a heap space, heaps are also tracked, so extents
 // of that space are known, therefore one can identify a heap chunk
 // from a non-heap (malloc?) chunk.
@@ -39374,15 +39527,18 @@ struct timer_local_data {
 	uint32_t remove_timer;
 	uint32_t CurrentTimerID;
 	int32_t last_sleep;
+	PLIST onThreadCreate;
 #define globalTimerData (*global_timer_structure)
 	volatile uint64_t lock_thread_create;
 	// should be a short list... 10 maybe 15...
 	PLIST thread_events;
 	CRITICALSECTION csGrab;
-#if defined( WIN32 )
+#if !HAS_TLS
+#  if defined( WIN32 )
 	DWORD my_thread_info_tls;
-#elif defined( __LINUX__ )
+#  elif defined( __LINUX__ )
 	pthread_key_t my_thread_info_tls;
+#  endif
 #endif
 }
 #ifdef __STATIC_GLOBALS__
@@ -39400,7 +39556,10 @@ struct my_thread_info {
 	PTHREAD pThread;
 	THREAD_ID nThread;
 };
-#define MyThreadInfo (*_MyThreadInfo)
+DeclareThreadLocal  struct my_thread_info _MyThreadInfo;
+#  define MyThreadInfo (_MyThreadInfo)
+#else
+#  define MyThreadInfo (*_MyThreadInfo)
 #endif
 #ifdef _WIN32
 #else
@@ -39419,14 +39578,15 @@ struct my_thread_info {
 #endif
 #endif
 void  RemoveTimerEx( uint32_t ID DBG_PASS );
+#if !HAS_TLS
 static struct my_thread_info* GetThreadTLS( void )
 {
 	struct my_thread_info* _MyThreadInfo;
-#if defined( WIN32 )
 #  ifndef __STATIC_GLOBALS__
 	if( !global_timer_structure )
 		SimpleRegisterAndCreateGlobal( global_timer_structure );
 #  endif
+#  if defined( WIN32 )
 	if( !( _MyThreadInfo = (struct my_thread_info*)TlsGetValue( global_timer_structure->my_thread_info_tls ) ) )
 	{
 		int old = SetAllocateLogging( FALSE );
@@ -39435,31 +39595,40 @@ static struct my_thread_info* GetThreadTLS( void )
 		_MyThreadInfo->nThread = 0;
 		_MyThreadInfo->pThread = 0;
 	}
-#elif defined( __LINUX__ )
+#  elif defined( __LINUX__ )
 	if( !( _MyThreadInfo = (struct my_thread_info*)pthread_getspecific( global_timer_structure->my_thread_info_tls ) ) )
 	{
 		pthread_setspecific( global_timer_structure->my_thread_info_tls, _MyThreadInfo = New( struct my_thread_info ) );
 		_MyThreadInfo->nThread = 0;
 		_MyThreadInfo->pThread = 0;
 	}
-#endif
-	return _MyThreadInfo;
+#  endif
+	return &MyThreadInfo;
 }
+#endif
 // this priorirty is also relative to a secondary init for procreg/names.c
 // if you change this, need to change when that is scheduled also
-PRIORITY_PRELOAD( LowLevelInit, CONFIG_SCRIPT_PRELOAD_PRIORITY-1 )
+PRIORITY_PRELOAD( LowLevelInit, TIMER_MODULE_PRELOAD_PRIORITY )
 {
 	// there is a small chance the local is already initialized.
 #  ifndef __STATIC_GLOBALS__
-	if( !global_timer_structure )
+	if( !global_timer_structure ) {
 		SimpleRegisterAndCreateGlobal( global_timer_structure );
+		OnThreadCreate( (void(*)(void))MakeThread );
+ // init thread local variable with thread id and self thread.
+		MakeThread();
+	}
 #  endif
 	if( !globalTimerData.timerID )
 	{
+ // init thread local variable with thread id and self thread.
+		MakeThread();
+#if !HAS_TLS
 #if defined( WIN32 )
 		globalTimerData.my_thread_info_tls = TlsAlloc();
 #elif defined( __LINUX__ )
 		pthread_key_create( &globalTimerData.my_thread_info_tls, NULL );
+#endif
 #endif
 		InitializeCriticalSec( &globalTimerData.csGrab );
 		// this may have initialized early?
@@ -39487,12 +39656,14 @@ uint32_t  GetTickCount( void )
 	gettimeofday( &time, 0 );
 	return (time.tv_sec * 1000) + (time.tv_usec / 1000);
 }
+#ifndef timeGetTime
 uint32_t  timeGetTime( void )
 {
 	struct timeval time;
 	gettimeofday( &time, 0 );
 	return (time.tv_sec * 1000) + (time.tv_usec / 1000);
 }
+#endif
 void  Sleep( uint32_t ms )
 {
 	(usleep((ms)*1000));
@@ -39681,7 +39852,7 @@ static PTHREAD FindWakeup( CTEXTSTR name )
 #endif
 		check = GetFromSet( THREAD, &globalTimerData.threadset );
 		MemSet( check, 0, sizeof( THREAD ) );
-		check->thread_ident = GetMyThreadID();
+		check->thread_ident = GetThisThreadID();
 		InitWakeup( check, name );
 		check->flags.bReady = 1;
 	}
@@ -39909,22 +40080,20 @@ static void  InternalWakeableNamedSleepEx( CTEXTSTR name, uint32_t n, LOGICAL th
 {
 	PTHREAD pThread;
 	if( name && threaded )
-		pThread = FindThreadWakeup( name, GetMyThreadID() );
+		pThread = FindThreadWakeup( name, GetThisThreadID() );
 	else if( name )
 		pThread = FindWakeup( name );
 	else
 	{
-#ifdef HAS_TLS
+#if !HAS_TLS
 		struct my_thread_info* _MyThreadInfo = GetThreadTLS();
+#endif
 		pThread = MyThreadInfo.pThread;
 		if( !pThread )
 		{
 			MakeThread();
 			pThread = MyThreadInfo.pThread;
 		}
-#else
-		pThread = FindThread( GetMyThreadID() );
-#endif
 	}
 	if( pThread )
 	{
@@ -40172,7 +40341,9 @@ uintptr_t CPROC ThreadProc( PTHREAD pThread );
 int  IsThisThreadEx( PTHREAD pThreadTest DBG_PASS )
 {
 	PTHREAD pThread;
+#if !HAS_TLS
 	struct my_thread_info* _MyThreadInfo = GetThreadTLS();
+#endif
 	pThread
 #ifdef HAS_TLS
 		= MyThreadInfo.pThread;
@@ -40188,27 +40359,30 @@ int  IsThisThreadEx( PTHREAD pThreadTest DBG_PASS )
 static int NotTimerThread( void )
 {
 	PTHREAD pThread;
+#if !HAS_TLS
 	struct my_thread_info* _MyThreadInfo = GetThreadTLS();
-	pThread
-#ifdef HAS_TLS
-		= MyThreadInfo.pThread;
-#else
-		= FindThread( GetMyThreadID() );
 #endif
+	pThread = MyThreadInfo.pThread;
 	if( pThread && ( pThread->proc == ThreadProc ) )
 		return FALSE;
 	return TRUE;
 }
 //--------------------------------------------------------------------------
-void  UnmakeThread( void )
+static void  UnmakeThread( void )
 {
 	PTHREAD pThread;
+#if !HAS_TLS
 	struct my_thread_info* _MyThreadInfo = GetThreadTLS();
+#endif
 	uint64_t oldval;
  //-V595
-	while( oldval = LockedExchange64( &globalTimerData.lock_thread_create, _MyThreadInfo->nThread ) ) {
+	while( oldval = LockedExchange64( &globalTimerData.lock_thread_create, MyThreadInfo.nThread ) ) {
 		//globalTimerData.lock_thread_create = oldval;
 		Relinquish();
+	}
+	if( globalTimerData.flags.bExited ) {
+		globalTimerData.lock_thread_create = 0;
+		return;
 	}
 	pThread
 #ifdef HAS_TLS
@@ -40227,10 +40401,14 @@ void  UnmakeThread( void )
 			//lprintf( "Unmaking thread event! on thread %016" _64fx"x", pThread->thread_ident );
 			CloseHandle( pThread->thread_event->hEvent );
 			{
+#  if !HAS_TLS
 				struct my_thread_info* _MyThreadInfo = GetThreadTLS();
-				Deallocate( struct my_thread_info*, _MyThreadInfo );
  //-V595
 				TlsSetValue( global_timer_structure->my_thread_info_tls, NULL );
+				Deallocate( struct my_thread_info*, _MyThreadInfo );
+#  else
+				//Deallocate( struct my_thread_info*, _MyThreadInfo );
+#  endif
 			}
 #else
 			closesem( (POINTER)pThread, 0 );
@@ -40258,7 +40436,9 @@ static uintptr_t CPROC ThreadWrapper( PTHREAD pThread )
 #endif
 {
 	uintptr_t result = 0;
+#if !HAS_TLS
 	struct my_thread_info* _MyThreadInfo = GetThreadTLS();
+#endif
 #ifdef _WIN32
 	while( !pThread->hThread )
 		Relinquish();
@@ -40278,11 +40458,20 @@ static uintptr_t CPROC ThreadWrapper( PTHREAD pThread )
 		pThread->thread_ident = _GetMyThreadID();
 	//DebugBreak();
 	InitWakeup( pThread, NULL );
+	{
+		INDEX idx;
+		void ( *f )( void );
+		LIST_FORALL( globalTimerData.onThreadCreate, idx,  void( * )( void ), f ){
+			f();
+		}
+	}
 #ifdef LOG_THREAD
 	Log1( "Set thread ident: %016" _64fx, pThread->thread_ident );
 #endif
 	if( pThread->proc )
 		result = pThread->proc( pThread );
+	if( globalTimerData.flags.bExited )
+		return result;
 	//lprintf( "%s(%d):Thread is exiting... ", pThread->pFile, pThread->nLine );
 	//DeAttachThreadToLibraries( FALSE );
 	UnmakeThread();
@@ -40305,7 +40494,9 @@ static void *SimpleThreadWrapper( PTHREAD pThread )
 static uintptr_t CPROC SimpleThreadWrapper( PTHREAD pThread )
 #endif
 {
+#if !HAS_TLS
 	struct my_thread_info* _MyThreadInfo = GetThreadTLS();
+#endif
 	uintptr_t result = 0;
 #ifdef _WIN32
 	while( !pThread->hThread )
@@ -40317,11 +40508,8 @@ static uintptr_t CPROC SimpleThreadWrapper( PTHREAD pThread )
 	pThread->flags.bStarted = 1;
 	while( !pThread->flags.bReady )
 		Relinquish();
-#ifdef HAS_TLS
 	MyThreadInfo.pThread = pThread;
-	MyThreadInfo.nThread =
-#endif
-		pThread->thread_ident = GetMyThreadID();
+	MyThreadInfo.nThread = pThread->thread_ident = GetMyThreadID();
 	InitWakeup( pThread, NULL );
 #ifdef LOG_THREAD
 	Log1( "Set thread ident: %016" _64fx, pThread->thread_ident );
@@ -40340,18 +40528,17 @@ static uintptr_t CPROC SimpleThreadWrapper( PTHREAD pThread )
 //--------------------------------------------------------------------------
 PTHREAD  MakeThread( void )
 {
-#ifdef HAS_TLS
+#if !HAS_TLS
 	struct my_thread_info* _MyThreadInfo = GetThreadTLS();
+#endif
 	if( MyThreadInfo.pThread )
 		return MyThreadInfo.pThread;
 	MyThreadInfo.nThread = _GetMyThreadID();
-#endif
 	{
 		PTHREAD pThread;
 		THREAD_ID thread_ident = _GetMyThreadID();
-#ifndef HAS_TLS
+		// this must be a search(?)
 		if( !(pThread = FindThread( thread_ident ) ) )
-#endif
 		{
 			THREAD_ID oldval;
 			LOGICAL dontUnlock = FALSE;
@@ -40385,9 +40572,7 @@ PTHREAD  MakeThread( void )
 			    , pThread->proc, pThread->thread_ident, pThread );
 #endif
 		}
-#ifdef HAS_TLS
 		MyThreadInfo.pThread = pThread;
-#endif
 		return pThread;
 	}
 }
@@ -40399,15 +40584,12 @@ THREAD_ID GetThreadID( PTHREAD thread )
 }
 THREAD_ID GetThisThreadID( void )
 {
-#if HAS_TLS
+#if !HAS_TLS
 	struct my_thread_info* _MyThreadInfo = GetThreadTLS();
-	if( !MyThreadInfo.nThread )
-	{
-		MyThreadInfo.nThread = _GetMyThreadID();
-	}
-	return MyThreadInfo.nThread;
 #else
-	return MakeThread()->thread_ident;
+	if( !MyThreadInfo.nThread )
+		MakeThread();
+	return MyThreadInfo.nThread;
 #endif
 }
 uintptr_t GetThreadParam( PTHREAD thread )
@@ -41347,6 +41529,8 @@ void  ChangeTimerEx( uint32_t ID, uint32_t initial, uint32_t frequency )
 //--------------------------------------------------------------------------
 #ifndef USE_NATIVE_CRITICAL_SECTION
 #ifdef _MSC_VER
+// reordering instructions in this is not allowed...
+// since MSVC ends up reversing unlocks before other code that should run first.
 #  pragma optimize( "st", off )
 #endif
 LOGICAL  EnterCriticalSecEx( PCRITICALSECTION pcs DBG_PASS )
@@ -41374,7 +41558,8 @@ LOGICAL  EnterCriticalSecEx( PCRITICALSECTION pcs DBG_PASS )
 					lprintf( "Failed to enter section... sleeping (forever)..." );
 #  endif
 #endif
-				WakeableNamedThreadSleepEx( "sack.critsec", SLEEP_FOREVER DBG_RELAY );
+ // shouldn't need more than 1 cycle; but infinite can fail on short locks.
+				WakeableNamedThreadSleepEx( "sack.critsec", 25 DBG_RELAY );
 #ifdef ENABLE_CRITICALSEC_LOGGING
 #  ifdef _DEBUG
 				if( global_timer_structure && globalTimerData.flags.bLogCriticalSections )
@@ -41441,7 +41626,7 @@ LOGICAL  LeaveCriticalSecEx( PCRITICALSECTION pcs DBG_PASS )
 #endif
 			Relinquish();
 }
-		dwCurProc = GetMyThreadID();
+		dwCurProc = GetThisThreadID();
 #ifdef _DEBUG
 		//GetTickCount() )
 		if( ( curtick + 2000 ) <= timeGetTime() ) {
@@ -41495,8 +41680,8 @@ LOGICAL  LeaveCriticalSecEx( PCRITICALSECTION pcs DBG_PASS )
 		if( !( pcs->dwLocks & ~(SECTION_LOGGED_WAIT) ) )
 		{
 			THREAD_ID dwWaiting = pcs->dwThreadWaiting;
-			pcs->dwLocks = 0;
 			pcs->dwThreadID = 0;
+			pcs->dwLocks = 0;
 			pcs->dwUpdating = pcs->dwLocks;
 			// wake the prior (if there is one sleeping)
 			if( dwWaiting )
@@ -41544,16 +41729,22 @@ void DeleteCriticalSec( PCRITICALSECTION pcs )
 #ifdef _WIN32
 HANDLE  GetWakeEvent( void )
 {
-#if HAS_TLS
+#if !HAS_TLS
 	struct my_thread_info* _MyThreadInfo = GetThreadTLS();
-	if( !MyThreadInfo.pThread )
-		MakeThread();
-	return MyThreadInfo.pThread->thread_event->hEvent;
-#else
-	return MakeThread()->thread_event->hEvent;
 #endif
+	if( !MyThreadInfo.pThread ) MakeThread();
+	return MyThreadInfo.pThread->thread_event->hEvent;
 }
 #endif
+void OnThreadCreate( void (*f)(void) ) {
+#ifndef __STATIC_GLOBALS__
+	if( !global_timer_structure )
+		SimpleRegisterAndCreateGlobal( global_timer_structure );
+#endif
+	AddLink( &globalTimerData.onThreadCreate, f );
+}
+#undef GetThreadTLS
+#undef MyThreadInfo
 #ifdef __cplusplus
 //	namespace timers {
 }
@@ -41561,6 +41752,7 @@ HANDLE  GetWakeEvent( void )
 }
 #endif
 //--------------------------------------------------------------------------
+#undef globalTimerData
 // $Log: timers.c,v $
 // Revision 1.140  2005/06/22 23:13:51  jim
 // Differentiate the normal logging of 'entered, left section' but leave in notable exception case logging when enabling critical section debugging.
@@ -41693,7 +41885,7 @@ IDLE_PROC( int, RemoveIdleProc )( int (CPROC*Proc)(uintptr_t psv ) )
 }
 IDLE_PROC( int, IdleEx )( DBG_VOIDPASS )
 {
-	THREAD_ID me = GetMyThreadID();
+	THREAD_ID me = GetThisThreadID();
 	int success = 0;
 	PIDLEPROC proc;
 #ifndef __STATIC_GLOBALS__
@@ -41747,8 +41939,8 @@ IDLE_PROC( int, Idle )( void )
 }
 IDLE_PROC( int, IdleForEx )( uint32_t dwMilliseconds DBG_PASS )
 {
-	uint32_t dwStart = timeGetTime();
-	while( ( dwStart + dwMilliseconds ) > timeGetTime() )
+	//uint32_t dwStart = timeGetTime();
+	//while( ( dwStart + dwMilliseconds ) > timeGetTime() )
 	{
 		if( !IdleEx( DBG_VOIDRELAY ) )
 		{
@@ -41883,6 +42075,7 @@ enum NetworkConnectionFlags {
 	, CF_CONNECTING      = 0x00000080
 	, CF_CONNECT_WAITING = 0x00008000
 	, CF_CONNECT_CLOSED  = 0x00100000
+  // wants to close at the next opportunity.
 	, CF_TOCLOSE         = 0x00000100
   // this flag is unused at this time
 	, UNUSED_CF_WRITEISPENDED   = 0x00000200
@@ -42501,6 +42694,7 @@ static void ClearClient( PCLIENT pc DBG_PASS )
 	pc->dwFlags = dwFlags;
 }
 //----------------------------------------------------------------------------
+#if 0
 static void NetworkGlobalLock( DBG_VOIDPASS ) {
 	LOGICAL locked = FALSE;
 	do {
@@ -42522,6 +42716,7 @@ static void NetworkGlobalLock( DBG_VOIDPASS ) {
 #endif
 	} while( !locked );
 }
+#endif
 LOGICAL TryNetworkGlobalLock( DBG_VOIDPASS ) {
 	LOGICAL locked = FALSE;
 #ifdef USE_NATIVE_CRITICAL_SECTION
@@ -42557,12 +42752,6 @@ void TerminateClosedClientEx( PCLIENT pc DBG_PASS )
 #endif
 	if( !pc )
 		return;
-	if( pc->dwFlags & CF_TOCLOSE ) {
-#ifdef VERBOSE_DEBUG
-		lprintf( "WAIT FOR CLOSE LATER... %x", pc->dwFlags );
-#endif
-		//return;
-	}
 	if( pc->dwFlags & CF_CLOSED )
 	{
 		PendingBuffer * lpNext;
@@ -42860,6 +43049,7 @@ int NetworkQuit(void)
 		WSAEVENT hThread;
 		peer_thread = globalNetworkData.root_thread;
 		globalNetworkData.root_thread = NULL;
+      MakeThread();
 		for( ; peer_thread; peer_thread = peer_thread->child_peer ) {
 			AddLink( &wakeEvents, peer_thread->hThread );
 		}
@@ -43231,8 +43421,9 @@ NETWORK_PROC( PCLIENT, NetworkLockEx)( PCLIENT lpClient, int readWrite DBG_PASS 
 #else
 			LeaveCriticalSecEx( readWrite?&lpClient->csLockRead:&lpClient->csLockWrite DBG_RELAY );
 #endif
-			_lprintf( DBG_RELAY )( "Failed lock" );
-			lprintf( "%p  %08x %08x inactive, cannot lock.", lpClient, lpClient->dwFlags, CF_ACTIVE );
+#ifdef LOG_NETWORK_LOCKING
+			_lprintf( DBG_RELAY )( "Failed lock: %p  %08x %08x inactive, cannot lock.", lpClient, lpClient->dwFlags, CF_ACTIVE );
+#endif
 			// this client is not available for client use!
 			return NULL;
 		}
@@ -43363,12 +43554,12 @@ void InternalRemoveClientExx(PCLIENT lpClient, LOGICAL bBlockNotify, LOGICAL bLi
 #endif
 			return;
 		}
-		if( lpClient->lpFirstPending || ( lpClient->dwFlags & CF_WRITEPENDING ) ) {
-#ifdef LOG_DEBUG_CLOSING
-			lprintf( "CLOSE WHILE WAITING FOR WRITE TO FINISH..." );
-#endif
-			//lpClient->dwFlags |= CF_TOCLOSE;
-			//return;
+		if( bLinger && ( lpClient->lpFirstPending || ( lpClient->dwFlags & CF_WRITEPENDING ) ) ) {
+//#ifdef LOG_DEBUG_CLOSING
+			lprintf( "GRACEFUL CLOSE WHILE WAITING FOR WRITE TO FINISH..." );
+//#endif
+			lpClient->dwFlags |= CF_TOCLOSE;
+			return;
 			// continue on; otherwise the close event gets lost...
 		}
 		{
@@ -43476,12 +43667,18 @@ void RemoveClientExx(PCLIENT lpClient, LOGICAL bBlockNotify, LOGICAL bLinger DBG
 	if( !lpClient ) return;
 	if( !( lpClient->dwFlags & CF_UDP )
 		&& ( lpClient->dwFlags & ( CF_CONNECTED ) ) ) {
-		shutdown( lpClient->Socket, SHUT_WR );
-	} else
-	{
+		// not linger
+		// OR  nothing to write allow shutdown.
+		if( !bLinger || !(lpClient->lpFirstPending || ( lpClient->dwFlags & CF_WRITEPENDING ) ) )
+			shutdown( lpClient->Socket, SHUT_WR );
+		else {
+			lprintf( "linger and still pending write data..." );
+			lpClient->dwFlags |= CF_TOCLOSE;
+		}
+	} else {
 		int n = 0;
 		// UDP still needs to be done this way...
-				//
+		// socket not connected; shutdown will not work.
 		//lprintf( "This will end up resetting the socket?" );
 		EnterCriticalSec( &globalNetworkData.csNetwork );
 		InternalRemoveClientExx( lpClient, bBlockNotify, bLinger DBG_RELAY );
@@ -43497,6 +43694,3210 @@ void RemoveClientExx(PCLIENT lpClient, LOGICAL bBlockNotify, LOGICAL bLinger DBG
 		LeaveCriticalSec( &globalNetworkData.csNetwork );
 	}
 }
+SACK_NETWORK_NAMESPACE_END
+///////////////////////////////////////////////////////////////////////////
+//
+// Filename    -  network_all.c
+//
+// Description -  Utility source to merge network providers for
+//                amalgamated targets; provides #ifdef wrappers
+//
+// Author      -  James Buckeyne
+//
+// Create Date -  2019-06-26
+//
+///////////////////////////////////////////////////////////////////////////
+#if defined( __MAC__ )
+///////////////////////////////////////////////////////////////////////////
+//
+// Filename    -  network_mac.C
+//
+// Description -  Network event handling for MAC(BSD) using kevent
+//
+// Author      -  James Buckeyne
+//
+// Create Date -  2019-06-26
+//
+///////////////////////////////////////////////////////////////////////////
+//
+//  DEBUG FLAGS IN netstruc.h
+//
+#ifndef _DEFAULT_SOURCE
+  // for features.h
+#define _DEFAULT_SOURCE
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#endif
+#define FIX_RELEASE_COM_COLLISION
+#define NO_UNICODE_C
+//#define DO_LOGGING // override no _DEBUG def to do loggings...
+//#define NO_LOGGING // force neverlog....
+#ifdef __LINUX__
+#endif
+//for GetMacAddress
+#ifdef __LINUX__
+//#include <sys/timeb.h>
+//*******************8
+#ifndef __ANDROID__
+#else
+#define EPOLLRDHUP EPOLLHUP
+#define EPOLL_CLOEXEC 0
+#endif
+#ifdef __MAC__
+#else
+#endif
+//*******************8
+#endif
+#ifdef WIN32
+#ifdef __CYGWIN__
+#else
+#endif
+#endif
+SACK_NETWORK_NAMESPACE
+//static uintptr_t CPROC NetworkThreadProc( PTHREAD thread );
+void RemoveThreadEvent( PCLIENT pc ) {
+	struct peer_thread_info *thread = pc->this_thread;
+	// could be closed (accept, initial read, protocol causes close before ever completing getting scheduled)
+	if( !thread ) {
+		 lprintf( "didn't have one? %p", pc );
+		return;
+	}
+	{
+#  ifdef __EMSCRIPTEN__
+#  else
+#      ifdef __64__
+		struct kevent64_s ev;
+		if( pc->dwFlags & CF_LISTEN ) {
+			EV_SET64( &ev, pc->Socket, EVFILT_READ, EV_DELETE, 0, 0, (uint64_t)pc, NULL, NULL );
+			kevent64( thread->kqueue, &ev, 1, 0, 0, 0, 0 );
+		} else {
+			EV_SET64( &ev, pc->Socket, EVFILT_READ, EV_DELETE, 0, 0, (uintptr_t)pc, NULL, NULL );
+			kevent64( thread->kqueue, &ev, 1, 0, 0, 0, 0 );
+			EV_SET64( &ev, pc->Socket, EVFILT_WRITE, EV_DELETE, 0, 0, (uintptr_t)pc, NULL, NULL );
+			kevent64( thread->kqueue, &ev, 1, 0, 0, 0, 0 );
+		}
+		if( pc->SocketBroadcast ) {
+			EV_SET64( &ev, pc->SocketBroadcast, EVFILT_READ, EV_DELETE, 0, 0, (uint64_t)pc, NULL, NULL );
+			kevent64( thread->kqueue, &ev, 1, 0, 0, 0, 0 );
+		}
+#      else
+		struct kevent ev;
+		if( pc->dwFlags & CF_LISTEN ) {
+			EV_SET( &ev, pc->Socket, EVFILT_READ, EV_DELETE, 0, 0, (uint64_t)pc );
+			kevent( thread->kqueue, &ev, 1, 0, 0, 0 );
+		} else {
+			EV_SET( &ev, pc->Socket, EVFILT_READ, EV_DELETE, 0, 0, (uintptr_t)pc );
+			kevent( thread->kqueue, &ev, 1, 0, 0, 0 );
+			EV_SET( &ev, pc->Socket, EVFILT_WRITE, EV_DELETE, 0, 0, (uintptr_t)pc );
+			kevent( thread->kqueue, &ev, 1, 0, 0, 0 );
+		}
+		if( pc->SocketBroadcast ) {
+			EV_SET( &ev, pc->SocketBroadcsat, EVFILT_READ, EV_DELETE, 0, 0, (uint64_t)pc );
+			kevent( thread->kqueue, &ev, 1, 0, 0, 0 );
+		}
+#      endif
+ // __EMSCRIPTEN__
+#  endif
+	}
+	LockedDecrement( &thread->nEvents );
+#    ifdef LOG_NETWORK_EVENT_THREAD
+	lprintf( "peer %p now has %d events", thread, thread->nEvents );
+#    endif
+	// don't bubble sort root thread
+	if( thread->parent_peer )
+		while( (thread->nEvents < thread->parent_peer->nEvents) && thread->parent_peer->parent_peer ) {
+#    ifdef LOG_NETWORK_EVENT_THREAD
+			//lprintf( "swapping this with parent peer ... this events %d  parent %d", thread->nEvents, thread->parent_peer->nEvents );
+#    endif
+			if( thread->child_peer )
+				thread->child_peer->parent_peer = thread->parent_peer;
+			thread->parent_peer->child_peer = thread->child_peer;
+			struct peer_thread_info *tmp = thread->parent_peer;
+			tmp->parent_peer->child_peer = thread;
+			thread->parent_peer = tmp->parent_peer;
+			tmp->parent_peer = thread;
+			thread->child_peer = tmp;
+		}
+}
+struct event_data {
+	PCLIENT pc;
+	int broadcast;
+};
+void AddThreadEvent( PCLIENT pc, int broadcast )
+{
+	struct peer_thread_info *peer = globalNetworkData.root_thread;
+	LOGICAL addPeer = FALSE;
+	if( pc->Socket <= 0 ) {
+		lprintf( "SAVED FROM A FATAL INFINITE EVENT LOOP");
+		return;
+	}
+#ifdef LOG_NOTICES
+	//if( globalNetworkData.flags.bLogNotices )
+		lprintf( "Add thread event %p %d %08x  %s", pc, broadcast?pc->SocketBroadcast:pc->Socket, pc->dwFlags, broadcast?"broadcast":"direct" );
+#endif
+	if( !broadcast ) {
+		for( ; peer; peer = peer->child_peer ) {
+			if( !peer->child_peer ) {
+#ifdef LOG_NOTICES
+				if( globalNetworkData.flags.bLogNotices )
+					lprintf( "On last peer..." );
+#endif
+				if( peer->nEvents > globalNetworkData.nPeers ) {
+#ifdef LOG_NOTICES
+					if( globalNetworkData.flags.bLogNotices )
+						lprintf( "global peers is %d, this has %d", globalNetworkData.nPeers, peer->nEvents );
+#endif
+					addPeer = TRUE;
+					break;
+				}
+				if( peer->nEvents >= 2560 ) {
+#ifdef LOG_NOTICES
+					if( globalNetworkData.flags.bLogNotices )
+						lprintf( "this has max events already.... %d %d", globalNetworkData.nPeers, peer->nEvents );
+#endif
+					addPeer = TRUE;
+					break;
+				}
+			}
+			if( peer->nEvents < 2560 ) {
+												// last thread.
+				if( !peer->child_peer )
+					break;
+				if( peer->nEvents < peer->child_peer->nEvents ) {
+#ifdef LOG_NOTICES
+					//if( globalNetworkData.flags.bLogNotices )
+					//	lprintf( "this event has fewer than the next thread's events %d  %d", peer->nEvents, peer->child_peer->nEvents );
+#endif
+					break;
+				}
+			}
+		}
+		if( addPeer ) {
+#ifdef LOG_NOTICES
+			if( globalNetworkData.flags.bLogNotices )
+				lprintf( "Creating a new thread...." );
+#endif
+			AddLink( (PLIST*)&globalNetworkData.pThreads, ThreadTo( NetworkThreadProc, (uintptr_t)peer ) );
+			globalNetworkData.nPeers++;
+			while( !peer->child_peer )
+				Relinquish();
+			if( globalNetworkData.root_thread != peer ) {
+				// relink to be higher in list of peers so it's found earlier.
+#ifdef LOG_NOTICES
+				if( globalNetworkData.flags.bLogNotices )
+					lprintf( "Relinking thread to be after root peer (no events, so it must be first)" );
+#endif
+				peer->child_peer->child_peer = globalNetworkData.root_thread->child_peer;
+				globalNetworkData.root_thread->child_peer->parent_peer = peer->child_peer;
+				globalNetworkData.root_thread->child_peer = peer->child_peer;
+				peer->child_peer->parent_peer = globalNetworkData.root_thread;
+				peer->child_peer = NULL;
+				peer = globalNetworkData.root_thread->child_peer;
+			}
+			else
+				peer = peer->child_peer;
+		}
+	} else {
+ // add broadcast to the same event as the original.
+		peer = pc->this_thread;
+	}
+	// make sure to only add this handle when the first peer will also be added.
+	// this means the list can be 61 and at this time no more.
+#ifdef __EMSCRIPTEN__
+#else
+	{
+		struct event_data *data = New( struct event_data );
+		data->pc = pc;
+		data->broadcast = broadcast;
+#    ifdef __64__
+		struct kevent64_s ev;
+		if( pc->dwFlags & CF_LISTEN ) {
+			EV_SET64( &ev, broadcast?pc->SocketBroadcast:pc->Socket, EVFILT_READ, EV_ADD, 0, 0, (uintptr_t)data, NULL, NULL );
+			kevent64( peer->kqueue, &ev, 1, 0, 0, 0, 0 );
+		}
+		else {
+			EV_SET64( &ev, broadcast?pc->SocketBroadcast:pc->Socket, EVFILT_READ, EV_ADD, 0, 0, (uintptr_t)data, NULL, NULL );
+			kevent64( peer->kqueue, &ev, 1, 0, 0, 0, 0 );
+			EV_SET64( &ev, broadcast?pc->SocketBroadcast:pc->Socket, EVFILT_WRITE, EV_ADD | EV_CLEAR, 0, 0, (uintptr_t)data, NULL, NULL );
+			kevent64( peer->kqueue, &ev, 1, 0, 0, 0, 0 );
+		}
+#    else
+		struct kevent ev;
+		if( pc->dwFlags & CF_LISTEN ) {
+			EV_SET( &ev, broadcast?pc->SocketBroadcast:pc->Socket, EVFILT_READ, EV_ADD, 0, 0, (uintptr_t)data );
+			kevent( peer->kqueue, &ev, 1, 0, 0, 0 );
+		}
+		else {
+			EV_SET( &ev, broadcast?pc->SocketBroadcast:pc->Socket, EVFILT_READ, EV_ADD|EV_ENABLE, 0, 0, (uintptr_t)data );
+			kevent( peer->kqueue, &ev, 1, 0, 0, 0 );
+			EV_SET( &ev, broadcast?pc->SocketBroadcast:pc->Socket, EVFILT_WRITE, EV_ADD|EV_ENABLE|EV_CLEAR, 0, 0, (uintptr_t)data );
+			kevent( peer->kqueue, &ev, 1, 0, 0, 0 );
+		}
+#    endif
+	}
+ // __EMSCRIPTEN__
+#endif
+#ifdef LOG_NETWORK_EVENT_THREAD
+	lprintf( "added thread: %p  %p  %p  ", pc, pc->this_thread, peer );
+#endif
+	if( !pc->this_thread ) {
+		LockedIncrement( &peer->nEvents );
+		pc->this_thread = peer;
+		pc->flags.bAddedToEvents = 1;
+	}
+#ifdef LOG_NETWORK_EVENT_THREAD
+	lprintf( "peer %p now has %d events", peer, peer->nEvents );
+#endif
+	// scheduler thread already awake do not wake him.
+}
+int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t unused )
+{
+	int cnt;
+	struct timeval time;
+	if( globalNetworkData.bQuit )
+		return -1;
+#ifdef __EMSCRIPTEN__
+		lprintf( "Need Old Select Code Here" );
+		return 1;
+#else
+	{
+#    ifdef __64__
+		struct kevent64_s events[10];
+		cnt = kevent64( thread->kqueue, NULL, 0, events, 10, 0, NULL );
+#    else
+		kevent events[10];
+		cnt = kevent( thread->kqueue, NULL, 0, events, 10, NULL );
+#    endif
+		if( cnt < 0 )
+		{
+			int err = errno;
+			if( err == EINTR )
+				return 1;
+			Log1( "Sorry epoll_pwait/kevent call failed... %d", err );
+			return 1;
+		}
+		if( cnt > 0 )
+		{
+			int closed;
+			int n;
+			struct event_data *event_data;
+			THREAD_ID prior = 0;
+			PCLIENT next;
+#  ifdef LOG_NETWORK_EVENT_THREAD
+			lprintf( "process %d events", cnt );
+#  endif
+			for( n = 0; n < cnt; n++ ) {
+				closed = 0;
+				event_data = (struct event_data*)events[n].udata;
+#  ifdef LOG_NOTICES
+				lprintf( "Process %d %x %x"
+				       , ((uintptr_t)event_data == 1) ?0:event_data->broadcast?event_data->pc->SocketBroadcast:event_data->pc->Socket
+				       , ((uintptr_t)event_data == 1) ?0:event_data->pc->dwFlags
+				       , events[n].filter );
+#  endif
+				if( event_data == (struct event_data*)1 ) {
+					//char buf;
+					//int stat;
+					//stat = read( GetThreadSleeper( thread->thread ), &buf, 1 );
+					//call wakeable sleep to just clear the sleep; because this is an event on the sleep pipe.
+					//WakeableSleep( 1 );
+					//lprintf( "This should sleep forever..." );
+					return 1;
+				}
+				if( events[n].filter == EVFILT_READ )
+				{
+					int locked;
+					locked = 1;
+					while( !NetworkLock( event_data->pc, 1 ) ) {
+						if( !( event_data->pc->dwFlags & CF_ACTIVE ) ) {
+#  ifdef LOG_NETWORK_EVENT_THREAD
+							lprintf( "failed lock dwFlags : %8x", event_data->pc->dwFlags );
+#  endif
+							locked = 0;
+							break;
+						}
+						if( event_data->pc->dwFlags & CF_AVAILABLE ) {
+							locked = 0;
+							break;
+						}
+						Relinquish();
+					}
+					if( !( event_data->pc->dwFlags & ( CF_ACTIVE | CF_CLOSED ) ) ) {
+#  ifdef LOG_NETWORK_EVENT_THREAD
+						lprintf( "not active but locked? dwFlags : %8x", event_data->pc->dwFlags );
+#  endif
+						continue;
+					}
+					if( event_data->pc->dwFlags & CF_AVAILABLE )
+						continue;
+					if( !IsValid( event_data->pc->Socket ) ) {
+						NetworkUnlock( event_data->pc, 1 );
+						continue;
+					}
+#  ifdef LOG_NETWORK_EVENT_THREAD
+					lprintf( "EPOLLIN/EVFILT_READ %x", event_data->pc->dwFlags );
+#  endif
+					if( event_data->pc->dwFlags & CF_CLOSED ) {
+						PCLIENT pClient = event_data->pc;
+						// close notice went to application; all resources for application are gone.
+						// any pending reads are no longre valid.
+						//lprintf( "socket is already closed... what do we need to do?");
+						//WakeableSleep( 100 );
+#if 0 && !DrainSupportDeprecated
+						if( 0 && !pClient->bDraining )
+#endif
+						{
+							size_t bytes_read;
+							// act of reading can result in a close...
+							// there are things like IE which close and send
+							// adn we might get the close notice at application level indicating there might still be data...
+							while( ( bytes_read = FinishPendingRead( pClient DBG_SRC) ) > 0
+ // try and read...
+								&& bytes_read != (size_t)-1 );
+							//if( pClient->dwFlags & CF_TOCLOSE )
+							{
+								//lprintf( "Pending read failed - reset connection. (well this is FD_CLOSE so yeah...??]" );
+								//InternalRemoveClientEx( pc, TRUE, FALSE );
+							}
+						}
+#  ifdef LOG_NOTICES
+						//if( globalNetworkData.flags.bLogNotices )
+							lprintf("FD_CLOSE... %p  %08x", pClient, pClient->dwFlags );
+#  endif
+						//if( pClient->dwFlags & CF_ACTIVE )
+						{
+							// might already be cleared and gone..
+							//InternalRemoveClientEx( pClient, FALSE, TRUE );
+							TerminateClosedClient( pClient );
+							closed = 1;
+						}
+						// section will be blank after termination...(correction, we keep the section state now)
+ // it's no longer closing.  (was set during the course of closure)
+						pClient->dwFlags &= ~CF_CLOSING;
+					} else if( !(event_data->pc->dwFlags & (CF_ACTIVE) ) ) {
+						lprintf( "Event on socket no longer active..." );
+						// change to inactive status by the time we got here...
+					} else if( event_data->pc->dwFlags & CF_LISTEN )
+					{
+#ifdef LOG_NOTICES
+						if( globalNetworkData.flags.bLogNotices )
+							lprintf( "accepting..." );
+#endif
+						AcceptClient( event_data->pc );
+					}
+					else if( event_data->pc->dwFlags & CF_UDP )
+					{
+#ifdef LOG_NOTICES
+						if( globalNetworkData.flags.bLogNotices )
+							lprintf( "UDP Read Event..." );
+#endif
+						//lprintf( "UDP READ" );
+						FinishUDPRead( event_data->pc, event_data->broadcast );
+					}
+#if 0 && !DrainSupportDeprecated
+					else if( event_data->pc->bDraining )
+					{
+#ifdef LOG_NOTICES
+						if( globalNetworkData.flags.bLogNotices )
+							lprintf( "TCP Drain Event..." );
+#endif
+						TCPDrainRead( event_data->pc );
+					}
+#endif
+					else if( event_data->pc->dwFlags & CF_READPENDING )
+					{
+						size_t read;
+#ifdef LOG_NOTICES
+						if( globalNetworkData.flags.bLogNotices )
+							lprintf( "TCP Read Event..." );
+#endif
+						// packet oriented things may probably be reading only
+						// partial messages at a time...
+						read = FinishPendingRead( event_data->pc DBG_SRC );
+						//lprintf( "Read %d", read );
+						if( ( read == -1 ) && ( event_data->pc->dwFlags & CF_TOCLOSE ) )
+						{
+#ifdef LOG_NOTICES
+							//if( globalNetworkData.flags.bLogNotices )
+							lprintf( "Pending read failed - reset connection." );
+#endif
+							EnterCriticalSec( &globalNetworkData.csNetwork );
+							InternalRemoveClientEx( event_data->pc, FALSE, FALSE );
+							TerminateClosedClient( event_data->pc );
+							LeaveCriticalSec( &globalNetworkData.csNetwork );
+							closed = 1;
+						}
+						else if( !event_data->pc->RecvPending.s.bStream )
+							event_data->pc->dwFlags |= CF_READREADY;
+					}
+					else
+					{
+#ifdef LOG_NOTICES
+						if( globalNetworkData.flags.bLogNotices )
+							lprintf( "TCP Set read ready..." );
+#endif
+						event_data->pc->dwFlags |= CF_READREADY;
+					}
+					if( locked )
+						LeaveCriticalSec( &event_data->pc->csLockRead );
+				}
+				if( !closed && ( event_data->pc->dwFlags & CF_ACTIVE ) ) {
+					int locked;
+					locked = 1;
+					if( events[n].filter == EVFILT_WRITE )
+					{
+#  ifdef LOG_NETWORK_EVENT_THREAD
+						lprintf( "EPOLLOUT %s", ( event_data->pc->dwFlags & CF_CONNECTING ) ? "connecting"
+							: ( !( event_data->pc->dwFlags & CF_ACTIVE ) ) ? "closed" : "writing" );
+#  endif
+						while( !NetworkLock( event_data->pc, 0 ) ) {
+							locked = 0;
+							break;
+						}
+						if( !( event_data->pc->dwFlags & ( CF_ACTIVE | CF_CLOSED ) ) ) {
+#  ifdef LOG_NETWORK_EVENT_THREAD
+							lprintf( "not active but locked? dwFlags : %8x", event_data->pc->dwFlags );
+#  endif
+							continue;
+						}
+						if( event_data->pc->dwFlags & CF_AVAILABLE )
+							continue;
+						if( !IsValid( event_data->pc->Socket ) ) {
+							NetworkUnlock( event_data->pc, 0 );
+							continue;
+						}
+						if( !( event_data->pc->dwFlags & CF_ACTIVE ) ) {
+							//lprintf( "FLAGS IS NOT ACTIVE BUT: %x", event_data->pc->dwFlags );
+							// change to inactive status by the time we got here...
+						} else if( event_data->pc->dwFlags & CF_CONNECTING ) {
+#ifdef LOG_NOTICES
+							if( globalNetworkData.flags.bLogNotices )
+								lprintf( "Connected!" );
+#endif
+							event_data->pc->dwFlags |= CF_CONNECTED;
+							event_data->pc->dwFlags &= ~CF_CONNECTING;
+							{
+								PCLIENT pc = event_data->pc;
+#ifdef __LINUX__
+								socklen_t
+#else
+								int
+#endif
+									nLen = MAGIC_SOCKADDR_LENGTH;
+								if( !pc->saSource )
+									pc->saSource = AllocAddr();
+								if( getsockname( pc->Socket, pc->saSource, &nLen ) ) {
+									lprintf( "getsockname errno = %d", errno );
+								}
+								if( pc->saSource->sa_family == AF_INET )
+									SET_SOCKADDR_LENGTH( pc->saSource, IN_SOCKADDR_LENGTH );
+								else if( pc->saSource->sa_family == AF_INET6 )
+									SET_SOCKADDR_LENGTH( pc->saSource, IN6_SOCKADDR_LENGTH );
+								else
+									SET_SOCKADDR_LENGTH( pc->saSource, nLen );
+							}
+							{
+								int error;
+								socklen_t errlen = sizeof( error );
+								getsockopt( event_data->pc->Socket, SOL_SOCKET
+									, SO_ERROR
+									, &error, &errlen );
+								//lprintf( "Error checking for connect is: %s on %d", strerror( error ), event_data->pc->Socket );
+								if( event_data->pc->pWaiting ) {
+#ifdef LOG_NOTICES
+									if( globalNetworkData.flags.bLogNotices )
+										lprintf( "Got connect event, waking waiter.." );
+#endif
+									WakeThread( event_data->pc->pWaiting );
+								}
+								if( event_data->pc->connect.ThisConnected )
+									event_data->pc->connect.ThisConnected( event_data->pc, error );
+#ifdef LOG_NOTICES
+								if( globalNetworkData.flags.bLogNotices )
+									lprintf( "Connect error was: %d", error );
+#endif
+								// if connected okay - issue first read...
+								if( !error ) {
+#ifdef LOG_NOTICES
+									lprintf( "Read Complete" );
+#endif
+									if( event_data->pc->read.ReadComplete ) {
+#ifdef LOG_NOTICES
+										lprintf( "Initial Read Complete" );
+#endif
+										event_data->pc->read.ReadComplete( event_data->pc, NULL, 0 );
+									}
+									if( event_data->pc->lpFirstPending ) {
+										lprintf( "Data was pending on a connecting socket, try sending it now" );
+										TCPWrite( event_data->pc );
+									}
+								} else {
+									event_data->pc->dwFlags |= CF_CONNECTERROR;
+								}
+							}
+						} else if( event_data->pc->dwFlags & CF_UDP ) {
+							//lprintf( "UDP WRITE IS NEVER QUEUED." );
+							// udp write event complete....
+							// do we ever care? probably sometime...
+						} else {
+#ifdef LOG_NOTICES
+							if( globalNetworkData.flags.bLogNotices )
+								lprintf( "TCP Write Event..." );
+#endif
+							// if write did not get locked, a write is in progress
+							// wait until it finished there?
+							// did this wake up because that wrote?
+							if( locked ) {
+								TCPWrite( event_data->pc );
+							}
+							else
+								event_data->pc->flags.bWriteOnUnlock = true;
+						}
+						if( locked )
+							NetworkUnlock( event_data->pc, 0 );
+					}
+				} else {
+					//lprintf( "Already closed? Stop looping on this event? %p %d %x", event_data->pc, event_data->pc->Socket, event_data->pc->dwFlags );
+				}
+			}
+			// had some event  - return 1 to continue working...
+		}
+		return 1;
+	}
+#endif
+	//lprintf( "Attempting to wake thread (send sighup!)" );
+	//WakeThread( globalNetworkData.pThread );
+	//lprintf( "Only reason should get here is if it's not this thread..." );
+	return -1;
+}
+//----------------------------------------------------------------------------
+int CPROC IdleProcessNetworkMessages( uintptr_t quick_check )
+{
+	struct peer_thread_info *this_thread = IsNetworkThread();
+	if( this_thread )
+		return ProcessNetworkMessages( this_thread, quick_check );
+	return -1;
+}
+SACK_NETWORK_NAMESPACE_END
+#endif
+#ifdef _WIN32
+///////////////////////////////////////////////////////////////////////////
+//
+// Filename    -  Network.C
+//
+// Description -  Network event handler for windows winsock2 events
+//
+// Author      -  James Buckeyne
+//
+// Create Date -  2019-06-26
+//
+///////////////////////////////////////////////////////////////////////////
+//
+//  DEBUG FLAGS IN netstruc.h
+//
+#ifndef _DEFAULT_SOURCE
+  // for features.h
+#define _DEFAULT_SOURCE
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#endif
+#define FIX_RELEASE_COM_COLLISION
+#define NO_UNICODE_C
+#ifdef WIN32
+#ifdef __CYGWIN__
+#else
+#endif
+#endif
+SACK_NETWORK_NAMESPACE
+//----------------------------------------------------------------------------
+static int NetworkStartup( void )
+{
+	static int attempt = 0;
+	static int nStep = 0,
+	          nError;
+	static SOCKET sockMaster;
+	static SOCKADDR remSin;
+	switch( nStep )
+	{
+	case 0 :
+		SystemCheck();
+		nStep++;
+		attempt = 0;
+	case 1 :
+		// Sit around, waiting for the network to start...
+		//--------------------
+		// sorry this is really really ugly to read!
+		sockMaster = OpenSocket( TRUE, FALSE, FALSE, 0 );
+		if( sockMaster == INVALID_SOCKET )
+		{
+			lprintf( "Clever OpenSocket failed... fallback... and survey sez..." );
+			//--------------------
+			sockMaster = socket( AF_INET, SOCK_DGRAM, 0);
+			//--------------------
+		}
+		//--------------------
+		if( sockMaster == INVALID_SOCKET )
+		{
+			nError = WSAGetLastError();
+			lprintf( "Failed to create a socket - error is %ld", WSAGetLastError() );
+ // provvider init fail )
+			if( nError == 10106 )
+			{
+				if( ++attempt >= 30 ) return NetworkQuit();
+				return -2;
+			}
+			if( nError == WSAENETDOWN )
+			{
+				if( ++attempt >= 30 ) return NetworkQuit();
+				//else return NetworkPause("Socket is delaying...");
+			}
+ // reset...
+			 nStep = 0;
+			if( ++attempt >= 30 ) return NetworkQuit();
+//NetworkQuit();
+			return 1;
+		}
+		// Retrieve my IP address and UDP Port number
+		remSin.sa_family=AF_INET;
+		remSin.sa_data[0]=0;
+		remSin.sa_data[1]=0;
+		((SOCKADDR_IN*)&remSin)->sin_addr.s_addr=INADDR_ANY;
+		nStep++;
+		attempt = 0;
+		// Fall into next state..............
+	case 2 :
+		// Associate an address with a socket. (bind)
+		if( bind( sockMaster, (PSOCKADDR)&remSin, sizeof(remSin))
+			 == SOCKET_ERROR )
+		{
+			if( WSAGetLastError() == WSAENETDOWN )
+			{
+				if( ++attempt >= 30 ) return NetworkQuit();
+				//else return NetworkPause("Bind is Delaying");
+			}
+ // reset...
+			nStep = 0;
+			return NetworkQuit();
+		}
+		nStep++;
+		attempt = 0;
+		// Fall into next state..............
+	case 3 :
+		closesocket(sockMaster);
+		sockMaster = INVALID_SOCKET;
+ // reset...
+		nStep = 0;
+		break;
+	}
+	return 0;
+}
+//----------------------------------------------------------------------------
+void CPROC NetworkPauseTimer( uintptr_t psv )
+{
+	int nResult;
+	nResult = NetworkStartup();
+	if( nResult == 0 )
+	{
+		while( !globalNetworkData.uNetworkPauseTimer )
+			Relinquish();
+		RemoveTimer( globalNetworkData.uNetworkPauseTimer );
+		globalNetworkData.flags.bNetworkReady = TRUE;
+		globalNetworkData.flags.bThreadInitOkay = TRUE;
+	}
+	else if( nResult == -1 )
+	{
+		globalNetworkData.flags.bNetworkReady = TRUE;
+		globalNetworkData.flags.bThreadInitOkay = FALSE;
+		// exiting ... bad stuff happens
+	}
+	else if( nResult == -2 )
+	{
+		// delaying... okay....
+	}
+}
+//----------------------------------------------------------------------------
+static void HandleEvent( PCLIENT pClient )
+{
+	WSANETWORKEVENTS networkEvents;
+	if( globalNetworkData.bQuit )
+	{
+		lprintf( "Task is shutting down network... don't handle event." );
+		return;
+	}
+	if( !pClient )
+	{
+		lprintf( "How did a NULL client get here?!" );
+		return;
+	}
+	pClient->dwFlags |= CF_PROCESSING;
+#ifdef LOG_NETWORK_EVENT_THREAD
+	//if( globalNetworkData.flags.bLogNotices )
+	//	lprintf( "Client event on %p", pClient );
+#endif
+	if( WSAEnumNetworkEvents( pClient->Socket, pClient->event, &networkEvents ) == ERROR_SUCCESS )
+	{
+		if( networkEvents.lNetworkEvents == 0 ) {
+#ifdef LOG_NETWORK_EVENT_THREAD
+			if( globalNetworkData.flags.bLogNotices )
+				lprintf( "zero events...%p %p %p", pClient, pClient->Socket, pClient->event );
+#endif
+			return;
+		}
+		{
+			if( pClient->dwFlags & CF_UDP )
+			{
+				if( networkEvents.lNetworkEvents & FD_READ )
+				{
+#ifdef LOG_NOTICES
+					if( globalNetworkData.flags.bLogNotices )
+						lprintf( "Got UDP FD_READ" );
+#endif
+					FinishUDPRead( pClient, 0 );
+				}
+			}
+			else
+			{
+				THREAD_ID prior = 0;
+#ifdef LOG_CLIENT_LISTS
+				lprintf( "client lists Ac:%p(%p(%d)) Av:%p(%p(%d)) Cl:%p(%p(%d))"
+						 , &globalNetworkData.ActiveClients, globalNetworkData.ActiveClients, globalNetworkData.ActiveClients?globalNetworkData.ActiveClients->Socket:0
+						 , &globalNetworkData.AvailableClients, globalNetworkData.AvailableClients, globalNetworkData.AvailableClients?globalNetworkData.AvailableClients->Socket:0
+						 , &globalNetworkData.ClosedClients, globalNetworkData.ClosedClients, globalNetworkData.ClosedClients?globalNetworkData.ClosedClients->Socket:0
+						 );
+#endif
+#ifdef LOG_NETWORK_LOCKING
+				lprintf( "Handle Event left global" );
+#endif
+				// if an unknown socket issued a
+				// notification - close it - unknown handling of unknown socket.
+#ifdef LOG_NETWORK_EVENT_THREAD
+				if( globalNetworkData.flags.bLogNotices )
+					lprintf( "events : %08x on %p", networkEvents.lNetworkEvents, pClient );
+#endif
+				if( networkEvents.lNetworkEvents & FD_CONNECT )
+				{
+					{
+						uint16_t wError = networkEvents.iErrorCode[FD_CONNECT_BIT];
+#ifdef LOG_NOTICES
+						if( globalNetworkData.flags.bLogNotices )
+							lprintf( "FD_CONNECT on %p", pClient );
+#endif
+						if( !wError )
+							pClient->dwFlags |= CF_CONNECTED;
+						else
+						{
+#ifdef LOG_NOTICES
+							if( globalNetworkData.flags.bLogNotices )
+								lprintf( "Connect error: %d", wError );
+#endif
+							pClient->dwFlags |= CF_CONNECTERROR;
+						}
+						if( !( pClient->dwFlags & CF_CONNECTERROR ) )
+						{
+							// since this is done before connecting is clear, tcpwrite
+							// may make notice of previously queued data to
+							// connection opening...
+							//lprintf( "Sending any previously queued data." );
+							// with events, we get a FD_WRITE also... which calls tcpwrite.
+							//TCPWrite( pClient );
+						}
+						pClient->dwFlags &= ~CF_CONNECTING;
+						if( pClient->connect.ThisConnected )
+						{
+							if( !wError && !pClient->saSource ) {
+#ifdef __LINUX__
+								socklen_t
+#else
+								int
+#endif
+									nLen = MAGIC_SOCKADDR_LENGTH;
+								if( !pClient->saSource )
+									pClient->saSource = AllocAddr();
+								if( getsockname( pClient->Socket, pClient->saSource, &nLen ) )
+								{
+									lprintf( "getsockname errno = %d", errno );
+								}
+							}
+#ifdef LOG_NOTICES
+							if( globalNetworkData.flags.bLogNotices )
+								lprintf( "Post connect to application %p  error:%d", pClient, wError );
+#endif
+							if( pClient->dwFlags & CF_CPPCONNECT )
+								pClient->connect.CPPThisConnected( pClient->psvConnect, wError );
+							else
+								pClient->connect.ThisConnected( pClient, wError );
+						}
+						//lprintf( "Returned from application connected callback" );
+						// check to see if the read was queued before the connect
+						// actually completed...
+						if( (pClient->dwFlags & ( CF_ACTIVE | CF_CONNECTED )) ==
+							( CF_ACTIVE | CF_CONNECTED ) )
+						{
+							if( pClient->read.ReadComplete )
+								if( pClient->dwFlags & CF_CPPREAD )
+									pClient->read.CPPReadComplete( pClient->psvRead, NULL, 0 );
+								else
+									pClient->read.ReadComplete( pClient, NULL, 0 );
+						}
+						if( pClient->pWaiting )
+							WakeThread( pClient->pWaiting );
+#ifdef LOG_NOTICES
+						if( globalNetworkData.flags.bLogNotices )
+							lprintf( "FD_CONNECT Completed" );
+#endif
+						//lprintf( "Returned from application inital read complete." );
+					}
+				}
+				if( networkEvents.lNetworkEvents & FD_READ )
+				{
+					PCLIENT pcLock;
+					while( !( pcLock = NetworkLockEx( pClient, 1 DBG_SRC ) ) ) {
+						// done with events; inactive sockets can't have events
+						if( !( pClient->dwFlags & CF_ACTIVE ) ) {
+							pcLock = NULL;
+							break;
+						}
+						Relinquish();
+					}
+#ifdef LOG_NOTICES
+					//if( globalNetworkData.flags.bLogNotices )
+					//	lprintf( "FD_READ" );
+#endif
+					  if( ( pClient->dwFlags & CF_ACTIVE ) ) {
+#if 0 && !DrainSupportDeprecated
+						if( pClient->bDraining )
+						{
+							TCPDrainRead( pClient );
+						}
+						else
+#endif
+						{
+							// got a network event, and won't get another until recv is called.
+							// mark that the socket has data, then the pend_read code will trigger the finishpendingread.
+							if( FinishPendingRead( pClient DBG_SRC ) == 0 )
+							{
+								pClient->dwFlags |= CF_READREADY;
+							}
+							if( pClient->dwFlags & CF_TOCLOSE )
+							{
+								//lprintf( "Pending read failed - and wants to close." );
+								//InternalRemoveClientEx( pc, TRUE, FALSE );
+							}
+						}
+						NetworkUnlock( pClient, 1 );
+					}
+				}
+				if( networkEvents.lNetworkEvents & FD_WRITE )
+				{
+					PCLIENT pcLock;
+					while( !( pcLock = NetworkLockEx( pClient, 0 DBG_SRC ) ) ) {
+						// done with events; inactive sockets can't have events
+						if( !( pClient->dwFlags & CF_ACTIVE ) ) {
+							pcLock = NULL;
+							break;
+						}
+						Relinquish();
+					}
+					if( pClient->dwFlags & CF_ACTIVE ) {
+#ifdef LOG_NOTICES
+						//if( globalNetworkData.flags.bLogNotices )
+						//	lprintf( "FD_Write" );
+#endif
+						// returns true while it wrote or there is data to write
+						if( pClient->lpFirstPending )
+							TCPWrite(pClient);
+						if( !pClient->lpFirstPending ) {
+							if( pClient->dwFlags & CF_TOCLOSE )
+							{
+								pClient->dwFlags &= ~CF_TOCLOSE;
+								//lprintf( "Pending read failed - and wants to close." );
+								EnterCriticalSec( &globalNetworkData.csNetwork );
+								InternalRemoveClientEx( pClient, FALSE, TRUE );
+								TerminateClosedClient( pClient );
+								LeaveCriticalSec( &globalNetworkData.csNetwork );
+							}
+						}
+						NetworkUnlock( pClient, 0 );
+					}
+				}
+				if( networkEvents.lNetworkEvents & FD_CLOSE )
+				{
+					//lprintf( "FD_CLOSE %p", pClient );
+#if 0 && !DrainSupportDeprecated
+					if( !pClient->bDraining )
+#endif
+					{
+						size_t bytes_read;
+						// act of reading can result in a close...
+						// there are things like IE which close and send
+						// adn we might get the close notice at application level indicating there might still be data...
+						//lprintf( "closed, try pending read %p", pClient );
+						while( ( bytes_read = FinishPendingRead( pClient DBG_SRC) ) > 0
+ // try and read...
+							&& bytes_read != (size_t)-1 )
+						//if( pClient->dwFlags & CF_TOCLOSE )
+						{
+							//lprintf( "Pending read failed - reset connection. (well this is FD_CLOSE so yeah...??]" );
+							//InternalRemoveClientEx( pc, TRUE, FALSE );
+						}
+					}
+#ifdef LOG_NOTICES
+					if( globalNetworkData.flags.bLogNotices )
+						lprintf("FD_CLOSE... %p  %08x", pClient, pClient->dwFlags );
+#endif
+					if( pClient->dwFlags & CF_ACTIVE )
+					{
+						// might already be cleared and gone..
+						EnterCriticalSec( &globalNetworkData.csNetwork );
+						InternalRemoveClientEx( pClient, FALSE, TRUE );
+						TerminateClosedClient( pClient );
+						LeaveCriticalSec( &globalNetworkData.csNetwork );
+					}
+					// section will be blank after termination...(correction, we keep the section state now)
+ // it's no longer closing.  (was set during the course of closure)
+					pClient->dwFlags &= ~CF_CLOSING;
+				}
+				if( networkEvents.lNetworkEvents & FD_ACCEPT )
+				{
+#ifdef LOG_NOTICES
+					//if( globalNetworkData.flags.bLogNotices )
+					//	lprintf( "FD_ACCEPT on %p", pClient );
+#endif
+					AcceptClient(pClient);
+					//NetworkUnlock( pClient, 1 );
+				}
+				//lprintf( "leaveing event handler..." );
+				//lprintf( "Left event handler CS." );
+			}
+		}
+	}
+	else
+	{
+		DWORD dwError = WSAGetLastError();
+		if( dwError == 10038 )
+		{
+			// no longer a socket, probably in a closed or closing state.
+		}
+		else
+			lprintf( "Event enum failed... do what? close socket? %p %" _32f, pClient, dwError );
+	}
+	pClient->dwFlags &= ~CF_PROCESSING;
+}
+//----------------------------------------------------------------------------
+void RemoveThreadEvent( PCLIENT pc ) {
+	struct peer_thread_info *thread = pc->this_thread;
+ // could be closed (accept, initial read, protocol causes close before ever completing getting scheduled)
+	if( !thread ) return;
+	// reduce peer wait count to 1.
+#ifdef LOG_NETWORK_EVENT_THREAD
+	lprintf( "Remove client %p from %p thread events...  proc:%d  ev:%d  wait:%d", pc, thread, thread->flags.bProcessing, thread->nEvents, thread->nWaitEvents );
+#endif
+	thread->counting = TRUE;
+	thread->nEvents = 1;
+	if( thread->thread != MakeThread() && !thread->flags.bProcessing )
+		while( thread->nEvents != thread->nWaitEvents ) {
+			if( !thread->flags.bProcessing )
+			{
+				// have to make sure threads reset to the new list.
+				//lprintf( "have to wait for thread to be in wait state..." );
+				LeaveCriticalSec( &globalNetworkData.csNetwork );
+				LeaveCriticalSec( &globalNetworkData.csNetwork );
+				while( (thread->nWaitEvents > 1) || thread->flags.bProcessing ) {
+					WSASetEvent( thread->hThread );
+					Relinquish();
+				}
+				EnterCriticalSec( &globalNetworkData.csNetwork );
+				EnterCriticalSec( &globalNetworkData.csNetwork );
+			}
+			else
+  // if it's processing, race it; build new list, count it.
+				break;
+			Relinquish();
+		}
+	{
+		INDEX idx;
+		INDEX c = 0;
+		PCLIENT previous;
+		PLIST newList = CreateList();
+		SetLink( &newList, 65, 0 );
+		//EmptyDataList( &thread->event_list );
+		LIST_FORALL( thread->monitor_list, idx, PCLIENT, previous ) {
+			if( previous != pc )
+			{
+				AddLink( &newList, previous );
+				SetDataItem( &thread->event_list, c++, GetDataItem( &thread->event_list, idx ) );
+			}
+		}
+		thread->event_list->Cnt = c;
+		thread->nEvents = (int)c;
+		thread->counting = FALSE;
+		DeleteListEx( &thread->monitor_list DBG_SRC );
+		thread->monitor_list = newList;
+		pc->this_thread = NULL;
+#ifdef LOG_NETWORK_EVENT_THREAD
+		lprintf( "peer %p now has %d events", thread, thread->nEvents );
+#endif
+	}
+  // don't bubble sort root thread
+	if( thread->parent_peer )
+		while( ( thread->nEvents < thread->parent_peer->nEvents ) && thread->parent_peer->parent_peer ) {
+#ifdef LOG_NETWORK_EVENT_THREAD
+			//lprintf( "swapping this with parent peer ... this events %d  parent %d", thread->nEvents, thread->parent_peer->nEvents );
+#endif
+			if( thread->child_peer )
+				thread->child_peer->parent_peer = thread->parent_peer;
+			thread->parent_peer->child_peer = thread->child_peer;
+			struct peer_thread_info *tmp = thread->parent_peer;
+			tmp->parent_peer->child_peer = thread;
+			thread->parent_peer = tmp->parent_peer;
+			tmp->parent_peer = thread;
+			thread->child_peer = tmp;
+		}
+}
+// unused parameter broadcsat on windows; not needed.
+void AddThreadEvent( PCLIENT pc, int broadcsat )
+{
+	struct peer_thread_info *peer = globalNetworkData.root_thread;
+	LOGICAL addPeer = FALSE;
+#ifdef LOG_NOTICES
+	if( globalNetworkData.flags.bLogNotices )
+		lprintf( "Add thread event %p %p %08x", pc, pc->event, pc->dwFlags );
+#endif
+	for( ; peer; peer = peer->child_peer ) {
+		if( !peer->child_peer ) {
+#ifdef LOG_NOTICES
+			if( globalNetworkData.flags.bLogNotices )
+				lprintf( "On last peer..." );
+#endif
+			if( peer->nEvents > globalNetworkData.nPeers ) {
+#ifdef LOG_NOTICES
+				if( globalNetworkData.flags.bLogNotices )
+					lprintf( "global peers is %d, this has %d", globalNetworkData.nPeers, peer->nEvents );
+#endif
+				addPeer = TRUE;
+				break;
+			}
+			if( peer->nEvents >= 60 ) {
+#ifdef LOG_NOTICES
+				if( globalNetworkData.flags.bLogNotices )
+					lprintf( "this has max events already....", globalNetworkData.nPeers, peer->nEvents );
+#endif
+				addPeer = TRUE;
+				break;
+			}
+		}
+		if( peer->nEvents < 60 ) {
+// last thread.
+			if( !peer->child_peer )
+				break;
+			if( peer->nEvents < peer->child_peer->nEvents ) {
+#ifdef LOG_NOTICES
+				//if( globalNetworkData.flags.bLogNotices )
+				//	lprintf( "this event has fewer than the next thread's events %d  %d", peer->nEvents, peer->child_peer->nEvents );
+#endif
+				break;
+			}
+		}
+	}
+	if( addPeer ) {
+#ifdef LOG_NOTICES
+		if( globalNetworkData.flags.bLogNotices )
+			lprintf( "Creating a new thread...." );
+#endif
+		AddLink( (PLIST*)&globalNetworkData.pThreads, ThreadTo( NetworkThreadProc, (uintptr_t)peer ) );
+		globalNetworkData.nPeers++;
+		while( !peer->child_peer )
+			Relinquish();
+		if( globalNetworkData.root_thread != peer ) {
+			// relink to be higher in list of peers so it's found earlier.
+#ifdef LOG_NOTICES
+			if( globalNetworkData.flags.bLogNotices )
+				lprintf( "Relinking thread to be after root peer (no events, so it must be first)" );
+#endif
+			peer->child_peer->child_peer = globalNetworkData.root_thread->child_peer;
+			globalNetworkData.root_thread->child_peer->parent_peer = peer->child_peer;
+			globalNetworkData.root_thread->child_peer = peer->child_peer;
+			peer->child_peer->parent_peer = globalNetworkData.root_thread;
+			peer->child_peer = NULL;
+			peer = globalNetworkData.root_thread->child_peer;
+		}
+		else
+			peer = peer->child_peer;
+	}
+	// make sure to only add this handle when the first peer will also be added.
+	// this means the list can be 61 and at this time no more.
+	AddLink( &peer->monitor_list, pc );
+	AddDataItem( &peer->event_list, &pc->event );
+	pc->this_thread = peer;
+	pc->flags.bAddedToEvents = 1;
+	peer->nEvents++;
+#ifdef LOG_NETWORK_EVENT_THREAD
+	lprintf( "peer %p now has %d events", peer, peer->nEvents );
+#endif
+ // scheduler thread already awake do not wake him.
+	if( !peer->flags.bProcessing && peer->parent_peer )
+		WSASetEvent( peer->hThread );
+}
+// this is passed '0' when it is called internally
+// this is passed '1' when it is called by idleproc
+int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t quick_check )
+{
+	//lprintf( "Check messages." );
+	if( globalNetworkData.bQuit )
+		return -1;
+	if( thread->flags.bProcessing )
+		return 0;
+	// disallow changing of the lists.
+	if( !thread->parent_peer )
+	{
+		EnterCriticalSec( &globalNetworkData.csNetwork );
+		{
+			PCLIENT pc;
+			PCLIENT next;
+			for( pc = globalNetworkData.ClosedClients; pc; pc = next )
+			{
+#    ifdef LOG_NOTICES
+				lprintf( "Have a closed client to check..." );
+#    endif
+				next = pc->next;
+				if( +GetTickCount() > (pc->LastEvent + 1000) )
+				{
+					//lprintf( "Remove thread event on closed thread (should be terminate here..)" );
+					// also does the remove.
+					TerminateClosedClient( pc );
+					//RemoveThreadEvent( pc ); // also does the close.
+				}
+			}
+		}
+		{
+			PCLIENT pc;
+			while( pc = (PCLIENT)DequeLink( &globalNetworkData.client_schedule ) )
+			{
+				// use this for "added to schedule".  Closing removes from schedule.
+				if( !pc->flags.bAddedToEvents )
+				{
+					if( pc->dwFlags & CF_CLOSED || (!(pc->dwFlags & CF_ACTIVE)) )
+					{
+						lprintf( " Found closed? %p", pc );
+						continue;
+					}
+#ifdef LOG_NETWORK_EVENT_THREAD
+					if( globalNetworkData.flags.bLogNotices )
+						lprintf( "Added to schedule : %p %08x", pc, pc->dwFlags );
+#endif
+					AddThreadEvent( pc, 0 );
+				}
+				else
+					lprintf( "Client in schedule queue, but it is already schedule?! %p", pc );
+			}
+		}
+		LeaveCriticalSec( &globalNetworkData.csNetwork );
+#ifdef LOG_NETWORK_LOCKING
+		lprintf( "Process Network left global" );
+#endif
+	}
+	else
+	{
+		// wait for master thread to set up the proper wait
+		while( thread->nEvents == 0 )
+			Relinquish();
+	}
+	while( 1 )
+	{
+		int32_t result;
+		// want to wait here anyhow...
+#ifdef LOG_NETWORK_EVENT_THREAD
+		//if( globalNetworkData.flags.bLogNotices )
+		//	lprintf( "%p Waiting on %d events", thread, thread->nEvents );
+#endif
+		thread->nWaitEvents = thread->nEvents;
+		thread->flags.bProcessing = 0;
+		while( thread->counting ) { thread->nWaitEvents = thread->nEvents; Relinquish(); }
+		result = WSAWaitForMultipleEvents( thread->nEvents
+													, (const HANDLE *)thread->event_list->data
+													, FALSE
+													, (quick_check)?0:WSA_INFINITE
+													, FALSE
+													);
+		if( globalNetworkData.bQuit )
+			return -1;
+#ifdef LOG_NETWORK_EVENT_THREAD
+		//if( globalNetworkData.flags.bLogNotices )
+		//	lprintf( "Event Wait Result was %d", result );
+#endif
+		// this should never be 0, but we're awake, not sleeping, and should say we're in a place
+		// where we probably do want to be woken on a 0 event.
+		if( result != WSA_WAIT_EVENT_0 )
+		{
+#ifdef LOG_NETWORK_EVENT_THREAD
+			//if( globalNetworkData.flags.bLogNotices )
+			//	lprintf( "Begin - thread processing %d", result );
+#endif
+			thread->flags.bProcessing = 1;
+		}
+		thread->nWaitEvents = 0;
+		if( result == WSA_WAIT_FAILED )
+		{
+			DWORD dwError = WSAGetLastError();
+			if( dwError == WSA_INVALID_HANDLE )
+			{
+				lprintf( "Rebuild list, have a bad event handle somehow." );
+				break;
+			}
+			lprintf( "error of wait is %d   %p", dwError, thread );
+			LogBinary( thread->event_list->data, 64 );
+			break;
+		}
+#ifndef UNDER_CE
+		else if( result == WSA_WAIT_IO_COMPLETION )
+		{
+			// reselect... not sure where io completion fits for network...
+			continue;
+		}
+#endif
+		else if( result == WSA_WAIT_TIMEOUT )
+		{
+			if( quick_check )
+				return 1;
+		}
+		else if( result >= WSA_WAIT_EVENT_0 )
+		{
+			// if result is _0, then it's the global event, and we just return.
+			if( result > WSA_WAIT_EVENT_0 )
+			{
+				PCLIENT pc = (PCLIENT)GetLink( &thread->monitor_list, result - (WSA_WAIT_EVENT_0) );
+				if( !pc || ( pc->dwFlags & CF_AVAILABLE ) ) {
+					//lprintf( "thread event happened on a now available client." );
+				}
+				else
+					HandleEvent( pc );
+				if( !quick_check )
+					continue;
+			}
+			//else
+			{
+#ifdef LOG_NOTICES
+				if( globalNetworkData.flags.bLogNotices )
+					lprintf( thread->parent_peer?"RESET THREAD EVENT":"RESET GLOBAL EVENT" );
+#endif
+				WSAResetEvent( thread->hThread );
+			}
+			return 1;
+		}
+	}
+	// result 0... we had nothing to do
+	// but we are this thread.
+	return 0;
+}
+//----------------------------------------------------------------------------
+int CPROC IdleProcessNetworkMessages( uintptr_t quick_check )
+{
+	struct peer_thread_info *this_thread = IsNetworkThread();
+	if( this_thread )
+		return ProcessNetworkMessages( this_thread, quick_check );
+	return -1;
+}
+SACK_NETWORK_NAMESPACE_END
+#endif
+#if defined( __LINUX__ ) && !defined( __MAC__ )
+///////////////////////////////////////////////////////////////////////////
+//
+// Filename    -  network_linux.C
+//
+// Description -  Network event handling using epoll
+//
+// Author      -  James Buckeyne
+//
+// Create Date -  2019-06-26
+//
+///////////////////////////////////////////////////////////////////////////
+//
+//  DEBUG FLAGS IN netstruc.h
+//
+#ifndef _DEFAULT_SOURCE
+  // for features.h
+#define _DEFAULT_SOURCE
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#endif
+#define FIX_RELEASE_COM_COLLISION
+#define NO_UNICODE_C
+//#define DO_LOGGING // override no _DEBUG def to do loggings...
+//#define NO_LOGGING // force neverlog....
+#ifdef __LINUX__
+#endif
+//for GetMacAddress
+#ifdef __LINUX__
+//#include <sys/timeb.h>
+//*******************8
+#ifndef __ANDROID__
+#else
+#define EPOLLRDHUP EPOLLHUP
+#define EPOLL_CLOEXEC 0
+#endif
+//*******************8
+#endif
+SACK_NETWORK_NAMESPACE
+void RemoveThreadEvent( PCLIENT pc ) {
+	struct peer_thread_info *thread = pc->this_thread;
+	// could be closed (accept, initial read, protocol causes close before ever completing getting scheduled)
+	if( !thread ) {
+		 lprintf( "didn't have one? %p", pc );
+		return;
+	}
+	{
+#  ifdef __EMSCRIPTEN__
+#  else
+		int r;
+#      ifdef LOG_NETWORK_EVENT_THREAD
+		lprintf( "Removing event %p   %d from poll %d", pc, pc->Socket, thread->epoll_fd );
+#      endif
+		//r = epoll_ctl( thread->epoll_fd, EPOLL_CTL_DISABLE, pc->Socket, NULL );
+		//if( r < 0 ) lprintf( "Error removing:%d", errno );
+		r = epoll_ctl( thread->epoll_fd, EPOLL_CTL_DEL, pc->Socket, NULL );
+		if( r < 0 ) lprintf( "Error removing:%d", errno );
+		if( pc->SocketBroadcast ) {
+			r = epoll_ctl( thread->epoll_fd, EPOLL_CTL_DEL, pc->SocketBroadcast, NULL );
+			if( r < 0 ) lprintf( "Error removing:%d", errno );
+		}
+		pc->flags.bAddedToEvents = 0;
+		pc->this_thread = NULL;
+ // __EMSCRIPTEN__
+#  endif
+	}
+	LockedDecrement( &thread->nEvents );
+#    ifdef LOG_NETWORK_EVENT_THREAD
+	lprintf( "peer %p now has %d events", thread, thread->nEvents );
+#    endif
+	// don't bubble sort root thread
+	if( thread->parent_peer )
+		while( (thread->nEvents < thread->parent_peer->nEvents) && thread->parent_peer->parent_peer ) {
+#    ifdef LOG_NETWORK_EVENT_THREAD
+			//lprintf( "swapping this with parent peer ... this events %d  parent %d", thread->nEvents, thread->parent_peer->nEvents );
+#    endif
+			if( thread->child_peer )
+				thread->child_peer->parent_peer = thread->parent_peer;
+			thread->parent_peer->child_peer = thread->child_peer;
+			struct peer_thread_info *tmp = thread->parent_peer;
+			tmp->parent_peer->child_peer = thread;
+			thread->parent_peer = tmp->parent_peer;
+			tmp->parent_peer = thread;
+			thread->child_peer = tmp;
+		}
+}
+struct event_data {
+	PCLIENT pc;
+	int broadcast;
+};
+void AddThreadEvent( PCLIENT pc, int broadcast )
+{
+	struct peer_thread_info *peer = globalNetworkData.root_thread;
+	LOGICAL addPeer = FALSE;
+	if( pc->Socket <= 0 ) {
+		lprintf( "SAVED FROM A FATAL INFINITE EVENT LOOP");
+		return;
+	}
+#ifdef LOG_NOTICES
+	//if( globalNetworkData.flags.bLogNotices )
+		lprintf( "Add thread event %p %d %08x  %s", pc, broadcast?pc->SocketBroadcast:pc->Socket, pc->dwFlags, broadcast?"broadcast":"direct" );
+#endif
+	if( !broadcast ) {
+		for( ; peer; peer = peer->child_peer ) {
+			if( !peer->child_peer ) {
+#ifdef LOG_NOTICES
+				if( globalNetworkData.flags.bLogNotices )
+					lprintf( "On last peer..." );
+#endif
+				if( peer->nEvents > globalNetworkData.nPeers ) {
+#ifdef LOG_NOTICES
+					if( globalNetworkData.flags.bLogNotices )
+						lprintf( "global peers is %d, this has %d", globalNetworkData.nPeers, peer->nEvents );
+#endif
+					addPeer = TRUE;
+					break;
+				}
+				if( peer->nEvents >= 2560 ) {
+#ifdef LOG_NOTICES
+					if( globalNetworkData.flags.bLogNotices )
+						lprintf( "this has max events already.... %d %d", globalNetworkData.nPeers, peer->nEvents );
+#endif
+					addPeer = TRUE;
+					break;
+				}
+			}
+			if( peer->nEvents < 2560 ) {
+												// last thread.
+				if( !peer->child_peer )
+					break;
+				if( peer->nEvents < peer->child_peer->nEvents ) {
+#ifdef LOG_NOTICES
+					//if( globalNetworkData.flags.bLogNotices )
+					//	lprintf( "this event has fewer than the next thread's events %d  %d", peer->nEvents, peer->child_peer->nEvents );
+#endif
+					break;
+				}
+			}
+		}
+		if( addPeer ) {
+#ifdef LOG_NOTICES
+			if( globalNetworkData.flags.bLogNotices )
+				lprintf( "Creating a new thread...." );
+#endif
+			AddLink( (PLIST*)&globalNetworkData.pThreads, ThreadTo( NetworkThreadProc, (uintptr_t)peer ) );
+			globalNetworkData.nPeers++;
+			while( !peer->child_peer )
+				Relinquish();
+			if( globalNetworkData.root_thread != peer ) {
+				// relink to be higher in list of peers so it's found earlier.
+#ifdef LOG_NOTICES
+				if( globalNetworkData.flags.bLogNotices )
+					lprintf( "Relinking thread to be after root peer (no events, so it must be first)" );
+#endif
+				peer->child_peer->child_peer = globalNetworkData.root_thread->child_peer;
+				globalNetworkData.root_thread->child_peer->parent_peer = peer->child_peer;
+				globalNetworkData.root_thread->child_peer = peer->child_peer;
+				peer->child_peer->parent_peer = globalNetworkData.root_thread;
+				peer->child_peer = NULL;
+				peer = globalNetworkData.root_thread->child_peer;
+			}
+			else
+				peer = peer->child_peer;
+		}
+	} else {
+ // add broadcast to the same event as the original.
+		peer = pc->this_thread;
+	}
+	// make sure to only add this handle when the first peer will also be added.
+	// this means the list can be 61 and at this time no more.
+#ifdef __EMSCRIPTEN__
+#else
+	{
+		int r;
+		struct epoll_event ev;
+		ev.data.ptr = New( struct event_data );
+		((struct event_data*)ev.data.ptr)->pc = pc;
+		((struct event_data*)ev.data.ptr)->broadcast = broadcast;
+		if( pc->dwFlags & CF_LISTEN )
+			ev.events = EPOLLIN;
+		else {
+			ev.events = EPOLLIN | EPOLLOUT | EPOLLRDHUP | EPOLLET;
+		}
+#    ifdef LOG_NETWORK_EVENT_THREAD
+		lprintf( "peer add socket %d to %d now has 0x%x events", pc->Socket, peer->epoll_fd, ev.events );
+#    endif
+		r = epoll_ctl( peer->epoll_fd, EPOLL_CTL_ADD, broadcast?pc->SocketBroadcast:pc->Socket, &ev );
+		if( r < 0 ) lprintf( "Error adding:%d %d", errno, broadcast?pc->SocketBroadcast:pc->Socket );
+	}
+ // __EMSCRIPTEN__
+#endif
+#ifdef LOG_NETWORK_EVENT_THREAD
+	lprintf( "added thread: %p  %p  %p  ", pc, pc->this_thread, peer );
+#endif
+	if( !pc->this_thread ) {
+		LockedIncrement( &peer->nEvents );
+		pc->this_thread = peer;
+		pc->flags.bAddedToEvents = 1;
+	}
+#ifdef LOG_NETWORK_EVENT_THREAD
+	lprintf( "peer %p now has %d events", peer, peer->nEvents );
+#endif
+	// scheduler thread already awake do not wake him.
+}
+int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t unused )
+{
+	int cnt;
+	struct timeval time;
+	if( globalNetworkData.bQuit )
+		return -1;
+#ifdef __EMSCRIPTEN__
+		lprintf( "Need Old Select Code Here" );
+		return 1;
+#else
+	{
+		struct epoll_event events[10];
+#    ifdef LOG_NETWORK_EVENT_THREAD
+		lprintf( "Wait on %d   %d", thread->epoll_fd, thread->nEvents );
+#    endif
+		cnt = epoll_wait( thread->epoll_fd, events, 10, -1 );
+		if( cnt < 0 )
+		{
+			int err = errno;
+			if( err == EINTR )
+				return 1;
+			Log1( "Sorry epoll_pwait/kevent call failed... %d", err );
+			return 1;
+		}
+		if( cnt > 0 )
+		{
+			int closed;
+			int n;
+			struct event_data *event_data;
+			THREAD_ID prior = 0;
+			PCLIENT next;
+#  ifdef LOG_NETWORK_EVENT_THREAD
+			lprintf( "process %d events", cnt );
+#  endif
+			for( n = 0; n < cnt; n++ ) {
+				closed = 0;
+				event_data = (struct event_data*)events[n].data.ptr;
+#  ifdef LOG_NOTICES
+				if( event_data != (struct event_data*)1 ) {
+					lprintf( "Process %d %x", event_data->broadcast?event_data->pc->SocketBroadcast:event_data->pc->Socket
+							 , events[n].events );
+				}
+#  endif
+				if( event_data == (struct event_data*)1 ) {
+					//char buf;
+					//int stat;
+					//stat = read( GetThreadSleeper( thread->thread ), &buf, 1 );
+					//call wakeable sleep to just clear the sleep; because this is an event on the sleep pipe.
+					//WakeableSleep( 1 );
+					//lprintf( "This should sleep forever..." );
+					return 1;
+				}
+				if( events[n].events & EPOLLIN )
+				{
+					int locked;
+					locked = 1;
+					while( !NetworkLock( event_data->pc, 1 ) ) {
+						if( !( event_data->pc->dwFlags & CF_ACTIVE ) ) {
+#  ifdef LOG_NETWORK_EVENT_THREAD
+							lprintf( "failed lock dwFlags : %8x", event_data->pc->dwFlags );
+#  endif
+							locked = 0;
+							break;
+						}
+						if( event_data->pc->dwFlags & CF_AVAILABLE ) {
+							locked = 0;
+							break;
+						}
+						Relinquish();
+					}
+					if( !( event_data->pc->dwFlags & ( CF_ACTIVE | CF_CLOSED ) ) ) {
+#  ifdef LOG_NETWORK_EVENT_THREAD
+						lprintf( "not active but locked? dwFlags : %8x", event_data->pc->dwFlags );
+#  endif
+						continue;
+					}
+					if( event_data->pc->dwFlags & CF_AVAILABLE )
+						continue;
+					if( !IsValid( event_data->pc->Socket ) ) {
+						NetworkUnlock( event_data->pc, 1 );
+						continue;
+					}
+#  ifdef LOG_NETWORK_EVENT_THREAD
+					lprintf( "EPOLLIN/EVFILT_READ %x", event_data->pc->dwFlags );
+#  endif
+					if( event_data->pc->dwFlags & CF_CLOSED ) {
+						PCLIENT pClient = event_data->pc;
+						// close notice went to application; all resources for application are gone.
+						// any pending reads are no longre valid.
+						//lprintf( "socket is already closed... what do we need to do?");
+#  ifdef LOG_NOTICES
+						lprintf("FD_CLOSE... %p  %08x", pClient, pClient->dwFlags );
+#  endif
+						TerminateClosedClient( pClient );
+						closed = 1;
+						// section will be blank after termination...(correction, we keep the section state now)
+ // it's no longer closing.  (was set during the course of closure)
+						pClient->dwFlags &= ~CF_CLOSING;
+					} else if( !(event_data->pc->dwFlags & (CF_ACTIVE) ) ) {
+						lprintf( "Event on socket no longer active..." );
+						// change to inactive status by the time we got here...
+					} else if( event_data->pc->dwFlags & CF_LISTEN )
+					{
+#ifdef LOG_NOTICES
+						if( globalNetworkData.flags.bLogNotices )
+							lprintf( "accepting..." );
+#endif
+						AcceptClient( event_data->pc );
+					}
+					else if( event_data->pc->dwFlags & CF_UDP )
+					{
+#ifdef LOG_NOTICES
+						if( globalNetworkData.flags.bLogNotices )
+							lprintf( "UDP Read Event..." );
+#endif
+						//lprintf( "UDP READ" );
+						FinishUDPRead( event_data->pc, event_data->broadcast );
+					}
+#if 0 && !DrainSupportDeprecated
+					else if( event_data->pc->bDraining )
+					{
+#ifdef LOG_NOTICES
+						if( globalNetworkData.flags.bLogNotices )
+							lprintf( "TCP Drain Event..." );
+#endif
+						TCPDrainRead( event_data->pc );
+					}
+#endif
+					else if( event_data->pc->dwFlags & CF_READPENDING )
+					{
+						size_t read;
+#ifdef LOG_NOTICES
+						if( globalNetworkData.flags.bLogNotices )
+							lprintf( "TCP Read Event..." );
+#endif
+						// packet oriented things may probably be reading only
+						// partial messages at a time...
+						read = FinishPendingRead( event_data->pc DBG_SRC );
+						//lprintf( "Read %d", read );
+						if( ( read == -1 ) && ( event_data->pc->dwFlags & CF_TOCLOSE ) )
+						{
+							int locked;
+							locked = 1;
+#ifdef LOG_NOTICES
+							//if( globalNetworkData.flags.bLogNotices )
+							lprintf( "Pending read failed - reset connection." );
+#endif
+							// lock other read channel.
+							while( !NetworkLock( event_data->pc, 0 ) ) {
+								if( !(event_data->pc->dwFlags & CF_ACTIVE) ) {
+#  ifdef LOG_NETWORK_EVENT_THREAD
+									lprintf( "failed lock dwFlags : %8x", event_data->pc->dwFlags );
+#  endif
+									locked = 0;
+									break;
+								}
+								if( event_data->pc->dwFlags & CF_AVAILABLE ) {
+									locked = 0;
+									break;
+								}
+								//lprintf( "Have to unlock..." );
+								NetworkUnlock( event_data->pc, 1 );
+								Relinquish();
+								//lprintf( "Need to relock..." );
+								while( !NetworkLock( event_data->pc, 1 ) ) {
+									if( !( event_data->pc->dwFlags & CF_ACTIVE ) ) {
+#  ifdef LOG_NETWORK_EVENT_THREAD
+										lprintf( "failed lock dwFlags : %8x", event_data->pc->dwFlags );
+#  endif
+										locked = 0;
+										break;
+									}
+									if( event_data->pc->dwFlags & CF_AVAILABLE ) {
+										locked = 0;
+										break;
+									}
+									Relinquish();
+								}
+								if( !locked ) break;
+							}
+							if( locked ) {
+								while( !TryNetworkGlobalLock( DBG_VOIDSRC ) ) {
+									NetworkUnlock( event_data->pc, 1 );
+									NetworkUnlock( event_data->pc, 0 );
+									Relinquish();
+									while( !NetworkLock( event_data->pc, 0 ) ) {
+										if( !(event_data->pc->dwFlags & CF_ACTIVE) ) {
+#  ifdef LOG_NETWORK_EVENT_THREAD
+											lprintf( "failed lock dwFlags : %8x", event_data->pc->dwFlags );
+#  endif
+											locked = 0;
+											break;
+										}
+										if( event_data->pc->dwFlags & CF_AVAILABLE ) {
+											locked = 0;
+											break;
+										}
+										Relinquish();
+									}
+									if( !locked ) break;
+									while( !NetworkLock( event_data->pc, 1 ) ) {
+										if( !(event_data->pc->dwFlags & CF_ACTIVE) ) {
+#  ifdef LOG_NETWORK_EVENT_THREAD
+											lprintf( "failed lock dwFlags : %8x", event_data->pc->dwFlags );
+#  endif
+											locked = 0;
+											break;
+										}
+										if( event_data->pc->dwFlags & CF_AVAILABLE ) {
+											locked = 0;
+											break;
+										}
+										NetworkUnlock( event_data->pc, 0 );
+										Relinquish();
+										while( !NetworkLock( event_data->pc, 0 ) ) {
+											if( !(event_data->pc->dwFlags & CF_ACTIVE) ) {
+#  ifdef LOG_NETWORK_EVENT_THREAD
+												lprintf( "failed lock dwFlags : %8x", event_data->pc->dwFlags );
+#  endif
+												locked = 0;
+												break;
+											}
+											if( event_data->pc->dwFlags & CF_AVAILABLE ) {
+												locked = 0;
+												break;
+											}
+											Relinquish();
+										}
+										if( !locked ) break;
+									}
+									if( !locked ) break;
+								}
+								if( locked ) {
+									InternalRemoveClientEx( event_data->pc, FALSE, FALSE );
+									NetworkUnlock( event_data->pc, 0 );
+									TerminateClosedClient( event_data->pc );
+									LeaveCriticalSec( &globalNetworkData.csNetwork );
+									closed = 1;
+								}
+							}
+						}
+						else if( !event_data->pc->RecvPending.s.bStream )
+							event_data->pc->dwFlags |= CF_READREADY;
+					}
+					else
+					{
+#ifdef LOG_NOTICES
+						if( globalNetworkData.flags.bLogNotices )
+							lprintf( "TCP Set read ready..." );
+#endif
+						event_data->pc->dwFlags |= CF_READREADY;
+					}
+					if( locked )
+						LeaveCriticalSec( &event_data->pc->csLockRead );
+				}
+				// many times a read event can cause the socket to close before write can complete.
+				if( !closed && ( event_data->pc->dwFlags & CF_ACTIVE ) ) {
+					int locked;
+					locked = 1;
+					if( events[n].events & EPOLLOUT )
+					{
+#  ifdef LOG_NETWORK_EVENT_THREAD
+						lprintf( "EPOLLOUT %s", ( event_data->pc->dwFlags & CF_CONNECTING ) ? "connecting"
+							: ( !( event_data->pc->dwFlags & CF_ACTIVE ) ) ? "closed" : "writing" );
+#  endif
+						if( !NetworkLock( event_data->pc, 0 ) ) {
+							locked = 0;
+						}
+						if( !( event_data->pc->dwFlags & ( CF_ACTIVE | CF_CLOSED ) ) ) {
+#  ifdef LOG_NETWORK_EVENT_THREAD
+							lprintf( "not active but locked? dwFlags : %8x", event_data->pc->dwFlags );
+#  endif
+							continue;
+						}
+						if( event_data->pc->dwFlags & CF_AVAILABLE )
+							continue;
+						if( !IsValid( event_data->pc->Socket ) ) {
+							NetworkUnlock( event_data->pc, 0 );
+							continue;
+						}
+						if( !( event_data->pc->dwFlags & CF_ACTIVE ) ) {
+							//lprintf( "FLAGS IS NOT ACTIVE BUT: %x", event_data->pc->dwFlags );
+							// change to inactive status by the time we got here...
+						} else if( event_data->pc->dwFlags & CF_CONNECTING ) {
+#ifdef LOG_NOTICES
+							if( globalNetworkData.flags.bLogNotices )
+								lprintf( "Connected!" );
+#endif
+							event_data->pc->dwFlags |= CF_CONNECTED;
+							event_data->pc->dwFlags &= ~CF_CONNECTING;
+							{
+								PCLIENT pc = event_data->pc;
+#ifdef __LINUX__
+								socklen_t
+#else
+								int
+#endif
+									nLen = MAGIC_SOCKADDR_LENGTH;
+								if( !pc->saSource )
+									pc->saSource = AllocAddr();
+								if( getsockname( pc->Socket, pc->saSource, &nLen ) ) {
+									lprintf( "getsockname errno = %d", errno );
+								}
+								if( pc->saSource->sa_family == AF_INET )
+									SET_SOCKADDR_LENGTH( pc->saSource, IN_SOCKADDR_LENGTH );
+								else if( pc->saSource->sa_family == AF_INET6 )
+									SET_SOCKADDR_LENGTH( pc->saSource, IN6_SOCKADDR_LENGTH );
+								else
+									SET_SOCKADDR_LENGTH( pc->saSource, nLen );
+							}
+							{
+								int error;
+								socklen_t errlen = sizeof( error );
+								getsockopt( event_data->pc->Socket, SOL_SOCKET
+									, SO_ERROR
+									, &error, &errlen );
+								//lprintf( "Error checking for connect is: %s on %d", strerror( error ), event_data->pc->Socket );
+								if( event_data->pc->pWaiting ) {
+#ifdef LOG_NOTICES
+									if( globalNetworkData.flags.bLogNotices )
+										lprintf( "Got connect event, waking waiter.." );
+#endif
+									WakeThread( event_data->pc->pWaiting );
+								}
+								if( event_data->pc->connect.ThisConnected )
+									event_data->pc->connect.ThisConnected( event_data->pc, error );
+#ifdef LOG_NOTICES
+								if( globalNetworkData.flags.bLogNotices )
+									lprintf( "Connect error was: %d", error );
+#endif
+								// if connected okay - issue first read...
+								if( !error ) {
+#ifdef LOG_NOTICES
+									lprintf( "Read Complete" );
+#endif
+									if( event_data->pc->read.ReadComplete ) {
+#ifdef LOG_NOTICES
+										lprintf( "Initial Read Complete" );
+#endif
+										event_data->pc->read.ReadComplete( event_data->pc, NULL, 0 );
+									}
+									if( event_data->pc->lpFirstPending ) {
+										lprintf( "Data was pending on a connecting socket, try sending it now" );
+										TCPWrite( event_data->pc );
+									}
+									if( !event_data->pc->lpFirstPending ) {
+										if( event_data->pc->dwFlags & CF_TOCLOSE )
+										{
+											event_data->pc->dwFlags &= ~CF_TOCLOSE;
+											lprintf( "Pending write completed - and wants to close." );
+											EnterCriticalSec( &globalNetworkData.csNetwork );
+											InternalRemoveClientEx( event_data->pc, FALSE, TRUE );
+											TerminateClosedClient( event_data->pc );
+											LeaveCriticalSec( &globalNetworkData.csNetwork );
+										}
+									}
+								} else {
+									event_data->pc->dwFlags |= CF_CONNECTERROR;
+								}
+							}
+						} else if( event_data->pc->dwFlags & CF_UDP ) {
+							//lprintf( "UDP WRITE IS NEVER QUEUED." );
+							// udp write event complete....
+							// do we ever care? probably sometime...
+						} else {
+#ifdef LOG_NOTICES
+							if( globalNetworkData.flags.bLogNotices )
+								lprintf( "TCP Write Event..." );
+#endif
+							// if write did not get locked, a write is in progress
+							// wait until it finished there?
+							// did this wake up because that wrote?
+							if( locked ) {
+								TCPWrite( event_data->pc );
+							} else {
+								// although this is only a few instructions down, this can still be a lost event that the other
+								// lock has already ended, so this will get lost still...
+								event_data->pc->flags.bWriteOnUnlock = 1;
+								//lprintf( "Write event didn't get the lock... and maybe we won't get to write more?" );
+							}
+						}
+						if( locked )
+							NetworkUnlock( event_data->pc, 0 );
+					}
+				} else {
+					//lprintf( "Already closed? Stop looping on this event? %p %d %x", event_data->pc, event_data->pc->Socket, event_data->pc->dwFlags );
+				}
+			}
+			// had some event  - return 1 to continue working...
+		}
+		return 1;
+	}
+#endif
+	//lprintf( "Attempting to wake thread (send sighup!)" );
+	//WakeThread( globalNetworkData.pThread );
+	//lprintf( "Only reason should get here is if it's not this thread..." );
+	return -1;
+}
+//----------------------------------------------------------------------------
+int CPROC IdleProcessNetworkMessages( uintptr_t quick_check )
+{
+	struct peer_thread_info *this_thread = IsNetworkThread();
+	if( this_thread )
+		return ProcessNetworkMessages( this_thread, quick_check );
+	return -1;
+}
+SACK_NETWORK_NAMESPACE_END
+#endif
+///////////////////////////////////////////////////////////////////////////
+//
+// Filename    -  network_address.C
+//
+// Description -  Network address support
+//
+// Author      -  James Buckeyne
+//
+// Create Date -  2019-06-26
+//
+///////////////////////////////////////////////////////////////////////////
+//
+//  DEBUG FLAGS IN netstruc.h
+//
+#ifndef _DEFAULT_SOURCE
+  // for features.h
+#define _DEFAULT_SOURCE
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#endif
+#define FIX_RELEASE_COM_COLLISION
+#define NO_UNICODE_C
+//#define DO_LOGGING // override no _DEBUG def to do loggings...
+//#define NO_LOGGING // force neverlog....
+#ifdef __LINUX__
+#endif
+//for GetMacAddress
+#ifdef __LINUX__
+//#include <sys/timeb.h>
+//*******************8
+#ifndef __ANDROID__
+#else
+#define EPOLLRDHUP EPOLLHUP
+#define EPOLL_CLOEXEC 0
+#endif
+#ifdef __MAC__
+#else
+#endif
+//*******************8
+#endif
+#ifdef WIN32
+#ifdef __CYGWIN__
+#else
+#endif
+#endif
+SACK_NETWORK_NAMESPACE
+//----------------------------------------------------------------------------
+#if !defined( __MAC__ ) && !defined( __EMSCRIPTEN__ )
+#  define INCLUDE_MAC_SUPPORT
+#endif
+//int get_mac_addr (char *device, unsigned char *buffer)
+NETWORK_PROC( int, GetMacAddress)(PCLIENT pc, uint8_t* buf, size_t *buflen )
+{
+#ifdef INCLUDE_MAC_SUPPORT
+#  ifdef __LINUX__
+#    ifdef __THIS_CODE_GETS_MY_MAC_ADDRESS___
+	int fd;
+	struct ifreq ifr;
+	fd = socket(PF_UNIX, SOCK_DGRAM, 0);
+	if (fd == -1)
+	{
+		lprintf("Unable to create socket for pclient: %p", pc);
+		return -1;
+	}
+	strcpy (ifr.ifr_name, GetNetworkLong(pc,GNL_IP));
+	if (ioctl (fd, SIOCGIFFLAGS, &ifr) < 0)
+	{
+		close (fd);
+		return -1;
+	}
+	if (ioctl (fd, SIOCGIFHWADDR, &ifr) < 0)
+	{
+		close (fd);
+		return -1;
+	}
+	close (fd);
+	memcpy (pc->hwClient, ifr.ifr_hwaddr.sa_data, 6);
+	return 0;
+#    endif
+	   /* this code queries the arp table to figure out who the other side is */
+	//int fd;
+	struct arpreq arpr;
+	struct ifconf ifc;
+	MemSet( &arpr, 0, sizeof( arpr ) );
+	lprintf( "this is broken." );
+	MemCpy( &arpr.arp_pa, pc->saClient, sizeof( SOCKADDR ) );
+	arpr.arp_ha.sa_family = AF_INET;
+	{
+		char ifbuf[256];
+		ifc.ifc_len = sizeof( ifbuf );
+		ifc.ifc_buf = ifbuf;
+		ioctl( pc->Socket, SIOCGIFCONF, &ifc );
+		{
+			int i;
+			struct ifreq *IFR;
+			IFR = ifc.ifc_req;
+			for( i = ifc.ifc_len / sizeof( struct ifreq); --i >=0; IFR++ )
+			{
+				printf( "IF: %s\n", IFR->ifr_name );
+				strcpy( arpr.arp_dev, "eth0" );
+			}
+		}
+	}
+	DebugBreak();
+	if( ioctl( pc->Socket, SIOCGARP, &arpr ) < 0 )
+	{
+		lprintf( "Error of some sort ... %s", strerror( errno ) );
+		DebugBreak();
+	}
+	return 0;
+#  endif
+#  ifdef WIN32
+	HRESULT hr;
+	ULONG   ulLen;
+	// I don't understand this useless cast - from size_t to ULONG?
+	// isn't that the same thing?
+	ulLen = (ULONG)(*buflen);
+	//needs ws2_32.lib and iphlpapi.lib in the linker.
+	hr = SendARP ( (IPAddr)GetNetworkLong(pc,GNL_MYIP), (IPAddr)GetNetworkLong(pc,GNL_MYIP), (PULONG)buf, &ulLen);
+	(*buflen) = ulLen;
+//  The second parameter of SendARP is a PULONG, which is typedef'ed to a pointer to
+//  an unsigned long.  The pc->hwClient is a pointer to an array of uint8_t (unsigned chars),
+//  actually defined in netstruc.h as uint8_t hwClient[6]; Well, in the end, they are all
+//  just addresses, whether they be address to information of eight bits in length, or
+//  of (sizeof(unsigned)) in length.  Although this may, in the future, throw a warning.
+	//hr = SendARP (GetNetworkLong(pc,GNL_IP), 0, (PULONG)pc->hwClient, &ulLen);
+	//lprintf ("Return %08x, length %8d\n", hr, ulLen);
+	return hr == S_OK;
+#  endif
+#else
+	return 0;
+#endif
+}
+//int get_mac_addr (char *device, unsigned char *buffer)
+NETWORK_PROC( PLIST, GetMacAddresses)( void )
+{
+#ifdef INCLUDE_MAC_SUPPORT
+#ifdef __LINUX__
+#ifdef __THIS_CODE_GETS_MY_MAC_ADDRESS___
+	int fd;
+	struct ifreq ifr;
+	fd = socket(PF_UNIX, SOCK_DGRAM, 0);
+	if (fd == -1)
+	{
+		lprintf("Unable to create socket for pclient: %p", pc);
+		return -1;
+	}
+	strcpy (ifr.ifr_name, GetNetworkLong(pc,GNL_IP));
+	if (ioctl (fd, SIOCGIFFLAGS, &ifr) < 0)
+	{
+		close (fd);
+		return -1;
+	}
+	if (ioctl (fd, SIOCGIFHWADDR, &ifr) < 0)
+	{
+		close (fd);
+		return -1;
+	}
+	close (fd);
+	memcpy (pc->hwClient, ifr.ifr_hwaddr.sa_data, 6);
+	return 0;
+#endif
+	/* this code queries the arp table to figure out who the other side is */
+	//int fd;
+	struct arpreq arpr;
+	MemSet( &arpr, 0, sizeof( arpr ) );
+#if 0
+	lprintf( "this is broken." );
+	MemCpy( &arpr.arp_pa, pc->saClient, sizeof( SOCKADDR ) );
+	arpr.arp_ha.sa_family = AF_INET;
+	{
+		char ifbuf[256];
+		ifc.ifc_len = sizeof( ifbuf );
+		ifc.ifc_buf = ifbuf;
+		ioctl( pc->Socket, SIOCGIFCONF, &ifc );
+		{
+			int i;
+			struct ifreq *IFR;
+			IFR = ifc.ifc_req;
+			for( i = ifc.ifc_len / sizeof( struct ifreq); --i >=0; IFR++ )
+			{
+				printf( "IF: %s\n", IFR->ifr_name );
+				strcpy( arpr.arp_dev, "eth0" );
+			}
+		}
+	}
+	DebugBreak();
+	if( ioctl( pc->Socket, SIOCGARP, &arpr ) < 0 )
+	{
+		lprintf( "Error of some sort ... %s", strerror( errno ) );
+		DebugBreak();
+	}
+#endif
+	return 0;
+#endif
+#ifdef WIN32
+	HRESULT hr;
+	ULONG   ulLen;
+	uint8_t hwClient[6];
+	ulLen = 6;
+	//needs ws2_32.lib and iphlpapi.lib in the linker.
+	hr = SendARP ((IPAddr)GetNetworkLong(NULL,GNL_IP), 0x100007f, (PULONG)&hwClient, &ulLen);
+//  The second parameter of SendARP is a PULONG, which is typedef'ed to a pointer to
+//  an unsigned long.  The pc->hwClient is a pointer to an array of uint8_t (unsigned chars),
+//  actually defined in netstruc.h as uint8_t hwClient[6]; Well, in the end, they are all
+//  just addresses, whether they be address to information of eight bits in length, or
+//  of (sizeof(unsigned)) in length.  Although this may, in the future, throw a warning.
+	//hr = SendARP (GetNetworkLong(pc,GNL_IP), 0, (PULONG)pc->hwClient, &ulLen);
+	lprintf ("Return %08x, length %8d\n", hr, ulLen);
+	return 0;
+#endif
+#else
+	return 0;
+#endif
+}
+//----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
+LOGICAL IsAddressV6( SOCKADDR *addr )
+{
+	if( addr->sa_family == AF_INET6 && SOCKADDR_LENGTH( addr ) == 28 )
+		return TRUE;
+	return FALSE;
+}
+const char * GetAddrString( SOCKADDR *addr )
+{
+	static char buf[256];
+	//lprintf( "addr family is: %d", addr->sa_family );
+	if( addr->sa_family == AF_INET )
+		snprintf( buf, 256, "%d.%d.%d.%d"
+			, *(((unsigned char *)addr) + 4),
+			*(((unsigned char *)addr) + 5),
+			*(((unsigned char *)addr) + 6),
+			*(((unsigned char *)addr) + 7) );
+	else if( addr->sa_family == AF_INET6 )
+	{
+		int first0 = 8;
+		int last0 = 0;
+		int after0 = 0;
+		int n;
+		int ofs = 0;
+		uint32_t piece;
+		for( n = 0; n < 8; n++ ) {
+			piece = (*(((unsigned short *)((unsigned char*)addr + 8 + (n * 2)))));
+			if( piece ) {
+				if( first0 < 8 )
+					after0 = 1;
+				if( !ofs ) {
+					ofs += snprintf( buf + ofs, 256 - ofs, "%x", ntohs( piece ) );
+				}
+				else {
+					//lprintf( last0, n );
+					if( last0 == 4 && first0 == 0 )
+						if( piece == 0xFFFF ) {
+							snprintf( buf, 256, "::ffff:%d.%d.%d.%d",
+								(*((unsigned char*)addr + 20)),
+								(*((unsigned char*)addr + 21)),
+								(*((unsigned char*)addr + 22)),
+								(*((unsigned char*)addr + 23)) );
+							break;
+						}
+					ofs += snprintf( buf + ofs, 256 - ofs, ":%x", ntohs( piece ) );
+				}
+			}
+			else {
+				if( !after0 ) {
+					if( first0 > n ) {
+						first0 = n;
+						ofs += snprintf( buf + ofs, 256 - ofs, ":" );
+					}
+					if( last0 < n )
+						last0 = n;
+				}
+				if( last0 < n )
+					ofs += snprintf( buf + ofs, 256 - ofs, ":%x", ntohs( piece ) );
+			}
+		}
+		if( !after0 && first0 < 8 )
+			ofs += snprintf( buf + ofs, 256 - ofs, ":" );
+	}
+	else
+		snprintf( buf, 256, "unknown protocol" );
+	return buf;
+}
+const char * GetAddrName( SOCKADDR *addr )
+{
+	char * tmp = ((char**)addr)[-1];
+	if( !tmp )
+	{
+		const char *buf = GetAddrString( addr );
+		((char**)addr)[-1] = strdup( buf );
+	}
+	return ((char**)addr)[-1];
+}
+void SetAddrName( SOCKADDR *addr, const char *name )
+{
+	((uintptr_t*)addr)[-1] = (uintptr_t)strdup( name );
+}
+//---------------------------------------------------------------------------
+SOCKADDR *AllocAddrEx( DBG_VOIDPASS )
+{
+	SOCKADDR *lpsaAddr=(SOCKADDR*)AllocateEx( MAGIC_SOCKADDR_LENGTH + 2 * sizeof( uintptr_t ) DBG_RELAY );
+	memset( lpsaAddr, 0, MAGIC_SOCKADDR_LENGTH );
+	//initialize socket length to something identifiable?
+	((uintptr_t*)lpsaAddr)[0] = 3;
+ // string representation of address
+	((uintptr_t*)lpsaAddr)[1] = 0;
+	lpsaAddr = (SOCKADDR*)( ( (uintptr_t)lpsaAddr ) + sizeof(uintptr_t) * 2 );
+	return lpsaAddr;
+}
+//----------------------------------------------------------------------------
+int GetAddressParts( SOCKADDR *sa, uint32_t *pdwIP, uint16_t *pdwPort )
+{
+	int result = TRUE;
+	if( sa )
+	{
+		if( sa->sa_family == AF_INET ) {
+			if( pdwIP )
+				(*pdwIP) = (uint32_t)(((SOCKADDR_IN*)sa)->sin_addr.S_un.S_addr);
+		}
+		else if( sa->sa_family == AF_INET6 ) {
+			if( pdwIP )
+ //-V512
+				memcpy( pdwIP, &(((SOCKADDR_IN*)sa)->sin_addr.S_un.S_addr), 16 );
+		}
+		else
+			result = FALSE;
+		if( (sa->sa_family == AF_INET) || (sa->sa_family = AF_INET6) ) {
+			if( pdwPort )
+				(*pdwPort) = ntohs((uint16_t)( (SOCKADDR_IN*)sa)->sin_port);
+		}
+		else
+			result = FALSE;
+	}
+	return result;
+}
+//----------------------------------------------------------------------------
+ // return a copy of this address...
+SOCKADDR* DuplicateAddressEx( SOCKADDR *pAddr DBG_PASS )
+{
+	POINTER tmp = (POINTER)( ( (uintptr_t)pAddr ) - 2*sizeof(uintptr_t) );
+	SOCKADDR *dup = AllocAddrEx( DBG_VOIDRELAY );
+	POINTER tmp2 = (POINTER)( ( (uintptr_t)dup ) - 2*sizeof(uintptr_t) );
+	MemCpy( tmp2, tmp, SOCKADDR_LENGTH( pAddr ) + 2*sizeof(uintptr_t) );
+	if( ((char**)( ( (uintptr_t)pAddr ) - sizeof(char*) ))[0] )
+		( (char**)( ( (uintptr_t)dup ) - sizeof( char* ) ) )[0]
+				= strdup( ((char**)( ( (uintptr_t)pAddr ) - sizeof( char* ) ))[0] );
+	return dup;
+}
+//---------------------------------------------------------------------------
+NETWORK_PROC( SOCKADDR *,CreateAddress_hton)( uint32_t dwIP,uint16_t nHisPort)
+{
+	SOCKADDR_IN *lpsaAddr=(SOCKADDR_IN*)AllocAddr();
+	if (!lpsaAddr)
+		return(NULL);
+	SET_SOCKADDR_LENGTH( lpsaAddr, IN_SOCKADDR_LENGTH );
+         // InetAddress Type.
+	lpsaAddr->sin_family       = AF_INET;
+	lpsaAddr->sin_addr.S_un.S_addr  = htonl(dwIP);
+	lpsaAddr->sin_port         = htons(nHisPort);
+	return((SOCKADDR*)lpsaAddr);
+}
+//---------------------------------------------------------------------------
+#if defined( __LINUX__ ) && !defined( __CYGWIN__ )
+#  ifndef __LINUX__
+#    define UNIX_PATH_MAX	 108
+struct sockaddr_un {
+#    ifdef __MAC__
+	u_char   sa_len;
+#    endif
+	sa_family_t  sun_family;
+	char	       sun_path[UNIX_PATH_MAX];
+};
+#  endif
+NETWORK_PROC( SOCKADDR *,CreateUnixAddress)( CTEXTSTR path )
+{
+	struct sockaddr_un *lpsaAddr;
+#ifdef UNICODE
+	char *tmp_path = CStrDup( path );
+#endif
+   lpsaAddr=(struct sockaddr_un*)AllocAddr();
+	if (!lpsaAddr)
+		return(NULL);
+	((uintptr_t*)lpsaAddr)[-1] = StrLen( path ) + 1;
+	lpsaAddr->sun_family = PF_UNIX;
+#ifdef UNICODE
+	strncpy( lpsaAddr->sun_path, tmp_path, 107 );
+	Deallocate( char*, tmp_path );
+#else
+	strncpy( lpsaAddr->sun_path, path, 107 );
+#endif
+#ifdef __MAC__
+	lpsaAddr->sun_len = 2+strlen( lpsaAddr->sun_path );
+#endif
+	return((SOCKADDR*)lpsaAddr);
+}
+#else
+NETWORK_PROC( SOCKADDR *,CreateUnixAddress)( CTEXTSTR path )
+{
+	lprintf( "-- CreateUnixAddress -- not available. " );
+	return NULL;
+}
+#endif
+//---------------------------------------------------------------------------
+SOCKADDR *CreateAddress( uint32_t dwIP,uint16_t nHisPort)
+{
+	SOCKADDR_IN *lpsaAddr=(SOCKADDR_IN*)AllocAddr();
+	if (!lpsaAddr)
+		return(NULL);
+	SET_SOCKADDR_LENGTH( lpsaAddr, IN_SOCKADDR_LENGTH );
+         // InetAddress Type.
+	lpsaAddr->sin_family	    = AF_INET;
+	lpsaAddr->sin_addr.S_un.S_addr  = dwIP;
+	lpsaAddr->sin_port         = htons(nHisPort);
+	return((SOCKADDR*)lpsaAddr);
+}
+//---------------------------------------------------------------------------
+SOCKADDR *CreateRemote( CTEXTSTR lpName,uint16_t nHisPort)
+{
+	SOCKADDR_IN *lpsaAddr;
+	int conversion_success = FALSE;
+	char *tmpName = NULL;
+#ifdef UNICODE
+	char *_lpName = CStrDup( lpName );
+#  define lpName _lpName
+#endif
+#ifndef WIN32
+	PHOSTENT phe;
+	// a IP type name will never have a / in it, therefore
+	// we can assume it's a unix type address....
+	if( lpName && StrChr( lpName, '/' ) )
+		return CreateUnixAddress( lpName );
+#endif
+	if( lpName[0] == '[' && lpName[StrLen( lpName ) - 1] == ']' ) {
+		size_t len;
+		tmpName = NewArray( char, len = StrLen( lpName ) );
+		memcpy( tmpName, lpName + 1, len - 2 );
+		tmpName[len - 2] = 0;
+		lpName = tmpName;
+	}
+	lpsaAddr=(SOCKADDR_IN*)AllocAddr();
+	if( !lpsaAddr )
+	{
+#ifdef UNICODE
+		Deallocate( char *, _lpName );
+#endif
+		return(NULL);
+	}
+	SetAddrName( (SOCKADDR*)lpsaAddr, lpName );
+	// if it's a numeric name... attempt to use as an address.
+#ifdef __LINUX__
+	if( lpName &&
+		( lpName[0] >= '0' && lpName[0] <= '9' )
+	  && StrChr( lpName, '.' ) )
+	{
+		if( inet_pton( AF_INET, lpName, &lpsaAddr->sin_addr ) > 0 )
+		{
+			SET_SOCKADDR_LENGTH( lpsaAddr, IN_SOCKADDR_LENGTH );
+         // InetAddress Type.
+			lpsaAddr->sin_family       = AF_INET;
+			conversion_success = TRUE;
+		}
+	}
+	else if( lpName
+		   && ( ( lpName[0] >= '0' && lpName[0] <= '9' )
+		      || ( lpName[0] >= 'a' && lpName[0] <= 'f' )
+		      || ( lpName[0] >= 'A' && lpName[0] <= 'F' )
+		      || lpName[0] == ':'
+		      || ( lpName[0] == '[' && lpName[StrLen( lpName ) - 1] == ']' ) )
+		   && StrChr( lpName, ':' )!=StrRChr( lpName, ':' ) )
+	{
+		//lprintf( "Converting name:", lpName );
+		if( inet_pton( AF_INET6, lpName, (struct in6_addr*)(&lpsaAddr->sin_addr+1) ) > 0 )
+		{
+			//lprintf( "This iset in the wrong place?" );
+			((struct sockaddr_in6*)lpsaAddr)->sin6_scope_id = 0;
+			SET_SOCKADDR_LENGTH( lpsaAddr, IN6_SOCKADDR_LENGTH );
+         // InetAddress Type.
+			lpsaAddr->sin_family       = AF_INET6;
+			conversion_success = TRUE;
+		}
+	}
+#endif
+	if( !conversion_success )
+	{
+		if( lpName )
+		{
+#ifndef h_addr
+#define h_addr h_addr_list[0]
+#define H_ADDR_DEFINED
+#endif
+#ifdef WIN32
+			{
+				struct addrinfo *result;
+				struct addrinfo *test;
+				int error;
+				//lprintf( "Or we do getaddrinfo... %s", lpName );
+				error = getaddrinfo( lpName, NULL, NULL, (struct addrinfo**)&result );
+				if( error == 0 )
+				{
+					for( test = result; test; test = test->ai_next )
+					{
+						//SOCKADDR *tmp;
+						//AddLink( &globalNetworkData.addresses, tmp = AllocAddr() );
+						//lprintf( "Copy addr: %d", test->ai_addrlen );
+						MemCpy( lpsaAddr, test->ai_addr, test->ai_addrlen );
+						SET_SOCKADDR_LENGTH( lpsaAddr, test->ai_addrlen );
+						break;
+					}
+				}
+				else
+					lprintf( "getaddrinfo Error: %d for [%s]", error, lpName );
+			}
+ //WIN32
+#else
+			char *tmp = CStrDup( lpName );
+#ifdef __EMSCRIPTEN__
+			if(!(phe=gethostbyname(tmp) ) )
+#else
+         if(1)
+#endif
+			{
+#if !defined( __EMSCRIPTEN__ )
+				if( !(phe=gethostbyname2(tmp,AF_INET6) ) )
+#endif
+				{
+#if !defined( __EMSCRIPTEN__ )
+					if( !(phe=gethostbyname2(tmp,AF_INET) ) )
+#endif
+					{
+						 // could not find the name in the host file.
+						lprintf( "Could not Resolve to %s  %s", tmp, lpName );
+						ReleaseAddress((SOCKADDR*)lpsaAddr);
+						Deallocate( char*, tmp );
+						if( tmpName ) Deallocate( char*, tmpName );
+						return(NULL);
+					}
+#if !defined( __EMSCRIPTEN__ )
+					else
+					{
+						lprintf( "Strange, gethostbyname failed, but AF_INET worked... %s", tmp );
+						SET_SOCKADDR_LENGTH( lpsaAddr, IN_SOCKADDR_LENGTH );
+						lpsaAddr->sin_family = AF_INET;
+           // save IP address from host entry.
+						memcpy( &lpsaAddr->sin_addr.S_un.S_addr,
+							    phe->h_addr,
+						       phe->h_length);
+					}
+#endif
+				}
+#if !defined( __EMSCRIPTEN__ )
+				else
+				{
+					SET_SOCKADDR_LENGTH( lpsaAddr, IN6_SOCKADDR_LENGTH );
+         // InetAddress Type.
+					lpsaAddr->sin_family = AF_INET6;
+					//lprintf( "This copy:%d", phe->h_length );
+#  if inline_note_never_included
+					{
+						__SOCKADDR_COMMON (sin6_);
+						n_port_t sin6_port;
+						uint32_t sin6_flowinfo;
+						struct in6_addr sin6_addr;
+						uint32_t sin6_scope_id;
+					};
+#  endif
+           // save IP address from host entry.
+					memcpy( ((struct sockaddr_in6*)lpsaAddr)->sin6_addr.s6_addr,
+							 phe->h_addr,
+							 phe->h_length);
+				}
+#endif
+			}
+			else
+			{
+				Deallocate( char *, tmp );
+				SET_SOCKADDR_LENGTH( lpsaAddr, IN_SOCKADDR_LENGTH );
+         // InetAddress Type.
+				lpsaAddr->sin_family = AF_INET;
+				//lprintf( "gethostbyname2:...." );
+           // save IP address from host entry.
+				memcpy( &lpsaAddr->sin_addr.S_un.S_addr,
+					 phe->h_addr,
+					 phe->h_length);
+			}
+#endif
+#ifdef H_ADDR_DEFINED
+#  undef H_ADDR_DEFINED
+#  undef h_addr
+#endif
+		}
+		else
+		{
+         // InetAddress Type.
+			lpsaAddr->sin_family      = AF_INET;
+			lpsaAddr->sin_addr.S_un.S_addr = 0;
+			SET_SOCKADDR_LENGTH( lpsaAddr, IN_SOCKADDR_LENGTH );
+		}
+	}
+#ifdef UNICODE
+	Deallocate( char *, _lpName );
+#  undef lpName
+#endif
+	//lprintf( "Resulting thing" );
+	//DumpAddr( "RESULT ADDRESS", (SOCKADDR*)lpsaAddr );
+	// put in his(destination) port number...
+	if( tmpName ) Deallocate( char*, tmpName );
+	lpsaAddr->sin_port         = htons(nHisPort);
+	return((SOCKADDR*)lpsaAddr);
+}
+//----------------------------------------------------------------------------
+#ifdef __cplusplus
+namespace udp {
+#endif
+NETWORK_PROC( void, DumpAddrEx)( CTEXTSTR name, SOCKADDR *sa DBG_PASS )
+	{
+		if( !sa ) { _lprintf(DBG_RELAY)( "%s: NULL", name ); return; }
+		LogBinary( (uint8_t *)sa, SOCKADDR_LENGTH( sa ) );
+		if( sa->sa_family == AF_INET ) {
+			_lprintf(DBG_RELAY)( "%s: (%s) %d.%d.%d.%d:%d ", name
+			       , ( ((uintptr_t*)sa)[-1] & 0xFFFF0000 )?( ((char**)sa)[-1] ) : "no name"
+			       //*(((unsigned char *)sa)+0),
+			       //*(((unsigned char *)sa)+1),
+			       ,*(((unsigned char *)sa)+4),
+			       *(((unsigned char *)sa)+5),
+			       *(((unsigned char *)sa)+6),
+			       *(((unsigned char *)sa)+7)
+			       , ntohs( *(((unsigned short *)((unsigned char*)sa + 2))) )
+			);
+		} else if( sa->sa_family == AF_INET6 )
+		{
+			lprintf( "Socket address binary: %s", name );
+			_lprintf(DBG_RELAY)( "%s: (%s) %03d %04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x "
+					 , name
+					, ( ((uintptr_t*)sa)[-1] & 0xFFFF0000 )?( ((char**)sa)[-1] ) : "no name"
+					 , ntohs(*(((unsigned short *)((unsigned char*)sa+2))))
+					 , ntohs(*(((unsigned short *)((unsigned char*)sa+8))))
+					 , ntohs(*(((unsigned short *)((unsigned char*)sa+10))))
+					 , ntohs(*(((unsigned short *)((unsigned char*)sa+12))))
+					 , ntohs(*(((unsigned short *)((unsigned char*)sa+14))))
+					 , ntohs(*(((unsigned short *)((unsigned char*)sa+16))))
+					 , ntohs(*(((unsigned short *)((unsigned char*)sa+18))))
+					 , ntohs(*(((unsigned short *)((unsigned char*)sa+20))))
+					 , ntohs(*(((unsigned short *)((unsigned char*)sa+22))))
+					 );
+		}
+}
+#ifdef __cplusplus
+}
+#endif
+//----------------------------------------------------------------------------
+NETWORK_PROC( SOCKADDR *, SetAddressPort )( SOCKADDR *pAddr, uint16_t nDefaultPort )
+{
+	if( pAddr )
+		((SOCKADDR_IN *)pAddr)->sin_port = htons(nDefaultPort);
+	return pAddr;
+}
+//----------------------------------------------------------------------------
+NETWORK_PROC( SOCKADDR *, SetNonDefaultPort )( SOCKADDR *pAddr, uint16_t nDefaultPort )
+{
+	if( pAddr && !((SOCKADDR_IN *)pAddr)->sin_port )
+		((SOCKADDR_IN *)pAddr)->sin_port = htons(nDefaultPort);
+	return pAddr;
+}
+//----------------------------------------------------------------------------
+NETWORK_PROC( SOCKADDR *,CreateSockAddress)(CTEXTSTR name, uint16_t nDefaultPort )
+{
+// blah... should process a ip:port - but - default port?!
+	uint32_t bTmpName = 0;
+	char * tmp;
+	SOCKADDR *sa = NULL;
+	char *port;
+	uint16_t wPort;
+	CTEXTSTR portName = name;
+#ifdef UNICODE
+	char *_name = CStrDup( name );
+#  define name _name
+#endif
+ //-V595
+	if( name[0] == '[' ) {
+		while( portName[0] && portName[0] != ']' )
+			portName++;
+		if( portName[0] ) portName++;
+	}
+	if( name && portName[0] && ( port = (char*)strrchr( portName, ':' ) ) )
+	{
+		tmp = StrDup( name );
+		bTmpName = 1;
+		port = tmp + (port-name);
+		name = tmp;
+		//Log1( "Found ':' assuming %s is IP:PORT", name );
+		*port = 0;
+		port++;
+  // a trailing : could be IPV6 abbreviation.
+		if( port[0] )
+		{
+			if( isdigit( *port ) )
+			{
+ //-V595
+				wPort = (short)atoi( port );
+			}
+			else
+			{
+				struct servent *se;
+				se = getservbyname( port, NULL );
+				if( !se )
+				{
+#ifdef UNICODE
+#define FMT "S"
+#else
+#define FMT "s"
+#endif
+					Log1( "Could not resolve \"%" FMT "\" as a valid service name", port );
+					//return NULL;
+					wPort = nDefaultPort;
+				}
+				else
+					wPort = htons(se->s_port);
+				//Log1( "port alpha - name resolve to %d", wPort );
+			}
+		}
+		else
+			wPort = nDefaultPort;
+#ifdef UNICODE
+#  undef name
+#endif
+		sa = CreateRemote( name, wPort );
+		if( port )
+		{
+  // incase we obliterated it
+			port[-1] = ':';
+		}
+	}
+  // no port specification...
+	else
+	{
+		//Log1( "%s does not have a ':'", name );
+		sa = CreateRemote( name, nDefaultPort );
+	}
+#ifdef UNICODE
+	Deallocate( char *, _name );
+#endif
+	if( bTmpName ) Deallocate( char*, tmp );
+	return sa;
+}
+//----------------------------------------------------------------------------
+SOCKADDR *CreateLocal(uint16_t nMyPort)
+{
+	char lpHostName[HOSTNAME_LEN];
+	if (gethostname(lpHostName,HOSTNAME_LEN))
+	{
+		return(NULL);
+	}
+	return CreateRemote( "0.0.0.0", nMyPort );
+}
+//----------------------------------------------------------------------------
+LOGICAL CompareAddressEx( SOCKADDR *sa1, SOCKADDR *sa2, int method )
+{
+	if( method == SA_COMPARE_FULL )
+	{
+		if( sa1 && sa2 )
+		{
+			if( ((SOCKADDR_IN*)sa1)->sin_family == ((SOCKADDR_IN*)sa2)->sin_family )
+			{
+				switch( ((SOCKADDR_IN*)sa1)->sin_family )
+				{
+				case AF_INET:
+					{
+						SOCKADDR_IN *sin1 = (SOCKADDR_IN*)sa1;
+						SOCKADDR_IN *sin2 = (SOCKADDR_IN*)sa2;
+						if( MemCmp( sin1, sin2, sizeof( SOCKADDR_IN ) ) == 0 )
+							return 1;
+					}
+					break;
+				default:
+					xlprintf( LOG_ALWAYS )( "unhandled address type passed to compare, resulting FAILURE" );
+					return 0;
+				}
+			}
+		}
+	}
+	else
+	{
+		if( sa1 && sa2 )
+		{
+			if( ((SOCKADDR_IN*)sa1)->sin_family == ((SOCKADDR_IN*)sa2)->sin_family )
+			{
+				switch( ((SOCKADDR_IN*)sa1)->sin_family )
+				{
+				case AF_INET:
+					{
+						if( MemCmp( &((SOCKADDR_IN*)sa1)->sin_addr, &((SOCKADDR_IN*)sa2)->sin_addr, sizeof( ((SOCKADDR_IN*)sa2)->sin_addr ) ) == 0 )
+							return 1;
+					}
+					break;
+				default:
+					xlprintf( LOG_ALWAYS )( "unhandled address type passed to compare, resulting FAILURE" );
+					return 0;
+				}
+			}
+		}
+	}
+	return 0;
+}
+//----------------------------------------------------------------------------
+LOGICAL CompareAddress( SOCKADDR *sa1, SOCKADDR *sa2 )
+{
+	return CompareAddressEx( sa1, sa2, SA_COMPARE_FULL );
+}
+//----------------------------------------------------------------------------
+PLIST GetLocalAddresses( void )
+{
+	return globalNetworkData.addresses;
+}
+//----------------------------------------------------------------------------
+LOGICAL IsThisAddressMe( SOCKADDR *addr, uint16_t myport )
+{
+	struct interfaceAddress *test_addr;
+	INDEX idx;
+	LIST_FORALL( globalNetworkData.addresses, idx, struct interfaceAddress *, test_addr )
+	{
+		if( ((SOCKADDR_IN*)addr)->sin_family == ((SOCKADDR_IN*)test_addr->sa)->sin_family )
+		{
+			switch( ((SOCKADDR_IN*)addr)->sin_family )
+			{
+			case AF_INET:
+				{
+					if( MemCmp( &((SOCKADDR_IN*)addr)->sin_addr, &((SOCKADDR_IN*)test_addr->sa)->sin_addr, sizeof(((SOCKADDR_IN*)addr)->sin_addr)  ) == 0 )
+					{
+						return TRUE;
+					}
+				}
+				break;
+			default:
+				lprintf( "Unknown comparison" );
+			}
+		}
+	}
+	return FALSE;
+}
+//----------------------------------------------------------------------------
+LOGICAL IsBroadcastAddressForInterface( struct interfaceAddress *address, SOCKADDR *addr ) {
+	if( addr->sa_family == AF_INET ) {
+      //lprintf( "can test for broadcast... %08x %08x %08x", ( ((uint32_t*)(address->saMask->sa_data+2))[0] | ((uint32_t*)(addr->sa_data+2))[0] ), ((uint32_t*)address->saMask->sa_data)[0] , ((uint32_t*)addr->sa_data)[0] );
+		if( ( ((uint32_t*)(address->saMask->sa_data+2))[0] | ((uint32_t*)(addr->sa_data+2))[0] ) == 0xFFFFFFFFU )
+         return TRUE;
+	}
+   return FALSE;
+}
+//----------------------------------------------------------------------------
+struct interfaceAddress* GetInterfaceForAddress( SOCKADDR *addr )
+{
+	struct interfaceAddress *test_addr;
+	INDEX idx;
+	if( !globalNetworkData.addresses )
+		LoadNetworkAddresses();
+	LIST_FORALL( globalNetworkData.addresses, idx, struct interfaceAddress *, test_addr )
+	{
+		if( ((SOCKADDR_IN*)addr)->sin_family == ((SOCKADDR_IN*)test_addr->sa)->sin_family )
+		{
+			switch( ((SOCKADDR_IN*)addr)->sin_family )
+			{
+			case AF_INET:
+				{
+					if( MemCmp( &((SOCKADDR_IN*)addr)->sin_addr, test_addr->sa->sa_data + 2, sizeof(((SOCKADDR_IN*)addr)->sin_addr)  ) == 0 )
+					{
+						return test_addr;
+					}
+				}
+				break;
+			case AF_INET6:
+				{
+					if( MemCmp( &((SOCKADDR_IN*)addr)->sin_addr, test_addr->sa->sa_data + 2, 16 ) == 0 )
+					{
+						return test_addr;
+					}
+				}
+				break;
+			default:
+				lprintf( "Unknown comparison" );
+			}
+		}
+	}
+	return NULL;
+}
+//----------------------------------------------------------------------------
+SOCKADDR* GetBroadcastAddressForInterface( SOCKADDR *addr )
+{
+	struct interfaceAddress *test_addr;
+	INDEX idx;
+	if( !globalNetworkData.addresses )
+		LoadNetworkAddresses();
+	LIST_FORALL( globalNetworkData.addresses, idx, struct interfaceAddress *, test_addr )
+	{
+		if( ((SOCKADDR_IN*)addr)->sin_family == ((SOCKADDR_IN*)test_addr->sa)->sin_family )
+		{
+			switch( ((SOCKADDR_IN*)addr)->sin_family )
+			{
+			case AF_INET:
+				{
+					if( MemCmp( &((SOCKADDR_IN*)addr)->sin_addr, test_addr->sa->sa_data + 2, sizeof(((SOCKADDR_IN*)addr)->sin_addr)  ) == 0 )
+					{
+						return test_addr->saBroadcast;
+					}
+				}
+				break;
+			case AF_INET6:
+				{
+					if( MemCmp( &((SOCKADDR_IN*)addr)->sin_addr, test_addr->sa->sa_data + 2, 16 ) == 0 )
+					{
+						return test_addr->saBroadcast;
+					}
+				}
+				break;
+			default:
+				lprintf( "Unknown comparison" );
+			}
+		}
+	}
+	return FALSE;
+}
+//----------------------------------------------------------------------------
+SOCKADDR* GetInterfaceAddressForBroadcast( SOCKADDR *addr )
+{
+	struct interfaceAddress *test_addr;
+	INDEX idx;
+	if( !globalNetworkData.addresses )
+		LoadNetworkAddresses();
+	LIST_FORALL( globalNetworkData.addresses, idx, struct interfaceAddress *, test_addr )
+	{
+		if( ((SOCKADDR_IN*)addr)->sin_family == ((SOCKADDR_IN*)test_addr->sa)->sin_family )
+		{
+			switch( ((SOCKADDR_IN*)addr)->sin_family )
+			{
+			case AF_INET:
+				{
+					if( MemCmp( &((SOCKADDR_IN*)addr)->sin_addr, test_addr->saBroadcast->sa_data + 2, 4 ) == 0 )
+					{
+						return test_addr->sa;
+					}
+				}
+				break;
+			case AF_INET6:
+				{
+					if( MemCmp( &((SOCKADDR_IN*)addr)->sin_addr, test_addr->saBroadcast->sa_data + 2, 16  ) == 0 )
+					{
+						return test_addr->sa;
+					}
+				}
+				break;
+			default:
+				lprintf( "Unknown comparison" );
+			}
+		}
+	}
+	return FALSE;
+}
+//----------------------------------------------------------------------------
+void ReleaseAddress(SOCKADDR *lpsaAddr)
+{
+	// sockaddr is often skewed from what I would expect it. (contains its own length)
+	if( lpsaAddr )
+	{
+		/* strdup is used for the addr part so use free instead of release */
+		free( ((POINTER*)( ( (uintptr_t)lpsaAddr ) - sizeof(uintptr_t) ))[0] );
+		Deallocate(POINTER, (POINTER)( ( (uintptr_t)lpsaAddr ) - 2 * sizeof(uintptr_t) ));
+	}
+}
+//----------------------------------------------------------------------------
+// creates class C broadcast address
+SOCKADDR *CreateBroadcast(uint16_t nPort)
+{
+	SOCKADDR_IN *bcast=(SOCKADDR_IN*)AllocAddr();
+	SOCKADDR *lpMyAddr;
+	if (!bcast)
+		return(NULL);
+	lpMyAddr = CreateLocal(0);
+	SET_SOCKADDR_LENGTH( bcast, IN_SOCKADDR_LENGTH );
+	bcast->sin_family	    = AF_INET;
+	bcast->sin_addr.S_un.S_addr  = ((SOCKADDR_IN*)lpMyAddr)->sin_addr.S_un.S_addr;
+ // Fake a subnet broadcast address
+	bcast->sin_addr.S_un.S_un_b.s_b4 = 0xFF;
+	bcast->sin_port        = htons(nPort);
+	ReleaseAddress(lpMyAddr);
+	return((SOCKADDR*)bcast);
+}
+//----------------------------------------------------------------------------
+void DumpSocket( PCLIENT pc )
+{
+	DumpAddr( "REMOT", pc->saClient );
+	DumpAddr( "LOCAL", pc->saSource );
+	return;
+}
+#ifdef __cplusplus
+namespace udp {
+#endif
+#undef DumpAddr
+NETWORK_PROC( void, DumpAddr)( CTEXTSTR name, SOCKADDR *sa )
+{
+	DumpAddrEx( name, sa DBG_SRC );
+}
+#ifdef __cplusplus
+}
+#endif
+//----------------------------------------------------------------------------
+CTEXTSTR GetSystemName( void )
+{
+	// start the network with defaults... we're able to reallocate later.
+#ifdef __ANDROID__
+#if 0
+	// dont' actually have to start winsock; but we do have to do work to get our IP
+	int sock_startup = socket( AF_INET, SOCK_RAW, 0);
+	if( sock_startup == -1 )
+		sock_startup = socket( AF_INET, SOCK_DGRAM, 0);
+	if( sock_startup == -1 )
+		sock_startup = socket( AF_INET, SOCK_STREAM, 0);
+	if( sock_startup >= 0 )
+	{
+		struct ifconf buffer;
+		struct ifreq ifr[10];
+		int ifc_num;
+		int n;
+		buffer.ifc_len = sizeof(ifr);
+		buffer.ifc_ifcu.ifcu_buf = (char*)ifr;
+		ioctl( sock_startup, SIOCGIFCONF, &buffer);
+		ifc_num = buffer.ifc_len / sizeof(struct ifreq);
+#define INT_TO_ADDR(_addr) (_addr & 0xFF), (_addr >> 8 & 0xFF), (_addr >> 16 & 0xFF), (_addr >> 24 & 0xFF)
+		for( n = 0; n < ifc_num; n++ )
+		{
+			int sd, ifc_num, addr, bcast, mask, network;
+			lprintf( "interface %d : %s", n, ifr[n].ifr_name );
+			if (ifr[n].ifr_addr.sa_family != AF_INET)
+			{
+				continue;
+			}
+			/* display the interface name */
+			lprintf("%d) interface: %s\n", n+1, ifr[n].ifr_name);
+			/* Retrieve the IP address, broadcast address, and subnet mask. */
+			if (ioctl(sd, SIOCGIFADDR, &ifr[n]) == 0)
+			{
+				addr = ((struct sockaddr_in *)(&ifr[n].ifr_addr))->sin_addr.s_addr;
+				lprintf("%d) address: %d.%d.%d.%d\n", n+1, INT_TO_ADDR(addr));
+			}
+			if (ioctl(sd, SIOCGIFBRDADDR, &ifr[n]) == 0)
+			{
+				bcast = ((struct sockaddr_in *)(&ifr[n].ifr_broadaddr))->sin_addr.s_addr;
+				lprintf("%d) broadcast: %d.%d.%d.%d\n", n+1, INT_TO_ADDR(bcast));
+			}
+			if (ioctl(sd, SIOCGIFNETMASK, &ifr[n]) == 0)
+			{
+				mask = ((struct sockaddr_in *)(&ifr[n].ifr_netmask))->sin_addr.s_addr;
+				lprintf("%d) netmask: %d.%d.%d.%d\n", n+1, INT_TO_ADDR(mask));
+			}
+			/* Compute the current network value from the address and netmask. */
+			network = addr & mask;
+			lprintf("%d) network: %d.%d.%d.%d\n", n+1, INT_TO_ADDR(network));
+		}
+		close( sock_startup );
+	}
+	else
+#endif
+		globalNetworkData.system_name = "No Name Available";
+#else
+	NetworkStart();
+#endif
+	return globalNetworkData.system_name;
+}
+#undef NetworkLock
+#undef NetworkUnlock
+NETWORK_PROC( void, GetNetworkAddressBinary )( SOCKADDR *addr, uint8_t **data, size_t *datalen ) {
+	if( addr ) {
+		size_t namelen;
+		size_t addrlen = SOCKADDR_LENGTH( addr );
+		const char * tmp = ((const char**)addr)[-1];
+		if( !( (uintptr_t)tmp & 0xFFFF0000 ) )
+		{
+			lprintf( "corrupted sockaddr." );
+			DebugBreak();
+		}
+		if( tmp )
+		{
+			namelen = StrLen( tmp );
+		}
+		else
+			namelen = 0;
+		(*datalen) = namelen + 1 + 1 + SOCKADDR_LENGTH( addr );
+		(*data) = NewArray( uint8_t, (*datalen) );
+		MemCpy( (*data), tmp, namelen + 1 );
+		(*data)[namelen+1] = (uint8_t)addrlen;
+		MemCpy( (*data) + namelen + 1, addr, addrlen );
+	}
+}
+NETWORK_PROC( SOCKADDR *, MakeNetworkAddressFromBinary )( uintptr_t *data, size_t datalen ) {
+	SOCKADDR *addr = AllocAddr();
+	size_t namelen = strlen( (const char*)data );
+ // if empty name, don't include it.
+	if( namelen )
+		SetAddrName( addr, (const char*)data );
+	SET_SOCKADDR_LENGTH( addr, data[1] );
+	MemCpy( addr, data + 2, data[1] );
+	return addr;
+}
+#ifdef __LINUX__
+void LoadNetworkAddresses( void ) {
+	struct ifaddrs *addrs, *tmp;
+	struct interfaceAddress *ia;
+	getifaddrs( &addrs );
+	tmp = addrs;
+	ia = New( struct interfaceAddress );
+	ia->sa = CreateRemote( "0.0.0.0", 0 );
+	ia->saMask = NULL;
+	ia->saBroadcast = CreateRemote( "255.255.255.255", 0 );
+	AddLink( &globalNetworkData.addresses, ia );
+	for( ; tmp; tmp = tmp->ifa_next )
+	{
+		SOCKADDR *dup;
+		if( !tmp->ifa_addr )
+			continue;
+#  ifndef __MAC__
+		if( tmp->ifa_addr && tmp->ifa_addr->sa_family == AF_PACKET )
+			continue;
+#  endif
+		ia = New( struct interfaceAddress );
+		dup = AllocAddr();
+		if( tmp->ifa_addr->sa_family == AF_INET6 ) {
+			continue;
+			//memcpy( dup, tmp->ifa_addr, IN6_SOCKADDR_LENGTH );
+			//SET_SOCKADDR_LENGTH( dup, IN6_SOCKADDR_LENGTH );
+		}
+		else {
+			memcpy( dup, tmp->ifa_addr, IN_SOCKADDR_LENGTH );
+			SET_SOCKADDR_LENGTH( dup, IN_SOCKADDR_LENGTH );
+		}
+		ia->sa = dup;
+		dup = AllocAddr();
+		if( tmp->ifa_addr->sa_family == AF_INET6 ) {
+			//memcpy( dup, tmp->ifa_netmask, IN6_SOCKADDR_LENGTH );
+			//SET_SOCKADDR_LENGTH( dup, IN6_SOCKADDR_LENGTH );
+		}
+		else {
+			if( tmp->ifa_netmask ) {
+				memcpy( dup, tmp->ifa_netmask, IN_SOCKADDR_LENGTH );
+				SET_SOCKADDR_LENGTH( dup, IN_SOCKADDR_LENGTH );
+			} else {
+				memset( dup, 0, IN_SOCKADDR_LENGTH );
+				SET_SOCKADDR_LENGTH( dup, IN_SOCKADDR_LENGTH );
+			}
+		}
+		ia->saMask = dup;
+		ia->saBroadcast = AllocAddr();
+		ia->saBroadcast->sa_family = ia->sa->sa_family;
+		ia->saBroadcast->sa_data[0] = 0;
+		ia->saBroadcast->sa_data[1] = 0;
+		ia->saBroadcast->sa_data[2] = (ia->sa->sa_data[2] & ia->saMask->sa_data[2]) | (~ia->saMask->sa_data[2]);
+		ia->saBroadcast->sa_data[3] = (ia->sa->sa_data[3] & ia->saMask->sa_data[3]) | (~ia->saMask->sa_data[3]);
+		ia->saBroadcast->sa_data[4] = (ia->sa->sa_data[4] & ia->saMask->sa_data[4]) | (~ia->saMask->sa_data[4]);
+		ia->saBroadcast->sa_data[5] = (ia->sa->sa_data[5] & ia->saMask->sa_data[5]) | (~ia->saMask->sa_data[5]);
+		SET_SOCKADDR_LENGTH( ia->saBroadcast, SOCKADDR_LENGTH( ia->sa ) );
+		AddLink( &globalNetworkData.addresses, ia );
+	}
+	freeifaddrs( addrs );
+}
+#endif
+#ifdef _WIN32
+#if 0
+#ifdef WIN32
+	{
+		struct addrinfo *result;
+		struct addrinfo *test;
+#ifdef _UNICODE
+		char *tmp = WcharConvert( globalNetworkData.system_name );
+		getaddrinfo( tmp, NULL, NULL, (struct addrinfo**)&result );
+		Deallocate( char*, tmp );
+#else
+		getaddrinfo( globalNetworkData.system_name, NULL, NULL, (struct addrinfo**)&result );
+#endif
+		for( test = result; test; test = test->ai_next )
+		{
+			//if( test->ai_family == AF_INET )
+			{
+				SOCKADDR *tmp;
+				AddLink( &globalNetworkData.addresses, tmp = AllocAddr() );
+				((uintptr_t*)tmp)[-1] = test->ai_addrlen;
+				MemCpy( tmp, test->ai_addr, test->ai_addrlen );
+				//lprintf( "initialize addres..." );
+				//DumpAddr( "blah", tmp );
+			}
+		}
+	}
+#endif
+#endif
+void LoadNetworkAddresses( void ) {
+	// Declare and initialize variables
+	PIP_INTERFACE_INFO pInfo;
+	pInfo = (IP_INTERFACE_INFO *) malloc( sizeof(IP_INTERFACE_INFO) );
+	DWORD dwRetVal = 0;
+	PIP_ADAPTER_INFO pAdapterInfo;
+	PIP_ADAPTER_INFO pAdapter = NULL;
+	ULONG ulOutBufLen = sizeof (IP_ADAPTER_INFO);
+	pAdapterInfo = New(IP_ADAPTER_INFO);
+	if (pAdapterInfo == NULL) {
+		lprintf("Error allocating memory needed to call GetAdaptersinfo\n");
+		free( pInfo );
+		return;
+	}
+	// Make an initial call to GetAdaptersInfo to get
+	// the necessary size into the ulOutBufLen variable
+	if (GetAdaptersInfo(pAdapterInfo, &ulOutBufLen) == ERROR_BUFFER_OVERFLOW) {
+		Deallocate( PIP_ADAPTER_INFO, pAdapterInfo);
+		pAdapterInfo = (IP_ADAPTER_INFO *) NewArray(uint8_t, ulOutBufLen);
+		if (pAdapterInfo == NULL) {
+			lprintf("Error allocating memory needed to call GetAdaptersinfo\n");
+			free( pInfo );
+			return;
+		}
+	}
+	if ((dwRetVal = GetAdaptersInfo(pAdapterInfo, &ulOutBufLen)) == NO_ERROR) {
+		pAdapter = pAdapterInfo;
+		while (pAdapter) {
+			PIP_ADDR_STRING ipadd = &pAdapter->IpAddressList;
+			for( ; ipadd; ipadd = ipadd->Next ) {
+			/*
+			typedef struct _IP_ADDR_STRING {
+			  struct _IP_ADDR_STRING  *Next;
+			  IP_ADDRESS_STRING      IpAddress;
+			  IP_MASK_STRING         IpMask;
+			  DWORD                  Context;
+			} IP_ADDR_STRING, *PIP_ADDR_STRING;
+			*/
+				if( StrCmp( ipadd->IpAddress.String, "0.0.0.0" ) == 0 )
+					continue;
+				struct interfaceAddress *ia = New( struct interfaceAddress );
+				ia->sa = CreateRemote( ipadd->IpAddress.String, 0 );
+				ia->saMask = CreateRemote( ipadd->IpMask.String, 0 );
+				ia->saBroadcast = AllocAddr();
+				ia->saBroadcast->sa_family = ia->sa->sa_family;
+				ia->saBroadcast->sa_data[0] = 0;
+				ia->saBroadcast->sa_data[1] = 0;
+				ia->saBroadcast->sa_data[2] = (ia->sa->sa_data[2] & ia->saMask->sa_data[2]) | (~ia->saMask->sa_data[2]);
+				ia->saBroadcast->sa_data[3] = (ia->sa->sa_data[3] & ia->saMask->sa_data[3]) | (~ia->saMask->sa_data[3]);
+				ia->saBroadcast->sa_data[4] = (ia->sa->sa_data[4] & ia->saMask->sa_data[4]) | (~ia->saMask->sa_data[4]);
+				ia->saBroadcast->sa_data[5] = (ia->sa->sa_data[5] & ia->saMask->sa_data[5]) | (~ia->saMask->sa_data[5]);
+				AddLink( &globalNetworkData.addresses, ia );
+			}
+			pAdapter = pAdapter->Next;
+		}
+	}
+	else {
+		lprintf( "GetAdaptersInfo failed with error: %d\n", dwRetVal );
+	}
+#if 0
+//msdn.microsoft.com/en-us/library/windows/desktop/aa365915%28v=vs.85%29.aspx?f=255&MSPPError=-2147217396
+https:
+    PIP_ADAPTER_ADDRESSES pAddresses = NULL;
+    ULONG outBufLen = 0;
+    ULONG Iterations = 0;
+    PIP_ADAPTER_ADDRESSES pCurrAddresses = NULL;
+    PIP_ADAPTER_UNICAST_ADDRESS pUnicast = NULL;
+    PIP_ADAPTER_ANYCAST_ADDRESS pAnycast = NULL;
+    PIP_ADAPTER_MULTICAST_ADDRESS pMulticast = NULL;
+    IP_ADAPTER_DNS_SERVER_ADDRESS *pDnServer = NULL;
+    IP_ADAPTER_PREFIX *pPrefix = NULL;
+  do {
+        pAddresses = (IP_ADAPTER_ADDRESSES *) MALLOC(outBufLen);
+        if (pAddresses == NULL) {
+            printf
+                ("Memory allocation failed for IP_ADAPTER_ADDRESSES struct\n");
+            exit(1);
+        }
+        dwRetVal =
+            GetAdaptersAddresses(AF_UNSPEC
+		, GAA_FLAG_SKIP_DNS_SERVER|GAA_FLAG_SKIP_FRIENDLY_NAME|GAA_FLAG_INCLUDE_ALL_INTERFACES
+		, NULL, pAddresses, &outBufLen);
+        if (dwRetVal == ERROR_BUFFER_OVERFLOW) {
+            FREE(pAddresses);
+            pAddresses = NULL;
+        } else {
+            break;
+        }
+        Iterations++;
+    } while ((dwRetVal == ERROR_BUFFER_OVERFLOW) && (Iterations < MAX_TRIES));
+#endif
+}
+#endif
 SACK_NETWORK_NAMESPACE_END
 // DEBUG FALGS in netstruc.h
 //TODO: after the connect and just before the call to the connect callback fill in the PCLIENT's MAC addr field.
@@ -44060,12 +47461,9 @@ static PCLIENT InternalTCPClientAddrFromAddrExxx( SOCKADDR *lpAddr, SOCKADDR *pF
 			if( bCPP )
 				pResult->dwFlags |= ( CF_CALLBACKTYPES );
 			AddActive( pResult );
-			if( !(flags & OPEN_TCP_FLAG_DELAY_CONNECT) ) {
-				NetworkConnectTCPEx( pResult DBG_RELAY );
-			}
+			NetworkUnlockEx(pResult, 1 DBG_SRC);
+			NetworkUnlockEx(pResult, 0 DBG_SRC);
 			//lprintf( "Leaving Client's critical section" );
-			NetworkUnlockEx( pResult, 1 DBG_SRC );
-			NetworkUnlockEx( pResult, 0 DBG_SRC );
 			// socket should now get scheduled for events, after unlocking it?
 #ifdef USE_WSA_EVENTS
 			if( globalNetworkData.flags.bLogNotices )
@@ -44088,15 +47486,18 @@ static PCLIENT InternalTCPClientAddrFromAddrExxx( SOCKADDR *lpAddr, SOCKADDR *pF
 #ifdef __LINUX__
 			AddThreadEvent( pResult, 0 );
 #endif
+			if (!(flags & OPEN_TCP_FLAG_DELAY_CONNECT)) {
+				NetworkConnectTCPEx(pResult DBG_RELAY);
+			}
 			if( !pConnectComplete && !(flags & OPEN_TCP_FLAG_DELAY_CONNECT) )
 			{
-				int Start, bProcessing = 0;
+				uint64_t Start = timeGetTime64();
+				int bProcessing = 0;
 				// should trigger a rebuild (if it's the root thread)
-				Start = (GetTickCount()&0xFFFFFFF);
 				pResult->dwFlags |= CF_CONNECT_WAITING;
 				// caller was expecting connect to block....
 				while( !( pResult->dwFlags & (CF_CONNECTED|CF_CONNECTERROR|CF_CONNECT_CLOSED) ) &&
-						( ( (GetTickCount()&0xFFFFFFF) - Start ) < globalNetworkData.dwConnectTimeout ) )
+						( ( timeGetTime64() - Start ) < globalNetworkData.dwConnectTimeout ) )
 				{
 					// may be this thread itself which connects...
 					if( this_thread )
@@ -44136,7 +47537,7 @@ static PCLIENT InternalTCPClientAddrFromAddrExxx( SOCKADDR *lpAddr, SOCKADDR *pF
 						Relinquish();
 					}
 				}
-				if( (( (GetTickCount()&0xFFFFFFF) - Start ) >= 10000)
+				if( (( timeGetTime64() - Start ) >= 10000)
 					|| (pResult->dwFlags &  CF_CONNECTERROR ) )
 				{
 					if( pResult->dwFlags &  CF_CONNECTERROR )
@@ -44775,20 +48176,12 @@ int TCPWriteEx(PCLIENT pc DBG_PASS)
 					lprintf( "Pending write..." );
 #endif
 					pc->dwFlags |= CF_WRITEPENDING;
-#ifdef __LINUX__
-					//if( !(pc->dwFlags & CF_WRITEISPENDED ) )
-					//{
-					//	   lprintf( "Sending signal" );
-					//    WakeThread( globalNetworkData.pThread );
-					//}
-					//else
-					//    lprintf( "Yes... it was already pending..(no signal)" );
-#endif
 					return TRUE;
 				}
 				{
-					_lprintf(DBG_RELAY)(" Network Send Error: %5d(buffer:%p ofs: %" _size_f "  Len: %" _size_f ")",
+					_lprintf(DBG_RELAY)(" Network Send Error: %5d(sock:%p, buffer:%p ofs: %" _size_f "  Len: %" _size_f ")",
 											  dwError,
+											  pc,
 											  pc->lpFirstPending->buffer.c,
 											  pc->lpFirstPending->dwUsed,
 											  pc->lpFirstPending->dwAvail );
@@ -44808,17 +48201,15 @@ int TCPWriteEx(PCLIENT pc DBG_PASS)
 				}
  // other side closed.
 			} else if (!nSent) {
-				lprintf( "sent zero bytes - assume it was closed - and HOPE there's an event..." );
+				//lprintf( "sent zero bytes - assume it was closed - and HOPE there's an event..." );
+				// this is more likely to show up as an EPIPE
 				pc->dwFlags |= CF_TOCLOSE;
 				// if this happened - don't return TRUE result which would
 				// result in queuing a pending buffer...
   // no sence processing the rest of this.
 				return FALSE;
 			} else if( pc->lpFirstPending && ( nSent < (int)pc->lpFirstPending->dwAvail ) ) {
-				//pc->lpFirstPending->dwUsed += nSent;
-				//pc->lpFirstPending->dwAvail -= nSent;
 				pc->dwFlags |= CF_WRITEPENDING;
-				//lprintf( "THIS IS ANOTHER PENDING CONDITION THAT WASN'T ACCOUNTED %d of %d", nSent, pc->lpFirstPending->dwAvail  );
 			}
 		}
 		else
@@ -44881,17 +48272,6 @@ int TCPWriteEx(PCLIENT pc DBG_PASS)
 					if( !(pc->dwFlags & CF_WRITEPENDING) )
 					{
 						pc->dwFlags |= CF_WRITEPENDING;
-#if 0
-#ifdef USE_WSA_EVENTS
-						if( globalNetworkData.flags.bLogNotices )
-							lprintf( "SET GLOBAL EVENT (write pending)" );
-						EnqueLink( &globalNetworkData.client_schedule, pc );
-						WSASetEvent( globalNetworkData.hMonitorThreadControlEvent );
-#endif
-#ifdef __LINUX__
-						AddThreadEvent( pc, 0 );
-#endif
-#endif
 					}
 					return TRUE;
 				}
@@ -44922,8 +48302,10 @@ LOGICAL doTCPWriteExx( PCLIENT lpClient
 	{
 		if( (!(lpClient->dwFlags & CF_ACTIVE )) || (lpClient->dwFlags & CF_TOCLOSE) )
 		{
+#ifdef LOG_NETWORK_LOCKING
 			_lprintf(DBG_RELAY)( "Failing send... inactive or closing" );
 			LogBinary( (uint8_t*)pInBuffer, nInLen );
+#endif
 			return FALSE;
 		}
 		Relinquish();
@@ -45947,7 +49329,7 @@ static LOGICAL DoPingExx( CTEXTSTR pstrHost
 #endif
    }
    // Setup destination socket address
-   saDest.sin_addr.s_addr = dwIP;
+   saDest.sin_addr.S_un.S_addr = dwIP;
    saDest.sin_family = AF_INET;
    saDest.sin_port = 0;
    //vtprintf( pvtResult, "Version 1.0   ADA Software Developers, Inc.  Copyright 1999.\n" );
@@ -46047,7 +49429,7 @@ static LOGICAL DoPingExx( CTEXTSTR pstrHost
       }
       else
       {
-         Entry[nEntry].dwIP = _dwIP = saSrc.sin_addr.s_addr;
+         Entry[nEntry].dwIP = _dwIP = saSrc.sin_addr.S_un.S_addr;
       }
       Entry[nEntry].TTL  = cTTL;
       Entry[nEntry].dwMaxTime = ConvertTickToMicrosecond( MaxTime );
@@ -46091,7 +49473,7 @@ LoopBreakpoint:
       char *pIPBuf;
       if( Entry[i].dwIP )
       {
-         saSrc.sin_addr.s_addr = Entry[i].dwIP;
+         saSrc.sin_addr.S_un.S_addr = Entry[i].dwIP;
          pIPBuf = inet_ntoa( *(struct in_addr*)&saSrc.sin_addr );
          nResult = TRUE;
       }
@@ -47014,7 +50396,7 @@ static void win32_locking_callback(int mode, int type, const char *file, int lin
 }
 unsigned long pthreads_thread_id(void)
 {
-	return (unsigned long)GetMyThreadID();
+	return (unsigned long)GetThisThreadID();
 }
 static LOGICAL ssl_InitLibrary( void ){
 	if( !ssl_global.flags.bInited )
@@ -47197,7 +50579,7 @@ static int handleServerName( SSL* ssl, int* al, void* param ) {
 									char* checkName;
 									char* nextName;
 									for( checkName = hostctx->host; checkName ? (nextName = StrChr( checkName, '~' )), 1 : 0; checkName = nextName ) {
-										int namelen = nextName ? (nextName - checkName) : strlen;
+										int namelen = (int)(nextName ? (nextName - checkName) : strlen);
 										if( nextName ) nextName++;
 										if( namelen != strlen ) {
 											//lprintf( "%.*s is not %.*s", namelen, checkName, strlen, host );
@@ -47259,11 +50641,11 @@ static int handleServerName( SSL* ssl, int* al, void* param ) {
 		return 0;
 	}
 	const char* host = SSL_get_servername( ssl, t );
-	int strlen = StrLen( host );
+	int strlen = (int)StrLen( host );
 	//lprintf( "ServerName;%s", host );
 	struct ssl_hostContext* hostctx;
 	struct ssl_hostContext* defaultHostctx;
-	lprintf( "Have hostchange: %.*s", strlen, host );
+	//lprintf( "Have hostchange: %.*s", strlen, host );
 	pcAccept->ssl_session->hostname = DupCStrLen( host, strlen );
 	LIST_FORALL( ctxList[0], idx, struct ssl_hostContext*, hostctx ) {
 		char const* checkName;
@@ -47327,6 +50709,13 @@ LOGICAL ssl_BeginServer_v2( PCLIENT pc, CPOINTER cert, size_t certlen
 			lprintf( "Ignoring hostname for anonymous, quickshot server certificate" );
 		}
 		certStruc = ses->cert = MakeRequest();
+		ctx = New( struct ssl_hostContext );
+		ctx->host = StrDup( hosts );
+		ctx->ctx = NULL;
+		ctx->cert = certStruc;
+		AddLink( &ses->hosts, ctx );
+		if( !ses->cert )
+			ses->cert = certStruc;
 	} else {
 		certStruc = New( struct internalCert );
 		BIO *keybuf = BIO_new( BIO_s_mem() );
@@ -48776,6 +52165,7 @@ void SetWebSocketDataCompletion( PCLIENT pc, web_socket_completion callback ) {
  */
 #ifndef INCLUDED_SHA1_H_
 #define INCLUDED_SHA1_H_
+#define _SHA1_H_
 #ifdef SHA1_SOURCE
 #define SHA1_PROC(type,name) EXPORT_METHOD type CPROC name
 #else
@@ -49760,8 +53150,10 @@ SRG_EXPORT char * SRG_ID_Generator( void );
 SRG_EXPORT char *SRG_ID_Generator_256( void );
 // return a unique ID using SHA3-keccak-512
 SRG_EXPORT char *SRG_ID_Generator3( void );
-// return a unique ID using SHA3-K12-512
+// return a unique ID using K12-32768
 SRG_EXPORT char *SRG_ID_Generator4( void );
+// return a short unique ID using K12-32768
+SRG_EXPORT char *SRG_ID_ShortGenerator4( void );
 //------------------------------------------------------------------------
 //   crypt_util.c extra simple routines - kinda like 'passwd'
 //
@@ -50724,6 +54116,10 @@ DeclareSet( PLINKQUEUE );
 typedef PDATALIST *PPDATALIST;
 #define MAXPDATALISTSPERSET 256
 DeclareSet( PDATALIST );
+struct pendingParser {
+	PDATALIST* pdlMessage;
+	struct json_parse_state* state;
+};
 struct json_parser_shared_data {
 	PPARSE_CONTEXTSET parseContexts;
 	PPARSE_BUFFERSET parseBuffers;
@@ -50735,8 +54131,8 @@ struct json_parser_shared_data {
 	PPDATALISTSET dataLists;
  // used by simple parse_message interface.
 	struct json_parse_state *json_state;
- // used by simple parse_message interface.
-	struct json_parse_state *json6_state;
+	///struct json_parse_state *json6_state; // used by simple parse_message interface.
+	PLIST pendingParsers6;
 };
 #ifndef JSON_PARSER_MAIN_SOURCE
 extern
@@ -50746,8 +54142,10 @@ void _json_dispose_message( PDATALIST *msg_data );
 #ifdef __cplusplus
 } } SACK_NAMESPACE_END
 #endif
+#ifdef _MSC_VER
 // derefecing NULL pointers; the function wouldn't be called with a NULL.
-#pragma warning( disable:6011)
+#  pragma warning( disable:6011)
+#endif
 #ifdef __cplusplus
 SACK_NAMESPACE namespace network { namespace json {
 #endif
@@ -51314,6 +54712,8 @@ int json_parse_add_data( struct json_parse_state *state
 					}
 					break;
 				case ' ':
+//case '\xa0':
+				case 160:
 				case '\t':
 				case '\r':
 				case '\n':
@@ -52849,7 +56249,8 @@ static int gatherString6(struct json_parse_state *state, CTEXTSTR msg, CTEXTSTR 
 					continue;
 				} else {
 					if( state->hex_char > 255 ) {
-						lprintf("(escaped character, parsing octal escape val=%d) fault while parsing; )" " (near %*.*s[%c]%s)"
+						if( !state->pvtError ) state->pvtError = VarTextCreate();
+						vtprintf( state->pvtError, "(escaped character, parsing octal escape val=%d) fault while parsing; )" " (near %*.*s[%c]%s)"
 							, state->hex_char
 							, (int)( ( n>3 ) ? 3 : n ), (int)( ( n>3 ) ? 3 : n )
 							, ( *msg_input ) - ( ( n>3 ) ? 3 : n )
@@ -52878,7 +56279,8 @@ static int gatherString6(struct json_parse_state *state, CTEXTSTR msg, CTEXTSTR 
 				else if( c >= 'A' && c <= 'F' ) state->hex_char += ( c - 'A' ) + 10;
 				else if( c >= 'a' && c <= 'f' ) state->hex_char += ( c - 'a' ) + 10;
 				else {
-					lprintf("(escaped character, parsing hex of \\u) fault while parsing; '%c' unexpected at %" _size_f " (near %*.*s[%c]%s)", c, n
+					if( !state->pvtError ) state->pvtError = VarTextCreate();
+					vtprintf( state->pvtError, "(escaped character, parsing hex of \\u) fault while parsing; '%c' unexpected at %" _size_f " (near %*.*s[%c]%s)", c, n
 						, (int)( ( n > 3 ) ? 3 : n ), (int)( ( n > 3 ) ? 3 : n )
 						, ( *msg_input ) - ( ( n > 3 ) ? 3 : n )
 						, c
@@ -52901,7 +56303,8 @@ static int gatherString6(struct json_parse_state *state, CTEXTSTR msg, CTEXTSTR 
 					else if( c >= 'A' && c <= 'F' ) state->hex_char += ( c - 'A' ) + 10;
 					else if( c >= 'a' && c <= 'f' ) state->hex_char += ( c - 'a' ) + 10;
 					else {
-						lprintf("(escaped character, parsing hex of \\x) fault while parsing; '%c' unexpected at %" _size_f " (near %*.*s[%c]%s)", c, n
+						if( !state->pvtError ) state->pvtError = VarTextCreate();
+						vtprintf( state->pvtError, "(escaped character, parsing hex of \\x) fault while parsing; '%c' unexpected at %" _size_f " (near %*.*s[%c]%s)", c, n
 							, (int)( ( n>3 ) ? 3 : n ), (int)( ( n>3 ) ? 3 : n )
 							, ( *msg_input ) - ( ( n>3 ) ? 3 : n )
 							, c
@@ -52938,9 +56341,9 @@ static int gatherString6(struct json_parse_state *state, CTEXTSTR msg, CTEXTSTR 
 				if( state->cr_escaped ) state->cr_escaped = FALSE;
 				// fall through to clear escape status <CR><LF> support.
  // LS (Line separator)
-			case 2028:
+			case 0x2028:
  // PS (paragraph separate)
-			case 2029:
+			case 0x2029:
 				// escaped whitespace is nul'ed.
 				state->escape = 0;
 				continue;
@@ -52987,7 +56390,8 @@ static int gatherString6(struct json_parse_state *state, CTEXTSTR msg, CTEXTSTR 
 					state->escape = FALSE;
 					mOut += ConvertToUTF8(mOut, c);
 				} else {
-					lprintf("(escaped character) fault while parsing; '%c' unexpected %" _size_f " (near %*.*s[%c]%s)", c, n
+					if( !state->pvtError ) state->pvtError = VarTextCreate();
+					vtprintf( state->pvtError, "(escaped character) fault while parsing; '%c' unexpected %" _size_f " (near %*.*s[%c]%s)", c, n
 						, (int)( ( n>3 ) ? 3 : n ), (int)( ( n>3 ) ? 3 : n )
 						, ( *msg_input ) - ( ( n>3 ) ? 3 : n )
 						, c
@@ -53188,9 +56592,9 @@ int json6_parse_add_data( struct json_parse_state *state
 				}
 				break;
 			case '[':
-				if( state->parse_context == CONTEXT_OBJECT_FIELD ) {
+				if( state->parse_context == CONTEXT_OBJECT_FIELD || state->val.value_type != VALUE_UNSET ) {
 					if( !state->pvtError ) state->pvtError = VarTextCreate();
-					vtprintf( state->pvtError, "Fault while parsing; while getting field name unexpected %c at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
+					vtprintf( state->pvtError, "Fault while parsing; unexpected %c at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
 					state->status = FALSE;
 					break;
 				}
@@ -53265,6 +56669,14 @@ int json6_parse_add_data( struct json_parse_state *state
 					//if( (state->parse_context == CONTEXT_OBJECT_FIELD_VALUE) )
 					if( state->val.value_type != VALUE_UNSET ) {
 						AddDataItem( state->elements, &state->val );
+					}
+					else if( state->parse_context == CONTEXT_OBJECT_FIELD_VALUE )
+					{
+						if( !state->pvtError ) state->pvtError = VarTextCreate();
+// fault
+						vtprintf( state->pvtError, "object close after field with no value? fault while parsing; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
+						state->status = FALSE;
+						break;
 					}
 					//RESET_STATE_VAL();
 					state->val.value_type = VALUE_OBJECT;
@@ -53357,9 +56769,15 @@ int json6_parse_add_data( struct json_parse_state *state
 #ifdef _DEBUG_PARSING
 					lprintf( "comma after field value, push field to object: %s", state->val.name );
 #endif
-					state->parse_context = CONTEXT_OBJECT_FIELD;
 					if( state->val.value_type != VALUE_UNSET )
 						AddDataItem( state->elements, &state->val );
+					else {
+						if( !state->pvtError ) state->pvtError = VarTextCreate();
+// fault
+						vtprintf( state->pvtError, "comma after no value? fault while parsing; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
+						state->status = FALSE;
+					}
+					state->parse_context = CONTEXT_OBJECT_FIELD;
 					RESET_STATE_VAL();
 				}
 				else
@@ -53367,7 +56785,7 @@ int json6_parse_add_data( struct json_parse_state *state
 					state->status = FALSE;
 					if( !state->pvtError ) state->pvtError = VarTextCreate();
 // fault
-					vtprintf( state->pvtError, "bad context; fault while parsing; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
+					vtprintf( state->pvtError, "excessive commas or bad context; fault while parsing; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
 				}
 				break;
 			default:
@@ -53705,7 +57123,15 @@ int json6_parse_add_data( struct json_parse_state *state
 					//
 					//----------------------------------------------------------
 				case '-':
-					state->negative = !state->negative;
+					if( state->word == WORD_POS_RESET )
+						state->negative = !state->negative;
+					else {
+						state->status = FALSE;
+						if( !state->pvtError ) state->pvtError = VarTextCreate();
+						vtprintf( state->pvtError, "fault while parsing; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f
+							, c, state->n, state->line, state->col );
+// fault
+					}
 					break;
 				default:
 					if( (c >= '0' && c <= '9') || (c == '+') || (c == '.') )
@@ -53769,7 +57195,7 @@ int json6_parse_add_data( struct json_parse_state *state
 								else {
 									state->status = FALSE;
 									if( !state->pvtError ) state->pvtError = VarTextCreate();
-									vtprintf( state->pvtError, "fault white parsing number; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
+									vtprintf( state->pvtError, "fault while parsing number; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
 									break;
 								}
 							}
@@ -53783,7 +57209,7 @@ int json6_parse_add_data( struct json_parse_state *state
 								else {
 									state->status = FALSE;
 									if( !state->pvtError ) state->pvtError = VarTextCreate();
-									vtprintf( state->pvtError, "fault white parsing number; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
+									vtprintf( state->pvtError, "fault while parsing number; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
 									break;
 								}
 							}
@@ -53791,7 +57217,7 @@ int json6_parse_add_data( struct json_parse_state *state
 								if( !state->exponent ) {
 									state->status = FALSE;
 									if( !state->pvtError ) state->pvtError = VarTextCreate();
-									vtprintf( state->pvtError, "fault white parsing number; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
+									vtprintf( state->pvtError, "fault while parsing number; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
 									break;
 								}
 								else {
@@ -53802,7 +57228,7 @@ int json6_parse_add_data( struct json_parse_state *state
 									else {
 										state->status = FALSE;
 										if( !state->pvtError ) state->pvtError = VarTextCreate();
-										vtprintf( state->pvtError, "fault white parsing number; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
+										vtprintf( state->pvtError, "fault while parsing number; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
 										break;
 									}
 								}
@@ -53816,7 +57242,7 @@ int json6_parse_add_data( struct json_parse_state *state
 								else {
 									state->status = FALSE;
 									if( !state->pvtError ) state->pvtError = VarTextCreate();
-									vtprintf( state->pvtError, "fault white parsing number; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
+									vtprintf( state->pvtError, "fault while parsing number; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
 									break;
 								}
 							}
@@ -53837,7 +57263,7 @@ int json6_parse_add_data( struct json_parse_state *state
 									else {
 										state->status = FALSE;
 										if( !state->pvtError ) state->pvtError = VarTextCreate();
-										vtprintf( state->pvtError, "fault white parsing number; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
+										vtprintf( state->pvtError, "fault while parsing number; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
 										break;
 									}
 								}
@@ -53988,6 +57414,7 @@ void json_parse_clear_state( struct json_parse_state *state ) {
 			INDEX idx;
 			LIST_FORALL( state->outValBuffers[0], idx, char*, buf ) {
 				Deallocate( char*, buf );
+				SetLink( state->outValBuffers, idx, NULL );
 			}
 			DeleteFromSet( PLIST, jpsd.listSet, state->outValBuffers );
 			//DeleteList( &state->outValBuffers );
@@ -54056,6 +57483,7 @@ void json_parse_dispose_state( struct json_parse_state **ppState ) {
 			Deallocate( const char *, buf->buf );
 			DeleteFromSet( PARSE_BUFFER, jpsd.parseBuffers, buf );
 			Deallocate( PPARSE_BUFFER, buf );
+			SetLink( state->outValBuffers, idx, NULL );
 		}
 		DeleteFromSet( PLIST, jpsd.listSet, state->outValBuffers );
 		//DeleteList( &state->outValBuffers );
@@ -54095,18 +57523,21 @@ LOGICAL json6_parse_message( const char * msg
 	logTick(1);
 	int result = json6_parse_add_data( state, msg, msglen );
 	//logTick(3);
-	if( jpsd.json6_state ) json_parse_dispose_state( &jpsd.json6_state );
 	if( result > 0 ) {
 		logTick(4);
 		(*_msg_output) = json_parse_get_data( state );
 		logTick(5);
-		jpsd.json6_state = state;
-		//json6_parse_dispose_state( &state );
+		{
+			struct pendingParser* pp = New( struct pendingParser );
+			pp->state = state;
+			pp->pdlMessage = _msg_output;
+			AddLink( &jpsd.pendingParsers6, pp );
+		}
 		return TRUE;
 	}
 	(*_msg_output) = NULL;
 	jpsd.last_parse_state = state;
-	jpsd.json6_state = state;
+	//jpsd.json6_state = state;
 	return FALSE;
 }
 void getJson6Ticks( int *tickBuf ) {
@@ -54119,12 +57550,27 @@ void getJson6Ticks( int *tickBuf ) {
 # endif
 }
 struct json_parse_state *json6_get_message_parser( void ) {
-	//lprintf( "Return simple json6 parser:%p", jpsd.json6_state );
-	return jpsd.json6_state;
+	//lprintf( "Return simple json6 parser:%p", jpsd.pendingParsers6 );
+	//DebugBreak();
+ // need to pass this a message to find the thing.
+	return (struct json_parse_state*)GetLink( &jpsd.pendingParsers6, 0);
 }
 void json6_dispose_message( PDATALIST *msg_data )
 {
 	json_dispose_message( msg_data );
+	{
+		struct pendingParser* pp;
+		INDEX idx;
+		LIST_FORALL( jpsd.pendingParsers6, idx, struct pendingParser*, pp ) {
+			if( pp->pdlMessage == msg_data )
+				break;
+		}
+		if( pp ) {
+			DeleteLink( &jpsd.pendingParsers6, pp );
+			json_parse_dispose_state( &pp->state );
+			Release( pp );
+		}
+	}
 	return;
 }
 #undef GetUtfChar
@@ -54409,8 +57855,9 @@ enum jsox_word_char_states {
 	JSOX_WORD_POS_UNDEFINED_7,
 	JSOX_WORD_POS_UNDEFINED_8,
 	//JSOX_WORD_POS_UNDEFINED_9, // instead of stepping to this value here, go to RESET
-	JSOX_WORD_POS_NAN_1,
   // 20
+	JSOX_WORD_POS_NAN_1,
+  // 21
 	JSOX_WORD_POS_NAN_2,
 	//JSOX_WORD_POS_NAN_3,// instead of stepping to this value here, go to RESET
 	JSOX_WORD_POS_INFINITY_1,
@@ -54422,8 +57869,9 @@ enum jsox_word_char_states {
 	JSOX_WORD_POS_INFINITY_7,
 	//JSOX_WORD_POS_INFINITY_8,// instead of stepping to this value here, go to RESET
 	JSOX_WORD_POS_FIELD,
+  // 30
 	JSOX_WORD_POS_AFTER_FIELD,
- // 30
+ // 31
 	JSOX_WORD_POS_DOT_OPERATOR,
 	JSOX_WORD_POS_PROPER_NAME,
 	JSOX_WORD_POS_AFTER_PROPER_NAME,
@@ -54511,6 +57959,20 @@ struct jsox_parse_context {
 typedef struct jsox_parse_context JSOX_PARSE_CONTEXT, *PJSOX_PARSE_CONTEXT;
 #define MAXJSOX_PARSE_CONTEXTSPERSET 128
 DeclareSet( JSOX_PARSE_CONTEXT );
+#ifndef JSON_PARSER_INCLUDED
+typedef PLIST *PPLIST;
+#define MAXPLISTSPERSET 256
+DeclareSet( PLIST );
+typedef PLINKSTACK *PPLINKSTACK;
+#define MAXPLINKSTACKSPERSET 256
+DeclareSet( PLINKSTACK );
+typedef PLINKQUEUE *PPLINKQUEUE;
+#define MAXPLINKQUEUESPERSET 256
+DeclareSet( PLINKQUEUE );
+typedef PDATALIST *PPDATALIST;
+#define MAXPDATALISTSPERSET 256
+DeclareSet( PDATALIST );
+#endif
 // this is the stack state that can be saved between parsing for streaming.
 struct jsox_parse_state {
 	//TEXTRUNE c;
@@ -54535,6 +57997,7 @@ struct jsox_parse_state {
 	PJSOX_CLASS current_class;
 	int current_class_item;
 	int arrayType;
+	int allowRedefinition;
 	LOGICAL first_token;
 	PJSOX_PARSE_CONTEXT context;
 	enum jsox_parse_context_modes parse_context;
@@ -54569,39 +58032,26 @@ struct jsox_parse_state {
 	LOGICAL stringHex;
 	TEXTRUNE hex_char;
 	int hex_char_len;
-	LOGICAL stringOct;
 	LOGICAL weakSpace;
 	PDATALIST root;
 	//char *token_begin;
+	PJSOX_CLASSSET  classPool;
+	PJSOX_PARSE_CONTEXTSET parseContexts;
+	PJSOX_CLASS_FIELDSET  class_fields;
+	PJSOX_PARSE_BUFFERSET parseBuffers;
 };
 typedef struct jsox_parse_state JSOX_PARSE_STATE, *PJSOX_PARSE_STATE;
 #define MAXJSOX_PARSE_STATESPERSET 32
 DeclareSet( JSOX_PARSE_STATE );
-#ifndef JSON_PARSER_INCLUDED
-typedef PLIST *PPLIST;
-#define MAXPLISTSPERSET 256
-DeclareSet( PLIST );
-typedef PLINKSTACK *PPLINKSTACK;
-#define MAXPLINKSTACKSPERSET 256
-DeclareSet( PLINKSTACK );
-typedef PLINKQUEUE *PPLINKQUEUE;
-#define MAXPLINKQUEUESPERSET 256
-DeclareSet( PLINKQUEUE );
-typedef PDATALIST *PPDATALIST;
-#define MAXPDATALISTSPERSET 256
-DeclareSet( PDATALIST );
-#endif
 struct jsox_parser_shared_data {
-	PJSOX_PARSE_CONTEXTSET parseContexts;
-	PJSOX_PARSE_BUFFERSET parseBuffers;
+	LOGICAL initialized;
+	CRITICALSECTION cs_states;
 	struct jsox_parse_state *last_parse_state;
 	PJSOX_PARSE_STATESET parseStates;
 	PPLISTSET listSet;
 	PPLINKSTACKSET linkStacks;
 	PPLINKQUEUESET linkQueues;
 	PPDATALISTSET dataLists;
-	PJSOX_CLASSSET  classes;
-	PJSOX_CLASS_FIELDSET  class_fields;
  // static parsing state for simple message interface.
 	struct jsox_parse_state *_state;
 };
@@ -54614,6 +58064,7 @@ void _jsox_dispose_message( PDATALIST *msg_data );
 } } SACK_NAMESPACE_END
 #endif
 //#define DEBUG_PARSING
+//#define DEBUG_ARRAY_TYPE
 //#define DEBUG_CHARACTER_PARSING
 //#define DEBUG_CLASS_STATES
 //#define DEBUG_STRING_LENGTH
@@ -54678,6 +58129,15 @@ static void jsox_state_init( struct jsox_parse_state *state )
 	ppList = GetFromSet( PLIST, &jxpsd.listSet );
 	if( ppList[0] ) ppList[0]->Cnt = 0;
 	state->outValBuffers = ppList;
+	if( state->classes ){
+		INDEX idx;
+		PJSOX_CLASS cls;
+		LIST_FORALL( state->classes, idx, PJSOX_CLASS, cls ) {
+			DeleteFromSet( JSOX_CLASS, &state->classPool, cls );
+			SetLink( &state->classes, idx, NULL );
+		}
+	}
+	DeleteList( &state->classes );
 	state->line = 1;
 	state->col = 1;
  // character index;
@@ -54688,11 +58148,14 @@ static void jsox_state_init( struct jsox_parse_state *state )
 	state->current_class = NULL;
 	state->current_class_item = 0;
 	state->arrayType = -1;
+#ifdef DEBUG_ARRAY_TYPE
+	lprintf( "Init arrayType to -1");
+#endif
 // NULL;
 	state->context_stack = GetFromSet( PLINKSTACK, &jxpsd.linkStacks );
 	if( state->context_stack[0] ) state->context_stack[0]->Top = 0;
 	//state->first_token = TRUE;
-	state->context = GetFromSet( JSOX_PARSE_CONTEXT, &jxpsd.parseContexts );
+	state->context = GetFromSet( JSOX_PARSE_CONTEXT, &state->parseContexts );
 	state->parse_context = JSOX_CONTEXT_UNKNOWN;
 	state->comment = 0;
 	state->completed = FALSE;
@@ -54711,9 +58174,15 @@ static void jsox_state_init( struct jsox_parse_state *state )
 /* I guess this is a good parser */
 struct jsox_parse_state * jsox_begin_parse( void )
 {
+	if( !jxpsd.initialized ) {
+		InitializeCriticalSec( &jxpsd.cs_states );
+		jxpsd.initialized = TRUE;
+	}
+	EnterCriticalSec( &jxpsd.cs_states  );
 //New( struct json_parse_state );
 	struct jsox_parse_state *state = GetFromSet( JSOX_PARSE_STATE, &jxpsd.parseStates );
 	jsox_state_init( state );
+	LeaveCriticalSec( &jxpsd.cs_states  );
 	return state;
 }
 char *jsox_escape_string_length( const char *string, size_t len, size_t *outlen ) {
@@ -54744,9 +58213,9 @@ char *jsox_escape_string( const char *string ) {
 }
 #undef __GetUtfChar
 #undef _zero
-#define BADUTF8 0xFFFFFFF
+#define JSOX_BADUTF8 0xFFFFFFF
 #define _2char(result,from) (((*from) += 2),( ( result & 0x1F ) << 6 ) | ( ( result & 0x3f00 )>>8))
-#define _zero(result,from)  ((*from)++,BADUTF8)
+#define _zero(result,from)  ((*from)++,JSOX_BADUTF8)
 #define _gzero(result,from)  ((*from)++,0)
 #define _3char(result,from) ( ((*from) += 3),( ( ( result & 0xF ) << 12 ) | ( ( result & 0x3F00 ) >> 2 ) | ( ( result & 0x3f0000 ) >> 16 )) )
 #define _4char(result,from)  ( ((*from) += 4), ( ( ( result & 0x7 ) << 18 )                             | ( ( result & 0x3F00 ) << 4 )                           | ( ( result & 0x3f0000 ) >> 10 )                            | ( ( result & 0x3f000000 ) >> 24 ) ) )
@@ -54768,7 +58237,7 @@ static int gatherStringX(struct jsox_parse_state *state, CTEXTSTR msg, CTEXTSTR 
 	//escape = 0;
 	//cr_escaped = FALSE;
 	while( ( ( n = nextN ), ( n < msglen ) )
-		&& ( ( ( c = GetUtfChar( msg_input ) ) != BADUTF8 )
+		&& ( ( ( c = GetUtfChar( msg_input ) ) != JSOX_BADUTF8 )
 			&& ( status >= 0 ) ) )
 	{
 		if( (nextN = msg_input[0] - msg ) > msglen ) {
@@ -54778,47 +58247,26 @@ static int gatherStringX(struct jsox_parse_state *state, CTEXTSTR msg, CTEXTSTR 
 		}
 		(state->col)++;
 		if( c == start_c ) {
-			if( state->escape ) { ( *mOut++ ) = c; state->escape = FALSE; }
-			else if( c == start_c ) {
+			if( state->escape ) {
+				if( state->cr_escaped ) { state->cr_escaped = FALSE; state->escape = FALSE; status = 1; break; }
+				// otherwise, escaped quote, append it.
+				if( state->stringHex ) {
+					c = state->hex_char;
+					state->stringHex = FALSE;
+				}
+				if( state->stringUnicode ){
+					c = state->hex_char;
+					state->stringUnicode = FALSE;
+				}
+				( *mOut++ ) = c; state->escape = FALSE;
+				state->val.stringLen = mOut - state->val.string;
+			}
+			else {
 				status = 1;
 				break;
- // other else is not valid close quote; just store as content.
-			} else ( *mOut++ ) = c;
+			}
 		} else if( state->escape ) {
-			if( state->stringOct ) {
-/*'0'*/
-/*'9'*/
-				if( state->hex_char_len < 3 && c >= 48 && c <= 57 ) {
-					state->hex_char *= 8;
-/*.codePointAt(0)*/
-					state->hex_char += c - 0x30;
-					state->hex_char_len++;
-					if( state->hex_char_len == 3 ) {
-						mOut += ConvertToUTF8(mOut, state->hex_char);
-						state->stringOct = FALSE;
-						state->escape = FALSE;
-						continue;
-					}
-					continue;
-				} else {
-					if( state->hex_char > 255 ) {
-						lprintf("(escaped character, parsing octal escape val=%d) fault while parsing; )" " (near %*.*s[%c]%s)"
-							, state->hex_char
-							, (int)( ( n>3 ) ? 3 : n ), (int)( ( n>3 ) ? 3 : n )
-							, ( *msg_input ) - ( ( n>3 ) ? 3 : n )
-							, c
-							, ( *msg_input ) + 1
-// fault
-						);
-						status = -1;
-						break;
-					}
-					mOut += ConvertToUTF8(mOut, state->hex_char);
-					state->stringOct = FALSE;
-					state->escape = FALSE;
-					continue;
-				}
-			} else if( state->unicodeWide ) {
+			if( state->unicodeWide ) {
 				if( c == '}' ) {
 					mOut += ConvertToUTF8(mOut, state->hex_char);
 					state->unicodeWide = FALSE;
@@ -54831,7 +58279,8 @@ static int gatherStringX(struct jsox_parse_state *state, CTEXTSTR msg, CTEXTSTR 
 				else if( c >= 'A' && c <= 'F' ) state->hex_char += ( c - 'A' ) + 10;
 				else if( c >= 'a' && c <= 'f' ) state->hex_char += ( c - 'a' ) + 10;
 				else {
-					lprintf("(escaped character, parsing hex of \\u) fault while parsing; '%c' unexpected at %" _size_f " (near %*.*s[%c]%s)", c, n
+					if( !state->pvtError ) state->pvtError = VarTextCreate();
+					vtprintf( state->pvtError, "(escaped character, parsing hex of \\u) fault while parsing; '%c' unexpected at %" _size_f " (near %*.*s[%c]%s)", c, n
 						, (int)( ( n > 3 ) ? 3 : n ), (int)( ( n > 3 ) ? 3 : n )
 						, ( *msg_input ) - ( ( n > 3 ) ? 3 : n )
 						, c
@@ -54854,7 +58303,8 @@ static int gatherStringX(struct jsox_parse_state *state, CTEXTSTR msg, CTEXTSTR 
 					else if( c >= 'A' && c <= 'F' ) state->hex_char += ( c - 'A' ) + 10;
 					else if( c >= 'a' && c <= 'f' ) state->hex_char += ( c - 'a' ) + 10;
 					else {
-						lprintf("(escaped character, parsing hex of \\x) fault while parsing; '%c' unexpected at %" _size_f " (near %*.*s[%c]%s)", c, n
+						if( !state->pvtError ) state->pvtError = VarTextCreate();
+						vtprintf( state->pvtError, "(escaped character, parsing hex of \\u) fault while parsing; '%c' unexpected at %" _size_f " (near %*.*s[%c]%s)", c, n
 							, (int)( ( n>3 ) ? 3 : n ), (int)( ( n>3 ) ? 3 : n )
 							, ( *msg_input ) - ( ( n>3 ) ? 3 : n )
 							, c
@@ -54863,6 +58313,7 @@ static int gatherStringX(struct jsox_parse_state *state, CTEXTSTR msg, CTEXTSTR 
 						);
 						status = -1;
 						state->stringHex = FALSE;
+						state->stringUnicode = FALSE;
 						state->escape = FALSE;
 						continue;
 					}
@@ -54891,9 +58342,9 @@ static int gatherStringX(struct jsox_parse_state *state, CTEXTSTR msg, CTEXTSTR 
 				if( state->cr_escaped ) state->cr_escaped = FALSE;
 				// fall through to clear escape status <CR><LF> support.
  // LS (Line separator)
-			case 2028:
+			case 0x2028:
  // PS (paragraph separate)
-			case 2029:
+			case 0x2029:
 				// escaped whitespace is nul'ed.
 				state->escape = 0;
 				continue;
@@ -54919,11 +58370,9 @@ static int gatherStringX(struct jsox_parse_state *state, CTEXTSTR msg, CTEXTSTR 
 			case 'f':
 				( *mOut++ ) = '\f';
 				break;
-			case '0': case '1': case '2': case '3':
-				state->stringOct = TRUE;
-				state->hex_char = c - 48;
-				state->hex_char_len = 1;
-				continue;
+			case '0':
+				( *mOut++ ) = '\0';
+				break;
 			case 'x':
 				state->stringHex = TRUE;
 				state->hex_char_len = 0;
@@ -54940,7 +58389,8 @@ static int gatherStringX(struct jsox_parse_state *state, CTEXTSTR msg, CTEXTSTR 
 					state->escape = FALSE;
 					mOut += ConvertToUTF8(mOut, c);
 				} else {
-					lprintf("(escaped character) fault while parsing; '%c' unexpected %" _size_f " (near %*.*s[%c]%s)", c, n
+					if( !state->pvtError ) state->pvtError = VarTextCreate();
+					vtprintf( state->pvtError, "(escaped character) fault while parsing; '%c' unexpected %" _size_f " (near %*.*s[%c]%s)", c, n
 						, (int)( ( n>3 ) ? 3 : n ), (int)( ( n>3 ) ? 3 : n )
 						, ( *msg_input ) - ( ( n>3 ) ? 3 : n )
 						, c
@@ -54957,7 +58407,11 @@ static int gatherStringX(struct jsox_parse_state *state, CTEXTSTR msg, CTEXTSTR 
 				(*mOut++) = '\\';
 				state->escape = 0;
 			}
-			else state->escape = 1;
+			else {
+				state->escape = 1;
+				state->stringHex = 0;
+				state->stringUnicode = 0;
+			}
 		}
 		else
 		{
@@ -54988,8 +58442,12 @@ static int openObject( struct jsox_parse_state *state, struct jsox_output_buffer
 	PJSOX_CLASS cls = NULL;
 	INDEX idx;
 	//let tmpobj = {};
-	if( state->word > JSOX_WORD_POS_RESET && state->word < JSOX_WORD_POS_FIELD )
+	if( state->word > JSOX_WORD_POS_RESET && state->word < JSOX_WORD_POS_FIELD ) {
 		recoverIdent( state, output, -1 );
+		if( !state->completedString ) {
+			state->val.stringLen = output->pos - state->val.string;
+		}
+	}
 	if( state->val.value_type == JSOX_VALUE_STRING ){
 		if( state->parse_context == JSOX_CONTEXT_UNKNOWN )
 			nextObjectMode = JSOX_OBJECT_CONTEXT_CLASS_FIELD;
@@ -55027,7 +58485,7 @@ static int openObject( struct jsox_parse_state *state, struct jsox_output_buffer
 				if( memcmp( cls->name, state->val.className, state->val.classNameLen ) == 0 )
 					break;
 			if( !cls ) {
-				cls = GetFromSet( JSOX_CLASS, &jxpsd.classes );
+				cls = GetFromSet( JSOX_CLASS, &state->classPool );
 				cls->name = state->val.className;
 				cls->nameLen = state->val.stringLen;
 				cls->fields = NULL;
@@ -55036,15 +58494,28 @@ static int openObject( struct jsox_parse_state *state, struct jsox_output_buffer
 #endif
 				AddLink( &state->classes, cls );
 			} else {
-				struct jsox_class_field* field;
-				LIST_FORALL( cls->fields, idx, struct jsox_class_field*,field ) {
-					DeleteFromSet( JSOX_CLASS_FIELD, jxpsd.class_fields, field );
-				}
+				if( state->allowRedefinition ) {
+					struct jsox_class_field* field;
+					LIST_FORALL( cls->fields, idx, struct jsox_class_field*, field ) {
+						DeleteFromSet( JSOX_CLASS_FIELD, state->class_fields, field );
+					}
 #ifdef DEBUG_CLASS_STATES
-				lprintf( "RESETTING CLASS: %s", cls->name );
+					lprintf( "RESETTING CLASS: %s", cls->name );
 #endif
-				DeleteList( &cls->fields );
-				// now can re-define fields.
+					DeleteList( &cls->fields );
+					// now can re-define fields.
+				}
+				else {
+ // no change to next...
+					nextMode = JSOX_CONTEXT_OBJECT_FIELD;
+					if( cls )
+						// no colons, on comma push value.
+						// maybe allow colons for extra values that aren't part of the pre-type
+						nextObjectMode = JSOX_OBJECT_CONTEXT_CLASS_VALUE;
+					else
+						// this is a tagged class for later prototype revival.
+						nextObjectMode = JSOX_OBJECT_CONTEXT_CLASS_NORMAL;
+				}
 			}
 		}
 		else {
@@ -55106,7 +58577,7 @@ static int openObject( struct jsox_parse_state *state, struct jsox_output_buffer
 		nextMode = JSOX_CONTEXT_OBJECT_FIELD;
 	// common code; create new object container layer...
 	{
-		struct jsox_parse_context *old_context = GetFromSet( JSOX_PARSE_CONTEXT, &jxpsd.parseContexts );
+		struct jsox_parse_context *old_context = GetFromSet( JSOX_PARSE_CONTEXT, &state->parseContexts );
 #ifdef DEBUG_PARSING
 		lprintf( "Begin a new object; previously pushed into elements; but wait until trailing comma or close previously:%d", state->val.value_type );
 #endif
@@ -55117,10 +58588,14 @@ static int openObject( struct jsox_parse_state *state, struct jsox_output_buffer
 		old_context->className = state->val.className;
 		old_context->classNameLen = state->val.classNameLen;
 		old_context->current_class = state->current_class;
+		old_context->objectContext = state->objectContext;
 #ifdef DEBUG_CLASS_STATES
 		lprintf( "object Push class: %s %s", state->val.className, state->current_class?state->current_class->name:"");
 #endif
 		old_context->current_class_item = state->current_class_item;
+#ifdef DEBUG_ARRAY_TYPE
+		lprintf( "open object save arrayType:%d",state->arrayType );
+#endif
 		old_context->arrayType = state->arrayType;
 		state->arrayType = -1;
 		state->current_class = cls;
@@ -55128,8 +58603,10 @@ static int openObject( struct jsox_parse_state *state, struct jsox_output_buffer
 		lprintf( "set current class: %s", cls?cls->name:"<none>" );
 #endif
 		state->current_class_item = 0;
+		EnterCriticalSec( &jxpsd.cs_states );
 // CreateDataList( sizeof( state->val ) );
 		state->elements = GetFromSet( PDATALIST, &jxpsd.dataLists );
+		LeaveCriticalSec( &jxpsd.cs_states );
 		if( !state->elements[0] ) state->elements[0] = CreateDataList( sizeof( state->val ) );
 		else state->elements[0]->Cnt = 0;
 		PushLink( state->context_stack, old_context );
@@ -55139,18 +58616,25 @@ static int openObject( struct jsox_parse_state *state, struct jsox_output_buffer
 	}
 	return TRUE;
 }
+#ifdef _MSC_VER
 // this is about nLeast being uninitialized.
 // LIST_FORALL initilaizes typeIndex.
 // knownArrayTypeNames is always NOT NULL.
-#pragma warning( disable: 6001 )
+#  pragma warning( disable: 6001 )
+#endif
 static LOGICAL openArray( struct jsox_parse_state *state, struct jsox_output_buffer* output, int c ) {
 	PJSOX_CLASS cls = NULL;
-	if( state->word > JSOX_WORD_POS_RESET && state->word < JSOX_WORD_POS_FIELD )
-		recoverIdent(state,output,c);
+	int newArrayType = -1;
+	if( state->word == JSOX_WORD_POS_FIELD ) {
+		if( !state->pvtError ) state->pvtError = VarTextCreate();
+		vtprintf( state->pvtError, "Fault while parsing; colon expected after field name %c at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
+		state->status = FALSE;
+		return FALSE;
+        }
 	if( state->val.value_type == JSOX_VALUE_STRING ) {
 		state->val.className = state->val.string;
 #ifdef DEBUG_CLASS_STATES
-		lprintf( "SET class: %s", state->val.className );
+		lprintf( "SET class: %.*s %d", state->val.stringLen, state->val.className, state->val.stringLen );
 #endif
 		state->val.classNameLen = state->val.stringLen;
 		state->val.string = NULL;
@@ -55159,7 +58643,8 @@ static LOGICAL openArray( struct jsox_parse_state *state, struct jsox_output_buf
 	}
 	else {
 		if( state->val.value_type != JSOX_VALUE_UNSET ) {
-			lprintf( "Unhandled value type preceeding object open: %d %s", state->val.value_type, state->val.string );
+			//lprintf( "Unhandled value type preceeding object open: %d %s", state->val.value_type, state->val.string );
+			// just assume it is okay up to this point... macro-tag{} []  is object type before this.
 		}
 	}
 	if( state->val.className ) {
@@ -55171,13 +58656,16 @@ static LOGICAL openArray( struct jsox_parse_state *state, struct jsox_output_buf
 		lprintf( "define typed array:%s", state->val.className );
 #endif
 		if( !knownArrayTypeNames ) registerKnownArrayTypeNames();
+		typeIndex = 0;
 		LIST_FORALL( knownArrayTypeNames, typeIndex, char *, name ) {
-			if( memcmp( state->val.className, name, state->val.classNameLen ) == 0 )
+			int typeLen = name[0] ? name[1] ? name[2] ? name[3] ? 4 : 3 : 2 : 1 : 0;
+			if( typeLen == state->val.classNameLen
+				&& memcmp( state->val.className, name, state->val.classNameLen ) == 0 )
 				break;
 		}
 		if( typeIndex < 13 ) {
 			state->word = JSOX_WORD_POS_FIELD;
-			state->arrayType = (int)typeIndex;
+			newArrayType = (int)typeIndex;
 #ifdef DEBUG_PARSING
 			lprintf( "setup array type... %d", typeIndex );
 #endif
@@ -55190,14 +58678,16 @@ static LOGICAL openArray( struct jsox_parse_state *state, struct jsox_output_buf
 		}
 	} else if( state->parse_context == JSOX_CONTEXT_OBJECT_FIELD ) {
 		if( state->objectContext == JSOX_OBJECT_CONTEXT_CLASS_VALUE ) {
+		}else {
+			if( !state->pvtError ) state->pvtError = VarTextCreate();
+			vtprintf( state->pvtError, "Fault while parsing; while getting field name unexpected %c at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
+			vtprintf( state->pvtError, "\nError: word state: %d %d", state->parse_context, state->objectContext );
+			state->status = FALSE;
+			return FALSE;
 		}
-		if( !state->pvtError ) state->pvtError = VarTextCreate();
-		vtprintf( state->pvtError, "Fault while parsing; while getting field name unexpected %c at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
-		state->status = FALSE;
-		return FALSE;
 	}
 	{
-		struct jsox_parse_context *old_context = GetFromSet( JSOX_PARSE_CONTEXT, &jxpsd.parseContexts );
+		struct jsox_parse_context *old_context = GetFromSet( JSOX_PARSE_CONTEXT, &state->parseContexts );
 #ifdef DEBUG_PARSING
 		lprintf( "Begin a new array; previously pushed into elements; but wait until trailing comma or close previously:%d", state->val.value_type );
 #endif
@@ -55207,20 +58697,26 @@ static LOGICAL openArray( struct jsox_parse_state *state, struct jsox_output_buf
 		old_context->nameLen = state->val.nameLen;
 		old_context->className = state->val.className;
 		old_context->classNameLen = state->val.classNameLen;
+		old_context->objectContext = state->objectContext;
 #ifdef DEBUG_CLASS_STATES
 		lprintf( "Push2T class: %s", state->val.className );
 #endif
 		old_context->current_class = state->current_class;
 		old_context->current_class_item = state->current_class_item;
+#ifdef DEBUG_ARRAY_TYPE
+		lprintf( "open array save arrayType:%d to %d", state->arrayType, newArrayType );
+#endif
 		old_context->arrayType = state->arrayType;
 		state->current_class = cls;
 #ifdef DEBUG_CLASS_STATES
 		lprintf( "set current class: %s", cls ? cls->name : "<none>" );
 #endif
 		state->current_class_item = 0;
-		state->arrayType = -1;
+		state->arrayType = newArrayType;
+		EnterCriticalSec( &jxpsd.cs_states );
 // CreateDataList( sizeof( state->val ) );
 		state->elements = GetFromSet( PDATALIST, &jxpsd.dataLists );
+		LeaveCriticalSec( &jxpsd.cs_states );
 		if( !state->elements[0] ) state->elements[0] = CreateDataList( sizeof( state->val ) );
 		else state->elements[0]->Cnt = 0;
 		PushLink( state->context_stack, old_context );
@@ -55230,7 +58726,10 @@ static LOGICAL openArray( struct jsox_parse_state *state, struct jsox_output_buf
 	}
 	return TRUE;
 }
-#pragma warning( default: 6001 )
+#ifdef _MSC_VER
+// restore warning...
+#  pragma warning( default: 6001 )
+#endif
 int recoverIdent( struct jsox_parse_state *state, struct jsox_output_buffer* output, int cInt ) {
 	if( state->word == JSOX_WORD_POS_FIELD && cInt == ':' ) return 0;
 	if( state->word != JSOX_WORD_POS_RESET ) {
@@ -55488,7 +58987,7 @@ int recoverIdent( struct jsox_parse_state *state, struct jsox_output_buffer* out
 		openObject( state, output, cInt );
 /*'['*/
 	else if( cInt == 91 )
-		openArray( state, output, cInt );
+		openArray( state, output, 0 );
 /*':'*/
 	else if( cInt == 58 ) {
  // well.. it is.  It's already a fairly commited value.
@@ -55498,37 +58997,56 @@ int recoverIdent( struct jsox_parse_state *state, struct jsox_output_buffer* out
 			state->val.stringLen = output->pos - state->val.string;
 		}
 #ifdef DEBUG_STRING_LENGTH
-		lprintf( "Update stringLen  '%c'  :%d", cInt, state->val.stringLen );
+			lprintf( "Update stringLen  '%c'  :%d", cInt?cInt:'?', state->val.stringLen );
 #endif
 /*','*/
 	} else if( cInt == 44 ) {
  // well.. it is.  It's already a fairly commited value.
 		state->word = JSOX_WORD_POS_RESET;
-		state->completedString = TRUE;
-		state->val.stringLen = output->pos - state->val.string;
+		if( !state->completedString ) {
+			state->completedString = TRUE;
+			state->val.stringLen = output->pos - state->val.string;
+}
 #ifdef DEBUG_STRING_LENGTH
-		lprintf( "Update stringLen  '%c'  :%d", cInt, state->val.stringLen );
+		lprintf( "Update stringLen  '%c'  :%d", cInt?cInt:'~', state->val.stringLen );
 #endif
 	} else if( cInt >= 0 ) {
 		// ignore white space.
 /*' '*/
-		if( cInt == 32 || cInt == 13 || cInt == 10 || cInt == 9 || cInt == 0xFEFF || cInt == 2028 || cInt == 2029 ) {
+/*nbsp*/
+		if( cInt == 32 ||cInt==160|| cInt == 13 || cInt == 10 || cInt == 9 || cInt == 0xFEFF || cInt == 0x2028 || cInt == 0x2029 ) {
 			state->word = JSOX_WORD_POS_END;
-			state->val.stringLen = output->pos - state->val.string;
+			if( !state->completedString ) {
+				state->completedString = TRUE;
+				state->val.stringLen = output->pos - state->val.string;
+}
 #ifdef DEBUG_STRING_LENGTH
 			lprintf( "Update stringLen  '%c'  :%d", cInt, state->val.stringLen );
 #endif
 			return 0;
 		}
+		if( cInt == '"' || cInt == '\'' || cInt == '`' ) {
+			if( !state->val.string )  state->val.string = output->pos;
+			state->val.value_type = JSOX_VALUE_STRING;
+			if( !state->val.className ) {
+				state->val.className = state->val.string;
+				state->val.classNameLen = state->val.stringLen;
+				state->val.string = output->pos;
+				state->val.stringLen = 0;
+				state->gatheringStringFirstChar = cInt;
+				state->gatheringString = TRUE;
+			}
+		}
 /*','*/
 /*'}'*/
 /*']'*/
 /*':'*/
-		if( cInt == 44 || cInt == 125 || cInt == 93 || cInt == 58 )
+		else if( cInt == 44 || cInt == 125 || cInt == 93 || cInt == 58 )
 			vtprintf( state->pvtError, "invalid character; unexpected %c at %" _size_f "  %" _size_f ":%" _size_f, cInt, state->n, state->line, state->col );
 		else {
 			if( !state->val.string )  state->val.string = output->pos;
 			state->val.value_type = JSOX_VALUE_STRING;
+			state->word = JSOX_WORD_POS_END;
 			if( cInt < 128 ) (*output->pos++) = cInt;
 			else output->pos += ConvertToUTF8( output->pos, cInt );
 #ifdef DEBUG_PARSING
@@ -55551,22 +59069,16 @@ static void pushValue( struct jsox_parse_state *state, PDATALIST *pdl, struct js
 #endif
  // no value to push.
 	if( val->value_type == JSOX_VALUE_UNSET ) return;
-	if( val->value_type == JSOX_VALUE_ARRAY ) {
-		if( state->arrayType >= 0 ) {
+	if( val->value_type >= JSOX_VALUE_TYPED_ARRAY && val->value_type <= JSOX_VALUE_TYPED_ARRAY_MAX ) {
+		//lprintf( "Setting value type as JSOX_VALUD_TYPED_ARRAY+%d",val->value_type - JSOX_VALUE_TYPED_ARRAY );
+		if( (val->value_type - JSOX_VALUE_TYPED_ARRAY) >= 0 && (val->value_type - JSOX_VALUE_TYPED_ARRAY) < 12 ) {
 			struct jsox_value_container *innerVal = (struct jsox_value_container *)GetDataItem( &val->contains, 0 );
-			//size_t size;
-			//val->className = (char*)GetLink( &knownArrayTypeNames, state->arrayType );
-			val->value_type = (enum jsox_value_types)(JSOX_VALUE_TYPED_ARRAY + state->arrayType);
-			//lprintf( "INPUT:%d %s", val->stringLen, val->string );
-			if( state->arrayType < 12 )
-				val->string = (char*)DecodeBase64Ex( innerVal->string, innerVal->stringLen, &val->stringLen, NULL );
-			//lprintf( "base:%s", EncodeBase64Ex( "HELLO, World!", 13, NULL, NULL ) );
-			//lprintf( "Resolve base64 string:%s", val->string );
+			val->string = (char*)DecodeBase64Ex( innerVal->string, innerVal->stringLen, &val->stringLen, NULL );
 		}
 	}
 	AddDataItem( pdl, val );
 #ifdef DEBUG_CLASS_STATES
-	lprintf( "RESET CLASS NAME %s", val->className );
+	lprintf( "RESET CLASS NAME %.*s", val->classNameLen, val->className );
 #endif
 	val->className = NULL;
 	val->classNameLen = 0;
@@ -55611,19 +59123,22 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 				if( input->tempBuf )
 					Deallocate( CPOINTER, input->buf );
 				input->pos = input->buf = newBuf;
+				input->size = unused+msglen;
 				input->tempBuf = TRUE;
 			}
 		}
 		// no input; or this buffer wasn't appended to the previous buffer...
 		if( !input || !input->tempBuf )
 		{
-			input = GetFromSet( JSOX_PARSE_BUFFER, &jxpsd.parseBuffers );
+			input = GetFromSet( JSOX_PARSE_BUFFER, &state->parseBuffers );
 			input->pos = input->buf = msg;
 			input->size = msglen;
 			input->tempBuf = FALSE;
 			EnqueLinkNL( state->inBuffers, input );
 		}
 		if( state->gatheringString
+ // already assigned to an existing outbuffer
+			|| state->val.string
 			|| state->gatheringNumber
 			|| state->word == JSOX_WORD_POS_FIELD
 			|| state->parse_context == JSOX_CONTEXT_OBJECT_FIELD ) {
@@ -55632,13 +59147,24 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 			size_t offset2;
 			output = (struct jsox_output_buffer*)DequeLinkNL( state->outQueue );
 			//lprintf( "output from before is %p", output );
-			offset = (output->pos - output->buf);
-			offset2 = state->val.string ? (state->val.string - output->buf) : 0;
-			AddLink( state->outValBuffers, output->buf );
-			output->buf = NewArray( char, output->size + msglen + 1 );
-			if( state->val.string ) {
-				MemCpy( output->buf + offset2, state->val.string, offset - offset2 );
-				state->val.string = output->buf + offset2;
+			if( output ) {
+				offset = (output->pos - output->buf);
+			}
+			offset2 = ( state->val.string && output ) ? (state->val.string - output->buf) : 0;
+			if( output ) {
+				AddLink( state->outValBuffers, output->buf );
+				output->buf = NewArray( char, output->size + msglen + 1 );
+				if( state->val.string ) {
+					MemCpy( output->buf + offset2, state->val.string, offset - offset2 );
+					state->val.string = output->buf + offset2;
+				}
+			} else {
+				output = (struct jsox_output_buffer*)GetFromSet( JSOX_PARSE_BUFFER, &state->parseBuffers );
+				offset = state->val.stringLen;
+				output->size = state->val.stringLen;
+				output->buf = NewArray( char, output->size + msglen + 1 );
+				MemCpy( output->buf, state->val.string, state->val.stringLen );
+				state->val.string = output->buf;
 			}
 			output->size += msglen;
 			//lprintf( "previous val:%s", state->val.string, state->val.string );
@@ -55646,7 +59172,7 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 			PrequeLink( state->outQueue, output );
 		}
 		else {
-			output = (struct jsox_output_buffer*)GetFromSet( JSOX_PARSE_BUFFER, &jxpsd.parseBuffers );
+			output = (struct jsox_output_buffer*)GetFromSet( JSOX_PARSE_BUFFER, &state->parseBuffers );
 			output->pos = output->buf = NewArray( char, msglen + 1 );
 			output->size = msglen;
 			EnqueLinkNL( state->outQueue, output );
@@ -55661,22 +59187,40 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 			PushLink( state->outBuffers, output );
 			state->gatheringNumber = FALSE;
 			//lprintf( "result with number:%s", state->val.string );
-			if( state->val.float_result )
-			{
-				CTEXTSTR endpos;
-				state->val.result_d = FloatCreateFromText( state->val.string, &endpos );
-				if( state->negative ) { state->val.result_d = -state->val.result_d; state->negative = FALSE; }
+			if( state->numberFromDate ) {
+				state->val.stringLen = ( output->pos - state->val.string );
+				state->val.value_type = JSOX_VALUE_DATE;
+			} else if( state->numberFromBigInt ) {
+				state->val.stringLen = ( output->pos - state->val.string );
+				state->val.value_type = JSOX_VALUE_BIGINT;
+			} else {
+				if( state->val.float_result ) {
+					CTEXTSTR endpos;
+					state->val.result_d = FloatCreateFromText( state->val.string, &endpos );
+					if( state->negative ) { state->val.result_d = -state->val.result_d; state->negative = FALSE; }
+				}
+				else {
+					state->val.result_n = IntCreateFromText( state->val.string );
+					if( state->negative ) { state->val.result_n = -state->val.result_n; state->negative = FALSE; }
+				}
+				state->val.value_type = JSOX_VALUE_NUMBER;
 			}
-			else
-			{
-				state->val.result_n = IntCreateFromText( state->val.string );
-				if( state->negative ) { state->val.result_n = -state->val.result_n; state->negative = FALSE; }
-			}
-			state->val.value_type = JSOX_VALUE_NUMBER;
 			if( state->parse_context == JSOX_CONTEXT_UNKNOWN ) {
 				state->completed = TRUE;
 			}
+ // this is a flush; and there's still an open object, array, etc.
+			else {
+				if( !state->pvtError ) state->pvtError = VarTextCreate();
+				vtprintf( state->pvtError, "Fault while parsing; unexpected end of stream at %" _size_f "  %" _size_f ":%" _size_f, state->n, state->line, state->col );
+				state->status = FALSE;
+				return -1;
+			}
 			retval = 1;
+		}else {
+			if( state->inBuffers[0]->Top == state->inBuffers[0]->Bottom )
+			if( state->val.value_type || state->word != JSOX_WORD_POS_RESET ) {
+				state->completed = 1;
+			}
 		}
 	}
 	while( state->status && ( input = (PJSOX_PARSE_BUFFER)DequeLinkNL( state->inBuffers ) ) ) {
@@ -55685,11 +59229,13 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 		//lprintf( "output is %p", output );
 		state->n = input->pos - input->buf;
 		if( state->n > input->size ) DebugBreak();
+	gatherStringInput:
 		if( state->gatheringString ) {
 			string_status = gatherStringX( state, input->buf, &input->pos, input->size, &output->pos, state->gatheringStringFirstChar );
-			if( string_status < 0 )
+			if( string_status < 0 ) {
 				state->status = FALSE;
-			else if( string_status > 0 )
+				state->gatheringString = FALSE;
+			} else if( string_status > 0 )
 			{
 				state->gatheringString = FALSE;
 				state->n = input->pos - input->buf;
@@ -55718,10 +59264,10 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 			goto continueNumber;
 		}
 		//lprintf( "Completed at start?%d", state->completed );
-		while( state->status && (state->n < input->size) && ( (c = GetUtfChar( &input->pos ))!= BADUTF8) )
+		while( state->status && (state->n < input->size) && ( (c = GetUtfChar( &input->pos ))!= JSOX_BADUTF8) )
 		{
 #if defined( DEBUG_PARSING ) && defined( DEBUG_CHARACTER_PARSING )
-			lprintf( "parse character %c %d %d %d %d", c<32?'.':c, state->word, state->parse_context, state->parse_context, state->word );
+			lprintf( "parse character %c %d %d %d %d", c<32?'.':c, state->word, state->parse_context, state->val.value_type, state->word );
 #endif
 			state->col++;
 			newN = input->pos - input->buf;
@@ -55757,6 +59303,9 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 			}
 			if( c > 127 ) {
 				// irrelativent.
+				if( c == 0x2028 || c == 0x2029 || c == 0xfeff ) {
+					goto whitespace;
+				}
 				if( !state->val.string )  state->val.string = output->pos;
 				state->val.value_type = JSOX_VALUE_STRING;
 				output->pos += ConvertToUTF8( output->pos, c );
@@ -55781,7 +59330,9 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 				openObject( state, output, c );
 				break;
 			case '[':
-				openArray( state, output, c );
+  // gather any preceeding string.
+				recoverIdent(state,output,c);
+				//openArray( state, output, c );
 				break;
 			case ':':
 				recoverIdent(state,output,c);
@@ -55795,7 +59346,15 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 						break;
 					}
 					if( state->objectContext == JSOX_OBJECT_CONTEXT_CLASS_FIELD ) {
-						lprintf( "This would be a default value for the object... if I ignore this..." );
+						if( GetLinkCount( state->current_class->fields ) == 0 ) {
+							DeleteLink( &state->classes, state->current_class );
+							DeleteFromSet( JSOX_CLASS, &state->classPool, state->current_class );
+							state->current_class = NULL;
+							state->objectContext = JSOX_OBJECT_CONTEXT_CLASS_NORMAL;
+						}
+						// need to establish whether this is a tag definition state
+						// or tagged-revival revival, or just a prototyped object that's not a tag-revival.
+						//lprintf( "This would be a default value for the object... if I ignore this..." );
 					}
 					state->word = JSOX_WORD_POS_RESET;
 					state->val.name = state->val.string;
@@ -55822,6 +59381,9 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 				{
 					int emitObject;
 					emitObject = TRUE;
+					if( state->word == JSOX_WORD_POS_AFTER_FIELD ) {
+						state->word = JSOX_WORD_POS_RESET;
+					}
 					if( state->word == JSOX_WORD_POS_END ) {
 						// allow starting a new word
 						state->word = JSOX_WORD_POS_RESET;
@@ -55831,7 +59393,7 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 							if( state->objectContext == JSOX_OBJECT_CONTEXT_CLASS_FIELD ) {
 								// allow blank comma at end to not be a field
 								if( state->val.string ) {
-									struct jsox_class_field* field = GetFromSet( JSOX_CLASS_FIELD, &jxpsd.class_fields );
+									struct jsox_class_field* field = GetFromSet( JSOX_CLASS_FIELD, &state->class_fields );
 									field->name = state->val.string;
 									field->nameLen = output->pos - state->val.string;
 									( *output->pos++ ) = 0;
@@ -55845,6 +59407,7 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 								JSOX_RESET_STATE_VAL();
 								emitObject = FALSE;
 								state->word = JSOX_WORD_POS_RESET;
+								//break;
 							}
 							else if( state->objectContext == JSOX_OBJECT_CONTEXT_CLASS_VALUE ) {
 								if( state->val.value_type != JSOX_VALUE_UNSET ) {
@@ -55867,25 +59430,32 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 								}
 							}
 						}
-						pushValue( state, state->elements, &state->val );
+  // there isn't a value for this...
+						if( emitObject )
+							pushValue( state, state->elements, &state->val );
 						//if( _DEBUG_PARSING ) lprintf( "close object; empty object", val, elements );
 					}
 					else if( state->parse_context == JSOX_CONTEXT_OBJECT_FIELD_VALUE ) {
 						// current class doesn't really matter... we only get here after a ':'
 						// which will have faulted or not...
 						// this is just push the value.
-						pushValue( state, state->elements, &state->val );
+						if( state->val.value_type != JSOX_VALUE_UNSET )
+							pushValue( state, state->elements, &state->val );
+						else {
+							if( !state->pvtError ) state->pvtError = VarTextCreate();
+							vtprintf( state->pvtError, "Fault while parsing(2); unexpected %c at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
+							state->status = FALSE;
+						}
 					}
 					else {
-						if( !state->pvtError ) state->pvtError = VarTextCreate();
-						vtprintf( state->pvtError, "Fault while parsing; unexpected %c at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
-						state->status = FALSE;
-						break;
-					}
-					// lose current class in the pop; have; have to report completed status before popping.
-					if( state->parse_context == JSOX_CONTEXT_UNKNOWN ) {
-						if( !state->current_class )
-							state->completed = TRUE;
+						if( state->val.value_type != JSOX_VALUE_UNSET ) {
+							//pushValue( state, state->elements, &state->val );
+						} else {
+							if( !state->pvtError ) state->pvtError = VarTextCreate();
+							vtprintf( state->pvtError, "Fault while parsing(3); unexpected %c at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
+							state->status = FALSE;
+							break;
+						}
 					}
 					{
 						struct jsox_parse_context* old_context = ( struct jsox_parse_context* )PopLink( state->context_stack );
@@ -55894,6 +59464,11 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 						state->val._contains = state->elements;
  // this will restore as IN_ARRAY or OBJECT_FIELD
 						state->parse_context = old_context->context;
+						// lose current class in the pop; have; have to report completed status before popping.
+						if( state->parse_context == JSOX_CONTEXT_UNKNOWN ) {
+							if( !state->current_class )
+								state->completed = TRUE;
+						}
 						state->elements = old_context->elements;
 						state->val.name = old_context->name;
 						state->val.nameLen = old_context->nameLen;
@@ -55902,10 +59477,14 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 						state->current_class = old_context->current_class;
 						state->current_class_item = old_context->current_class_item;
 						state->arrayType = old_context->arrayType;
+#ifdef DEBUG_ARRAY_TYPE
+						lprintf( "close object restore arrayType:%d",state->arrayType );
+#endif
+						state->objectContext = old_context->objectContext;
 #ifdef DEBUG_CLASS_STATES
 						lprintf( "POP CLASS NAME %s %s %p", state->val.className, state->current_class ? state->current_class->name : "", state->current_class ? state->current_class->fields : 0 );
 #endif
-						DeleteFromSet( JSOX_PARSE_CONTEXT, jxpsd.parseContexts, old_context );
+						DeleteFromSet( JSOX_PARSE_CONTEXT, state->parseContexts, old_context );
 						if( emitObject )
 							state->val.value_type = JSOX_VALUE_OBJECT;
 						else
@@ -55937,7 +59516,11 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 						pushValue( state, state->elements, &state->val );
 						JSOX_RESET_STATE_VAL();
 					}
-					state->val.value_type = JSOX_VALUE_ARRAY;
+					if( state->arrayType >= 0 ) {
+						state->val.value_type = (enum jsox_value_types)(JSOX_VALUE_TYPED_ARRAY + state->arrayType);
+					}
+					else
+						state->val.value_type = JSOX_VALUE_ARRAY;
 					//state->val.string = NULL;
 					state->val.contains = state->elements[0];
 					state->val._contains = state->elements;
@@ -55955,11 +59538,15 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 						state->val.classNameLen = old_context->classNameLen;
 						state->current_class = old_context->current_class;
 						state->current_class_item = old_context->current_class_item;
+						state->objectContext = old_context->objectContext;
 #ifdef DEBUG_CLASS_STATES
 						lprintf( "POP2 CLASS NAME %s %s %p", state->val.className, state->current_class ? state->current_class->name : "", state->current_class ? state->current_class->fields : 0 );
 #endif
 						state->arrayType = old_context->arrayType;
-						DeleteFromSet( JSOX_PARSE_CONTEXT, jxpsd.parseContexts, old_context );
+#ifdef DEBUG_ARRAY_TYPE
+						lprintf( "close array restore arrayType:%d",state->arrayType );
+#endif
+						DeleteFromSet( JSOX_PARSE_CONTEXT, state->parseContexts, old_context );
 					}
 					if( state->parse_context == JSOX_CONTEXT_UNKNOWN ) {
 						state->completed = TRUE;
@@ -55978,7 +59565,7 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 					if( state->objectContext == JSOX_OBJECT_CONTEXT_CLASS_VALUE ) {
 						if( state->val.value_type != JSOX_VALUE_UNSET ) {
 							// revive class value, get name from class definition
-							if( state->current_class->fields ) {
+							if( state->current_class && state->current_class->fields ) {
 								struct jsox_class_field *field = (struct jsox_class_field *)GetLink( &state->current_class->fields, state->current_class_item++ );
 								state->val.name = field->name;
 								state->val.nameLen = field->nameLen;
@@ -55998,7 +59585,7 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 					}
 					else if( state->objectContext == JSOX_OBJECT_CONTEXT_CLASS_FIELD ) {
 						if( state->current_class ) {
-							struct jsox_class_field *field = GetFromSet( JSOX_CLASS_FIELD, &jxpsd.class_fields );
+							struct jsox_class_field *field = GetFromSet( JSOX_CLASS_FIELD, &state->class_fields );
 							field->name = state->val.string;
 							field->nameLen = output->pos - state->val.string;
 							(*output->pos++) = 0;
@@ -56008,11 +59595,20 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 							lprintf( "Comma Adding field to class %p %s %p", state->current_class, state->current_class->name, state->current_class->fields );
 #endif
 							AddLink( &state->current_class->fields, field );
+							state->word = JSOX_WORD_POS_RESET;
 						}
 						else {
 							if( !state->pvtError ) state->pvtError = VarTextCreate();
 // fault
 							vtprintf( state->pvtError, "lost class definition; fault while parsing; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f, state->parse_context, c, state->n, state->line, state->col );
+							state->status = FALSE;
+						}
+					}
+					else {
+						if( state->val.value_type != JSOX_VALUE_UNSET ) {
+							if( !state->pvtError ) state->pvtError = VarTextCreate();
+// fault
+							vtprintf( state->pvtError, "invalid value where a field name is expected %" _size_f "  %" _size_f ":%" _size_f, state->parse_context, c, state->n, state->line, state->col );
 							state->status = FALSE;
 						}
 					}
@@ -56029,10 +59625,14 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 #endif
 						pushValue( state, state->elements, &state->val );
 						JSOX_RESET_STATE_VAL();
+						state->word = JSOX_WORD_POS_RESET;
 					}
 				}
 				else if( state->parse_context == JSOX_CONTEXT_OBJECT_FIELD_VALUE ) {
 					// after an array value, it will have returned to OBJECT_FIELD anyway
+					if( state->word > JSOX_WORD_POS_END
+						&& state->word < JSOX_WORD_POS_AFTER_FIELD )
+						recoverIdent( state, output, c );
 #ifdef DEBUG_PARSING
 					lprintf( "comma after field value, push field to object: %s", state->val.name );
 #endif
@@ -56040,6 +59640,12 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 					state->word = JSOX_WORD_POS_RESET;
 					if( state->val.value_type != JSOX_VALUE_UNSET )
 						pushValue( state, state->elements, &state->val );
+					else {
+						if( !state->pvtError ) state->pvtError = VarTextCreate();
+						vtprintf( state->pvtError, "missing value for object field; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
+						state->status = FALSE;
+						break;
+					}
 					JSOX_RESET_STATE_VAL();
 				}
 				else {
@@ -56052,6 +59658,50 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 			default:
 				if( state->val.value_type == JSOX_VALUE_STRING && !state->completedString ) {
 					// already faulted to a string?
+					if( c == '\'' || c == '\"' || c == '`' ) {
+#ifdef DEBUG_CLASS_STATES
+						lprintf( "Setting classname for string here... %d %.*s", state->val.stringLen, state->val.stringLen, state->val.string );
+#endif
+						state->val.className = state->val.string;
+						state->val.classNameLen = state->val.stringLen;
+						state->val.string = output->pos;
+						state->val.stringLen = 0;
+						state->gatheringString = TRUE;
+						state->gatheringStringFirstChar = c;
+						goto gatherStringInput;
+					}
+/*' '*/
+/*nbsp*/
+					if( c == 32 || c == 160 || c == 13 || c == 10 || c == 9 || c == 0xFEFF || c == 0x2028 || c == 0x2029 ) {
+						state->word = JSOX_WORD_POS_AFTER_FIELD;
+						break;
+					}
+					if( state->word == JSOX_WORD_POS_AFTER_FIELD ) {
+						if( state->val.className ) {
+							state->status = FALSE;
+							if( !state->pvtError ) state->pvtError = VarTextCreate();
+// fault
+							vtprintf( state->pvtError, "unquoted spaces between stings; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
+							break;
+						}
+						else {
+							if( !state->current_class ) {
+								state->status = FALSE;
+								if( !state->pvtError ) state->pvtError = VarTextCreate();
+// fault
+								vtprintf( state->pvtError, "?? This is like doublestring revival; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
+								break;
+							}
+							lprintf( "THIS IS WRONG!" );
+							lprintf( "STRING-STRING?" );
+							state->val.className = state->val.string;
+							state->val.classNameLen = state->val.stringLen;
+							state->val.string = NULL;
+							state->val.stringLen = 0;
+							state->word = JSOX_WORD_POS_RESET;
+							break;
+						}
+					}
 					if( c < 128 ) ( *output->pos++ ) = c;
 					else output->pos += ConvertToUTF8( output->pos, c );
 					state->val.stringLen = output->pos - state->val.string;
@@ -56061,11 +59711,13 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 					break;
 				}
 				if( ( state->parse_context == JSOX_CONTEXT_OBJECT_FIELD  && state->objectContext != JSOX_OBJECT_CONTEXT_CLASS_VALUE )
-				   //|| state->parse_context == JSOX_CONTEXT_UNKNOWN
-				   //|| state->parse_context == JSOX_CONTEXT_IN_ARRAY
-				   //|| (state->parse_context == JSOX_CONTEXT_OBJECT_FIELD_VALUE )
 				) {
-					//lprintf( "gathering object field:%c  %*.*s", c, output->pos- state->val.string, output->pos - state->val.string, state->val.string );
+#ifdef DEBUG_PARSING
+					if( state->val.string )
+						lprintf( "gathering object field:%c  %d %.*s", c, output->pos- state->val.string, output->pos - state->val.string, state->val.string );
+					else
+						lprintf( "Gathering, but no string yet? %c", c );
+#endif
 					switch( c )
 					{
 					case '`':
@@ -56073,8 +59725,7 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 						// but gatherString now just gathers all strings
 					case '"':
 					case '\'':
-						if( state->val.value_type == JSOX_VALUE_STRING
-							&& state->val.className ) {
+						if( state->val.value_type == JSOX_VALUE_STRING && state->val.className ) {
 							state->status = FALSE;
 							if( !state->pvtError ) state->pvtError = VarTextCreate();
 // fault
@@ -56085,11 +59736,20 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 							|| ( state->val.value_type == JSOX_VALUE_STRING
 								&& !state->val.className ) ) {
 							(*output->pos++) = 0;
+#ifdef DEBUG_PARSING
+							lprintf( "Promoting previous string to... what? %d %.*s", state->val.stringLen, state->val.stringLen, state->val.string );
+#endif
 							state->val.className = state->val.string;
+							state->val.classNameLen = state->val.stringLen;
 #ifdef DEBUG_CLASS_STATES
 							lprintf( "Setting classname HERE (why?):", state->val.string );
 #endif
 						}
+#ifdef DEBUG_PARSING
+						else {
+							lprintf( "Was there already a string in progress?");
+						}
+#endif
 						state->val.string = output->pos;
 						state->gatheringString = TRUE;
 						state->gatheringStringFirstChar = c;
@@ -56123,14 +59783,17 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 						state->col = 1;
 						// fall through to normal space handling - just updated line/col position
 					case ' ':
+// case '\xa0': // nbsp
+					case 160 :
 					case '\t':
 					case '\r':
  // LS (Line separator)
-					case 2028:
+					case 0x2028:
  // PS (paragraph separate)
-					case 2029:
+					case 0x2029:
  // ZWNBS is WS though
 					case 0xFEFF:
+					whitespace:
 						if( state->word == JSOX_WORD_POS_END ) {
 							state->word = JSOX_WORD_POS_RESET;
 							if( state->parse_context == JSOX_CONTEXT_UNKNOWN ) {
@@ -56138,9 +59801,13 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 							}
 							break;
 						}
-						if( (state->word == JSOX_WORD_POS_RESET) || ( state->word == JSOX_WORD_POS_AFTER_FIELD ) )
+						if( state->word == JSOX_WORD_POS_AFTER_FIELD ) {
+							if( state->parse_context == JSOX_CONTEXT_UNKNOWN )
+								state->completed = TRUE;
 							break;
-						else if( state->word == JSOX_WORD_POS_FIELD ) {
+						} else if( state->word == JSOX_WORD_POS_RESET ) {
+							break;
+						} else if( state->word == JSOX_WORD_POS_FIELD ) {
 							if( state->parse_context == JSOX_CONTEXT_UNKNOWN ) {
 								state->completed = TRUE;
 								break;
@@ -56151,10 +59818,9 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 							}
 						}
 						else {
-							state->status = FALSE;
-							if( !state->pvtError ) state->pvtError = VarTextCreate();
-	// fault
-							vtprintf( state->pvtError, "fault while parsing; whitespace unexpected at %" _size_f "  %" _size_f ":%" _size_f, state->n, state->line, state->col );
+							//state->status = FALSE;
+							//if( !state->pvtError ) state->pvtError = VarTextCreate();
+							//vtprintf( state->pvtError, "fault while parsing; whitespace unexpected at %" _size_f "  %" _size_f ":%" _size_f, state->n, state->line, state->col );	// fault
 						}
 						break;
 					default:
@@ -56164,6 +59830,7 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 						if( state->word == JSOX_WORD_POS_AFTER_FIELD ) {
 							state->status = FALSE;
 							if( !state->pvtError ) state->pvtError = VarTextCreate();
+							//lprintf( "Val is:%s", state->val.string );
 	// fault
 							vtprintf( state->pvtError, "fault while parsing; second string in field name at %" _size_f "  %" _size_f ":%" _size_f, state->n, state->line, state->col );
 							break;
@@ -56197,8 +59864,9 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 							 && !state->val.className ) ) {
 						(*output->pos++) = 0;
 						state->val.className = state->val.string;
+						state->val.classNameLen = state->val.stringLen;
 #ifdef DEBUG_CLASS_STATES
-						lprintf( "Setting classname HERE (why?):", state->val.string );
+						lprintf( "Setting classname HERE (why?): %d %.*s", state->val.stringLen, state->val.stringLen, state->val.string );
 #endif
 					}
 					state->val.string = output->pos;
@@ -56240,10 +59908,12 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 					state->col = 1;
 					// FALLTHROUGH
 				case ' ':
+// case '\xa0': // nbsp
+				case 160 :
  // LS (Line separator)
-				case 2028:
+				case 0x2028:
  // PS (paragraph separate)
-				case 2029:
+				case 0x2029:
 				case '\t':
 				case '\r':
 				case 0xFEFF:
@@ -56254,10 +59924,13 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 						}
 						break;
 					}
-					if( state->word == JSOX_WORD_POS_RESET || (state->word == JSOX_WORD_POS_AFTER_FIELD) ) {
+					if( state->word == JSOX_WORD_POS_AFTER_FIELD ) {
+						if( state->parse_context == JSOX_CONTEXT_UNKNOWN )
+							state->completed = TRUE;
 						break;
-					}
-					else if( state->word == JSOX_WORD_POS_FIELD ) {
+					} else if( (state->word == JSOX_WORD_POS_RESET) ) {
+						break;
+					} else if( state->word == JSOX_WORD_POS_FIELD ) {
 						if( state->val.string ) {
 							state->val.value_type = JSOX_VALUE_STRING;
 							state->word = JSOX_WORD_POS_AFTER_FIELD;
@@ -56266,10 +59939,10 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 						}
 					}
 					else {
-						state->status = FALSE;
-						if( !state->pvtError ) state->pvtError = VarTextCreate();
-	// fault
-						vtprintf( state->pvtError, "fault while parsing; whitespace unexpected at %" _size_f "  %" _size_f ":%" _size_f, state->n );
+						recoverIdent( state, output, c );
+						//state->status = FALSE;
+						//if( !state->pvtError ) state->pvtError = VarTextCreate();
+						//vtprintf( state->pvtError, "fault while parsing; whitespace unexpected at %" _size_f "  %" _size_f ":%" _size_f, state->n );	// fault
 					}
 					// skip whitespace
 					//n++;
@@ -56372,7 +60045,6 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 				default:
 					if( state->word == JSOX_WORD_POS_RESET && ( (c >= '0' && c <= '9') || (c == '+') || (c == '.') ) )
 					{
-						LOGICAL fromDate;
  // to unwind last character past number.
 						const char *_msg_input;
 						// always reset this here....
@@ -56384,7 +60056,6 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 							state->exponent = FALSE;
 							state->exponent_sign = FALSE;
 							state->exponent_digit = FALSE;
-							fromDate = FALSE;
 							state->fromHex = FALSE;
 							state->val.float_result = (c == '.');
 							state->val.string = output->pos;
@@ -56393,10 +60064,9 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 						}
 						else
 						{
-						continueNumber:
-							fromDate = state->numberFromDate;
+					continueNumber: ;
 						}
-						while( (_msg_input = input->pos), ((state->n < input->size) && ( (c = GetUtfChar( &input->pos ))!= BADUTF8)) )
+						while( (_msg_input = input->pos), ((state->n < input->size) && ( (c = GetUtfChar( &input->pos ))!= JSOX_BADUTF8)) )
 						{
 							newN = input->pos - input->buf;
 							if( newN > input->size ) {
@@ -56423,7 +60093,8 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 								// Returns 2011-10-05T14:48:00.000Z
 								*/
 								(*output->pos++) = c;
-								state->numberFromDate = TRUE;
+								if( c != '+' && c != '-' )
+									state->numberFromDate = TRUE;
 							}
 							else if( ( c == 'x' || c == 'b' || c =='o' || c == 'X' || c == 'B' || c == 'O')
 							       && ( output->pos - state->val.string) == 1
@@ -56451,7 +60122,7 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 								else {
 									state->status = FALSE;
 									if( !state->pvtError ) state->pvtError = VarTextCreate();
-									vtprintf( state->pvtError, "fault white parsing number; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
+									vtprintf( state->pvtError, "fault while parsing number; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
 									break;
 								}
 							}
@@ -56459,7 +60130,7 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 								if( !state->exponent ) {
 									state->status = FALSE;
 									if( !state->pvtError ) state->pvtError = VarTextCreate();
-									vtprintf( state->pvtError, "fault white parsing number; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
+									vtprintf( state->pvtError, "fault while parsing number; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
 									break;
 								}
 								else {
@@ -56470,7 +60141,7 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 									else {
 										state->status = FALSE;
 										if( !state->pvtError ) state->pvtError = VarTextCreate();
-										vtprintf( state->pvtError, "fault white parsing number; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
+										vtprintf( state->pvtError, "fault while parsing number; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
 										break;
 									}
 								}
@@ -56488,12 +60159,13 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 								else {
 									state->status = FALSE;
 									if( !state->pvtError ) state->pvtError = VarTextCreate();
-									vtprintf( state->pvtError, "fault white parsing number; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
+									vtprintf( state->pvtError, "fault while parsing number; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
 									break;
 								}
 							} else {
 								// in non streaming mode; these would be required to follow
-								if( c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == 0xFEFF
+/*'\xa0'*/
+								if( c == ' ' || c == 160 || c == '\t' || c == '\n' || c == '\r' || c == 0xFEFF
 									|| c == ',' || c == ']' || c == '}'  || c == ':' ) {
 									//lprintf( "Non numeric character received; push the value we have" );
 									(*output->pos) = 0;
@@ -56507,7 +60179,7 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 									else {
 										state->status = FALSE;
 										if( !state->pvtError ) state->pvtError = VarTextCreate();
-										vtprintf( state->pvtError, "fault white parsing number; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
+										vtprintf( state->pvtError, "fault while parsing number; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
 										break;
 									}
 								}
@@ -56523,7 +60195,6 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 						{
 							//lprintf( "completion mode is not end of string; and at end of string" );
 							state->gatheringNumber = TRUE;
-							state->numberFromDate = fromDate;
 						}
 						else
 						{
@@ -56569,9 +60240,11 @@ int jsox_parse_add_data( struct jsox_parse_state *state
  // default of high level switch
 				break;
 			}
+			if( state->gatheringString )
+				goto gatherStringInput;
 			// got a completed value; skip out
 			if( state->completed ) {
-				if( state->word == JSOX_WORD_POS_END ) {
+				if( state->word == JSOX_WORD_POS_END || state->completedString ) {
 					state->word = JSOX_WORD_POS_RESET;
 				}
 				break;
@@ -56582,8 +60255,9 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 			if( state->n >= input->size ) {
 				if( input->tempBuf )
 					Deallocate( CPOINTER, input->buf );
-				DeleteFromSet( JSOX_PARSE_BUFFER, jxpsd.parseBuffers, input );
+				DeleteFromSet( JSOX_PARSE_BUFFER, state->parseBuffers, input );
 				if( state->gatheringString
+				    || ( state->val.string && state->parse_context == JSOX_CONTEXT_UNKNOWN && !state->completedString )
 					|| state->gatheringNumber
 					|| state->parse_context == JSOX_CONTEXT_OBJECT_FIELD
 					|| state->word == JSOX_WORD_POS_FIELD ) {
@@ -56626,6 +60300,8 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 		if( state->val.value_type != JSOX_VALUE_UNSET ) {
 			pushValue( state, state->elements, &state->val );
 			JSOX_RESET_STATE_VAL();
+			if( !retval )
+			retval = 1;
 		}
 		state->completed = FALSE;
 	}
@@ -56633,8 +60309,10 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 }
 PDATALIST jsox_parse_get_data( struct jsox_parse_state *state ) {
 	PDATALIST *result = state->elements;
+	EnterCriticalSec( &jxpsd.cs_states );
 // CreateDataList( sizeof( state->val ) );
 	state->elements = GetFromSet( PDATALIST, &jxpsd.dataLists );
+	LeaveCriticalSec( &jxpsd.cs_states );
 	if( !state->elements[0] ) state->elements[0] = CreateDataList( sizeof( state->val ) );
 	else state->elements[0]->Cnt = 0;
 	return result[0];
@@ -56667,7 +60345,9 @@ void _jsox_dispose_message( PDATALIST *msg_data )
 	}
 	// quick method
 	DeleteDataList( msg_data );
+	EnterCriticalSec( &jxpsd.cs_states );
 	DeleteFromSet( PDATALIST, jxpsd.dataLists, msg_data );
+	LeaveCriticalSec( &jxpsd.cs_states );
 }
 static uintptr_t jsox_FindDataList( void*p, uintptr_t psv ) {
 	if( ((PPDATALIST)p)[0] == (PDATALIST)psv )
@@ -56684,13 +60364,13 @@ void jsox_parse_clear_state( struct jsox_parse_state *state ) {
 		PJSOX_PARSE_BUFFER buffer;
 		while( buffer = (PJSOX_PARSE_BUFFER)PopLink( state->outBuffers ) ) {
 			Deallocate( const char *, buffer->buf );
-			DeleteFromSet( JSOX_PARSE_BUFFER, jxpsd.parseBuffers, buffer );
+			DeleteFromSet( JSOX_PARSE_BUFFER, state->parseBuffers, buffer );
 		}
 		while( buffer = (PJSOX_PARSE_BUFFER)DequeLinkNL( state->inBuffers ) )
-			DeleteFromSet( JSOX_PARSE_BUFFER, jxpsd.parseBuffers, buffer );
+			DeleteFromSet( JSOX_PARSE_BUFFER, state->parseBuffers, buffer );
 		while( buffer = (PJSOX_PARSE_BUFFER)DequeLinkNL( state->outQueue ) ) {
 			Deallocate( const char*, buffer->buf );
-			DeleteFromSet( JSOX_PARSE_BUFFER, jxpsd.parseBuffers, buffer );
+			DeleteFromSet( JSOX_PARSE_BUFFER, state->parseBuffers, buffer );
 		}
 		DeleteFromSet( PLINKQUEUE, jxpsd.linkQueues, state->inBuffers );
 		//DeleteLinkQueue( &state->inBuffers );
@@ -56699,12 +60379,19 @@ void jsox_parse_clear_state( struct jsox_parse_state *state ) {
 		DeleteFromSet( PLINKSTACK, jxpsd.linkStacks, state->outBuffers );
 		//DeleteLinkStack( &state->outBuffers );
 		{
-			char *buf;
+			char* buf;
 			INDEX idx;
+			PJSOX_CLASS cls;
 			LIST_FORALL( state->outValBuffers[0], idx, char*, buf ) {
 				Deallocate( char*, buf );
+ // maybe it was saved?
+				SetLink( state->outValBuffers, idx, NULL );
 			}
 			DeleteFromSet( PLIST, jxpsd.listSet, state->outValBuffers );
+			LIST_FORALL( state->classes, idx, PJSOX_CLASS, cls ) {
+				DeleteFromSet( JSOX_CLASS, &state->classPool, cls );
+				SetLink( &state->classes, idx, NULL );
+			}
 			//DeleteList( &state->outValBuffers );
 		}
 		state->status = TRUE;
@@ -56715,6 +60402,8 @@ void jsox_parse_clear_state( struct jsox_parse_state *state ) {
 		state->line = 1;
 		state->gatheringString = FALSE;
 		state->gatheringNumber = FALSE;
+		state->val.value_type = JSOX_VALUE_UNSET;
+		state->val.string = NULL;
 		{
 			PDATALIST *result = state->elements;
 // CreateDataList( sizeof( state->val ) );
@@ -56740,26 +60429,30 @@ void jsox_parse_dispose_state( struct jsox_parse_state **ppState ) {
 	struct jsox_parse_state *state = (*ppState);
 	struct jsox_parse_context *old_context;
 	PJSOX_PARSE_BUFFER buffer;
+	EnterCriticalSec( &jxpsd.cs_states );
 	_jsox_dispose_message( state->elements );
 	//DeleteDataList( &state->elements );
 	while( buffer = (PJSOX_PARSE_BUFFER)PopLink( state->outBuffers ) ) {
 		Deallocate( const char *, buffer->buf );
-		DeleteFromSet( JSOX_PARSE_BUFFER, jxpsd.parseBuffers, buffer );
+		DeleteFromSet( JSOX_PARSE_BUFFER, state->parseBuffers, buffer );
 	}
 	{
-		char *buf;
+		char* buf;
 		INDEX idx;
 		LIST_FORALL( state->outValBuffers[0], idx, char*, buf ) {
-			Deallocate( char*, buf );
+			Release( buf );
+ // maybe it was saved?
+			SetLink( state->outValBuffers, idx, NULL );
 		}
 		DeleteFromSet( PLIST, jxpsd.listSet, state->outValBuffers );
 		//DeleteList( &state->outValBuffers );
 	}
 	while( buffer = (PJSOX_PARSE_BUFFER)DequeLinkNL( state->inBuffers ) )
-		DeleteFromSet( JSOX_PARSE_BUFFER, jxpsd.parseBuffers, buffer );
+		DeleteFromSet( JSOX_PARSE_BUFFER, state->parseBuffers, buffer );
+	state->val.string = NULL;
 	while( buffer = (PJSOX_PARSE_BUFFER)DequeLinkNL( state->outQueue ) ) {
 		Deallocate( const char*, buffer->buf );
-		DeleteFromSet( JSOX_PARSE_BUFFER, jxpsd.parseBuffers, buffer );
+		DeleteFromSet( JSOX_PARSE_BUFFER, state->parseBuffers, buffer );
 	}
 	DeleteFromSet( PLINKQUEUE, jxpsd.linkQueues, state->inBuffers );
 	//DeleteLinkQueue( &state->inBuffers );
@@ -56767,15 +60460,16 @@ void jsox_parse_dispose_state( struct jsox_parse_state **ppState ) {
 	//DeleteLinkQueue( &state->outQueue );
 	DeleteFromSet( PLINKSTACK, jxpsd.linkStacks, state->outBuffers );
 	//DeleteLinkStack( &state->outBuffers );
-	DeleteFromSet( JSOX_PARSE_CONTEXT, jxpsd.parseContexts, state->context );
+	DeleteFromSet( JSOX_PARSE_CONTEXT, state->parseContexts, state->context );
 	while( (old_context = (struct jsox_parse_context *)PopLink( state->context_stack )) ) {
 		//lprintf( "warning unclosed contexts...." );
-		DeleteFromSet( JSOX_PARSE_CONTEXT, jxpsd.parseContexts, old_context );
+		DeleteFromSet( JSOX_PARSE_CONTEXT, state->parseContexts, old_context );
 	}
 	if( state->context_stack )
 		DeleteFromSet( PLINKSTACK, jxpsd.linkStacks, state->context_stack );
 		//DeleteLinkStack( &state->context_stack );
 	DeleteFromSet( JSOX_PARSE_STATE, jxpsd.parseStates, state );
+	LeaveCriticalSec( &jxpsd.cs_states );
 	//Deallocate( struct jsox_parse_state *, state );
 	(*ppState) = NULL;
 }
@@ -56906,6 +60600,83 @@ struct jsox_value_container *jsox_get_parsed_value( PDATALIST pdlMessage, const 
 #endif
 //-----------------------------------------------------------------------
 FILESYS_NAMESPACE
+// have to include this in-namespace
+#ifdef _WIN32
+#define LONG_PATHCHAR '\\'
+#define SYS_PATHCHAR "\\"
+#else
+#define LONG_PATHCHAR 0
+#define SYS_PATHCHAR "/"
+#endif
+#define PATHCHAR "/"
+struct file_system_mounted_interface
+{
+	struct file_system_mounted_interface* nextLayer;
+	struct file_system_mounted_interface** meLayer;
+	//struct file_system_mounted_interface* sideLayer; // mount-as...
+	struct file_system_mounted_interface* parent;
+	//DeclareLink( struct file_system_mounted_interface );
+	const char *name;
+	int priority;
+	uintptr_t psvInstance;
+	struct file_system_interface *fsi;
+	LOGICAL writeable;
+};
+#if !defined( WINFILE_COMMON_SOURCE ) && defined( __STATIC_GLOBALS__ )
+extern
+#endif
+ struct winfile_local_tag {
+	CRITICALSECTION cs_files;
+	PLIST files;
+	PLIST directories;
+	PLIST groups;
+	PLIST handles;
+	PLIST file_system_interface;
+	struct file_system_interface *default_file_system_interface;
+	struct file_system_mounted_interface *_mounted_file_systems;
+	struct file_system_mounted_interface *last_find_mount;
+	struct file_system_mounted_interface *_default_mount;
+	LOGICAL have_default;
+	struct {
+		BIT_FIELD bLogOpenClose : 1;
+		BIT_FIELD bInitialized : 1;
+		BIT_FIELD bDeallocateClosedFiles : 1;
+	} flags;
+	TEXTSTR local_data_file_root;
+	TEXTSTR data_file_root;
+	TEXTSTR producer;
+	TEXTSTR application;
+ }
+#ifdef __STATIC_GLOBALS__
+winfile_local__;
+#endif
+;
+#if HAS_TLS
+struct filesys_thread_mount_info {
+	struct file_system_mounted_interface* default_mount;
+	struct file_system_mounted_interface** _mounted_file_systems;
+#define mounted_file_systems _mounted_file_systems[0]
+	struct file_system_mounted_interface* thread_local_mounted_file_systems;
+	char* cwd;
+};
+#if !defined( WINFILE_COMMON_SOURCE )
+extern
+#endif
+	DeclareThreadVar  struct filesys_thread_mount_info _fileSysThreadInfo;
+#  define FileSysThreadInfo (_fileSysThreadInfo)
+#else
+#error "Please get a better platform target...."
+//#  define fileSysThreadInfo (*_fileSysThreadInfo)
+#endif
+#ifndef WINFILE_COMMON_SOURCE
+extern
+#endif
+	struct winfile_local_tag *winfile_local
+#if defined( __STATIC_GLOBALS__ ) && defined( WINFILE_COMMON_SOURCE )
+		   = &winfile_local__
+#endif
+	;
+//#define l (*winfile_local)
 	static char *currentPath
 #ifdef __EMSCRIPTEN__
        = "/home/web_user"
@@ -56955,6 +60726,11 @@ extern TEXTSTR ExpandPath( CTEXTSTR path );
 //-----------------------------------------------------------------------
 TEXTSTR GetCurrentPath( TEXTSTR path, int len )
 {
+	// allow thread to initialize itself with a real currentpath...
+	if( FileSysThreadInfo.cwd ) {
+		strncpy( path, FileSysThreadInfo.cwd, len );
+		return path;
+	}
 	if( !path )
 		return 0;
 #ifdef __EMSCRIPTEN__
@@ -57287,6 +61063,12 @@ int  MakePath ( CTEXTSTR path )
 //-----------------------------------------------------------------------
 int  SetCurrentPath ( CTEXTSTR path )
 {
+	TEXTSTR tmp = ExpandPath( path );
+	if( IsPath( tmp ) ) {
+		Release( FileSysThreadInfo.cwd );
+		FileSysThreadInfo.cwd = StrDup( tmp );
+		return 1;
+	}
 	int status = 1;
 	TEXTSTR tmp_path;
 	if( !path )
@@ -57364,6 +61146,7 @@ FILESYS_NAMESPACE_END
 #  define __FILESYS_NO_FILE_LOGGING__
 #endif
 #if defined( _WIN32 ) && !defined( __TURBOC__ )
+#  include <winternl.h>
 #  ifndef UNDER_CE
   // findfirst,findnext, fileinfo
 #  endif
@@ -57415,76 +61198,41 @@ enum textModes {
 	TM_UTF_BOCU,
 	TM_UTF_GB_18030
 };
-struct file{
+struct file {
 	TEXTSTR name;
 	TEXTSTR fullname;
 	wchar_t* wfullname;
-	int fullname_size;
  // HANDLE 's
-	PLIST handles;
+	PLIST  handles;
  // FILE *'s
-	PLIST files;
-	INDEX group;
-	enum textModes textmode;
+	PLIST  files;
+	INDEX  group;
+	enum   textModes textmode;
   // text file modes; skip existing BOM for seek purposes.
 	size_t file_start_offset;
-	struct file_system_mounted_interface *mount;
+	struct file_system_mounted_interface* mount;
+ // allow covering for file systems that don't actually delete files that are still open
+	int    deleted;
+ // has been deleted, but deletion failed (probably because it's open)
+	int    delete_on_close;
+};
+struct directory {
+	TEXTSTR name;
+	TEXTSTR fullname;
+	wchar_t* wfullname;
+	struct file_system_mounted_interface* mount;
+ // allow covering for file systems that don't actually delete files that are still open
+	int    deleted;
 };
 struct file_interface_tracker
 {
 	CTEXTSTR name;
-	struct file_system_interface *fsi;
+	struct file_system_interface* fsi;
 };
 struct Group {
 	TEXTSTR name;
 	TEXTSTR base_path;
 };
-struct file_system_mounted_interface
-{
-	DeclareLink( struct file_system_mounted_interface );
-	const char *name;
-	int priority;
-	uintptr_t psvInstance;
-	struct file_system_interface *fsi;
-	LOGICAL writeable;
-};
-#if !defined( WINFILE_COMMON_SOURCE ) && defined( __STATIC_GLOBALS__ )
-extern
-#endif
- struct winfile_local_tag {
-	CRITICALSECTION cs_files;
-	PLIST files;
-	PLIST groups;
-	PLIST handles;
-	PLIST file_system_interface;
-	struct file_system_interface *default_file_system_interface;
-	struct file_system_mounted_interface *mounted_file_systems;
-	struct file_system_mounted_interface *last_find_mount;
-	struct file_system_mounted_interface *default_mount;
-	LOGICAL have_default;
-	struct {
-		BIT_FIELD bLogOpenClose : 1;
-		BIT_FIELD bInitialized : 1;
-		BIT_FIELD bDeallocateClosedFiles : 1;
-	} flags;
-	TEXTSTR local_data_file_root;
-	TEXTSTR data_file_root;
-	TEXTSTR producer;
-	TEXTSTR application;
- }
-#ifdef __STATIC_GLOBALS__
-winfile_local__;
-#endif
-;
-#ifndef WINFILE_COMMON_SOURCE
-extern
-#endif
-	struct winfile_local_tag *winfile_local
-#if defined( __STATIC_GLOBALS__ ) && defined( WINFILE_COMMON_SOURCE )
-		   = &winfile_local__
-#endif
-	;
-//#define l (*winfile_local)
 #ifdef _WIN32
 #  ifndef SHGFP_TYPE_CURRENT
 #    define SHGFP_TYPE_CURRENT 0
@@ -57495,52 +61243,67 @@ extern
 EXTERN_C DECLSPEC_IMPORT HRESULT STDAPICALLTYPE SHGetFolderPathA( HWND hwnd, int csidl, HANDLE hToken, DWORD dwFlags, LPSTR pszPath );
 #  endif
 #endif
+static void* CPROC sack_filesys_open( uintptr_t psv, const char* filename, const char* opts );
+static int CPROC sack_filesys_close( void* file ) { return fclose( (FILE*)file ); }
+static size_t CPROC sack_filesys_read( void* file, void* buf, size_t len ) { return fread( buf, 1, len, (FILE*)file ); }
+static size_t CPROC sack_filesys_write( void* file, const void* buf, size_t len ) { return fwrite( buf, 1, len, (FILE*)file ); }
+static size_t CPROC sack_filesys_seek( void* file, size_t pos, int whence ) { return fseek( (FILE*)file, (long)pos, whence ), ftell( (FILE*)file ); }
+static int CPROC sack_filesys_unlink( uintptr_t psv, const char* filename );
 static void UpdateLocalDataPath( void )
 {
 #ifdef _WIN32
 	TEXTCHAR path[MAX_PATH];
-	TEXTCHAR *realpath;
+	TEXTCHAR* realpath;
 	size_t len;
 	SHGetFolderPathA( NULL, CSIDL_COMMON_APPDATA, NULL, SHGFP_TYPE_CURRENT, path );
 	realpath = NewArray( TEXTCHAR, len = StrLen( path )
-							  + StrLen( (*winfile_local).producer?(*winfile_local).producer:"" )
+		+ StrLen( ( *winfile_local ).producer ? ( *winfile_local ).producer : "" )
  // worse case +3
-							  + StrLen( (*winfile_local).application?(*winfile_local).application:"" ) + 3 );
+		+ StrLen( ( *winfile_local ).application ? ( *winfile_local ).application : "" ) + 3 );
 	tnprintf( realpath, len, "%s%s%s%s%s", path
-			  , (*winfile_local).producer?"/":"", (*winfile_local).producer?(*winfile_local).producer:""
-			  , (*winfile_local).application?"/":"", (*winfile_local).application?(*winfile_local).application:""
-			  );
-	if( (*winfile_local).data_file_root )
-		Deallocate( TEXTSTR, (*winfile_local).data_file_root );
-	(*winfile_local).data_file_root = realpath;
-	MakePath( (*winfile_local).data_file_root );
+		, ( *winfile_local ).producer ? "\\" : "", ( *winfile_local ).producer ? ( *winfile_local ).producer : ""
+		, ( *winfile_local ).application ? "\\" : "", ( *winfile_local ).application ? ( *winfile_local ).application : ""
+	);
+	if( ( *winfile_local ).data_file_root )
+		Deallocate( TEXTSTR, ( *winfile_local ).data_file_root );
+	( *winfile_local ).data_file_root = realpath;
+	MakePath( ( *winfile_local ).data_file_root );
 	SHGetFolderPathA( NULL, CSIDL_LOCAL_APPDATA, NULL, SHGFP_TYPE_CURRENT, path );
 	realpath = NewArray( TEXTCHAR, len = StrLen( path )
-							  + StrLen( (*winfile_local).producer?(*winfile_local).producer:"" )
+		+ StrLen( ( *winfile_local ).producer ? ( *winfile_local ).producer : "" )
  // worse case +3
-							  + StrLen( (*winfile_local).application?(*winfile_local).application:"" ) + 3 );
+		+ StrLen( ( *winfile_local ).application ? ( *winfile_local ).application : "" ) + 3 );
 	tnprintf( realpath, len, "%s%s%s%s%s", path
-			  , (*winfile_local).producer?"/":"", (*winfile_local).producer?(*winfile_local).producer:""
-			  , (*winfile_local).application?"/":"", (*winfile_local).application?(*winfile_local).application:""
-			  );
-	if( (*winfile_local).local_data_file_root )
-		Deallocate( TEXTSTR, (*winfile_local).local_data_file_root );
-	(*winfile_local).local_data_file_root = realpath;
-	MakePath( (*winfile_local).local_data_file_root );
+		, ( *winfile_local ).producer ? "\\" : "", ( *winfile_local ).producer ? ( *winfile_local ).producer : ""
+		, ( *winfile_local ).application ? "\\" : "", ( *winfile_local ).application ? ( *winfile_local ).application : ""
+	);
+	if( ( *winfile_local ).local_data_file_root )
+		Deallocate( TEXTSTR, ( *winfile_local ).local_data_file_root );
+	( *winfile_local ).local_data_file_root = realpath;
+	MakePath( ( *winfile_local ).local_data_file_root );
 #else
-	(*winfile_local).data_file_root = StrDup( "." );
-	(*winfile_local).local_data_file_root = StrDup( "." );
+	( *winfile_local ).data_file_root = StrDup( "." );
+	( *winfile_local ).local_data_file_root = StrDup( "." );
 #endif
 }
 void sack_set_common_data_producer( CTEXTSTR name )
 {
-	(*winfile_local).producer = StrDup( name );
+	( *winfile_local ).producer = StrDup( name );
 	UpdateLocalDataPath();
 }
 void sack_set_common_data_application( CTEXTSTR name )
 {
-	(*winfile_local).application = StrDup( name );
+	( *winfile_local ).application = StrDup( name );
 	UpdateLocalDataPath();
+}
+static void threadInit( void ) {
+ // edge case the main thread might init twice.
+	if( !FileSysThreadInfo.cwd ) {
+		FileSysThreadInfo.cwd = StrDup( "." );
+		FileSysThreadInfo.default_mount = ( *winfile_local )._default_mount;
+		FileSysThreadInfo._mounted_file_systems = &( *winfile_local )._mounted_file_systems;
+		//FileSysThreadInfo.mounted_file_systems = ( *winfile_local )._mounted_file_systems;
+	}
 }
 static void LocalInit( void )
 {
@@ -57548,12 +61311,14 @@ static void LocalInit( void )
 	if( !winfile_local )
 		SimpleRegisterAndCreateGlobal( winfile_local );
 #endif
-	if( !(*winfile_local).flags.bInitialized )
-	{
-		InitializeCriticalSec( &(*winfile_local).cs_files );
-		(*winfile_local).flags.bInitialized = 1;
+	if( !( *winfile_local ).flags.bInitialized ) {
+		OnThreadCreate( threadInit );
+  // this might or might not get dispatched already on this thread.
+		threadInit();
+		InitializeCriticalSec( &( *winfile_local ).cs_files );
+		( *winfile_local ).flags.bInitialized = 1;
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
-		(*winfile_local).flags.bLogOpenClose = 0;
+		( *winfile_local ).flags.bLogOpenClose = 0;
 #endif
 		{
 #ifdef _WIN32
@@ -57564,8 +61329,8 @@ static void LocalInit( void )
 #else
 			{
 				char tmpPath[256];
-				snprintf( tmpPath, 256, "%s/%s", getenv("HOME"), ".Freedom Collective" );
-				(*winfile_local).data_file_root = StrDup( tmpPath );
+				snprintf( tmpPath, 256, "%s/%s", getenv( "HOME" ), ".Freedom Collective" );
+				( *winfile_local ).data_file_root = StrDup( tmpPath );
 				MakePath( tmpPath );
 			}
 			UpdateLocalDataPath();
@@ -57576,13 +61341,13 @@ static void LocalInit( void )
 }
 static void InitGroups( void )
 {
-	struct Group *group;
+	struct Group* group;
 	TEXTCHAR tmp[256];
 	// known handle '0' is 'default' which is CurrentWorkingDirectory at load.
 	group = New( struct Group );
 	group->base_path = StrDup( GetCurrentPath( tmp, sizeof( tmp ) ) );
 	group->name = StrDup( "Default" );
-	AddLink( &(*winfile_local).groups, group );
+	AddLink( &( *winfile_local ).groups, group );
 	// known handle '1' is the program's load path.
 	group = New( struct Group );
 #ifdef __ANDROID__
@@ -57592,36 +61357,33 @@ static void InitGroups( void )
 	group->base_path = StrDup( GetProgramPath() );
 #endif
 	group->name = StrDup( "Program Path" );
-	AddLink( &(*winfile_local).groups, group );
+	AddLink( &( *winfile_local ).groups, group );
 	// known handle '1' is the program's start path.
 	group = New( struct Group );
 	group->base_path = StrDup( GetStartupPath() );
 	group->name = StrDup( "Startup Path" );
-	AddLink( &(*winfile_local).groups, group );
-	(*winfile_local).have_default = TRUE;
+	AddLink( &( *winfile_local ).groups, group );
+	( *winfile_local ).have_default = TRUE;
 }
-static struct Group *GetGroupFilePath( CTEXTSTR group )
+static struct Group* GetGroupFilePath( CTEXTSTR group )
 {
-	struct Group *filegroup;
+	struct Group* filegroup;
 	INDEX idx;
-	if( !(*winfile_local).groups )
-	{
+	if( !( *winfile_local ).groups ) {
 		InitGroups();
 	}
-	LIST_FORALL( (*winfile_local).groups, idx, struct Group *, filegroup )
+	LIST_FORALL( ( *winfile_local ).groups, idx, struct Group*, filegroup )
 	{
-		if( StrCaseCmp( filegroup->name, group ) == 0 )
-		{
-		break;
+		if( StrCaseCmp( filegroup->name, group ) == 0 ) {
+			break;
 		}
 	}
 	return filegroup;
 }
-INDEX  GetFileGroup ( CTEXTSTR groupname, CTEXTSTR default_path )
+INDEX  GetFileGroup( CTEXTSTR groupname, CTEXTSTR default_path )
 {
-	struct Group *filegroup = GetGroupFilePath( groupname );
-	if( !filegroup )
-	{
+	struct Group* filegroup = GetGroupFilePath( groupname );
+	if( !filegroup ) {
 		{
 			TEXTCHAR tmp_ent[256];
 			TEXTCHAR tmp[256];
@@ -57630,7 +61392,7 @@ INDEX  GetFileGroup ( CTEXTSTR groupname, CTEXTSTR default_path )
 #ifdef __NO_OPTIONS__
 			tmp[0] = 0;
 #else
-			if( (*winfile_local).have_default ) {
+			if( ( *winfile_local ).have_default ) {
 				SACK_GetProfileString( GetProgramName(), tmp_ent, default_path ? default_path : NULL, tmp, sizeof( tmp ) );
 			}
 			else
@@ -57638,8 +61400,7 @@ INDEX  GetFileGroup ( CTEXTSTR groupname, CTEXTSTR default_path )
 #endif
 			if( tmp[0] )
 				default_path = tmp;
-			else if( default_path )
-			{
+			else if( default_path ) {
 #ifndef __NO_OPTIONS__
 				SACK_WriteProfileString( GetProgramName(), tmp_ent, default_path );
 #endif
@@ -57651,15 +61412,14 @@ INDEX  GetFileGroup ( CTEXTSTR groupname, CTEXTSTR default_path )
 			filegroup->base_path = StrDup( default_path );
 		else
 			filegroup->base_path = StrDup( "." );
-		AddLink( &(*winfile_local).groups, filegroup );
+		AddLink( &( *winfile_local ).groups, filegroup );
 	}
-	return FindLink( &(*winfile_local).groups, filegroup );
+	return FindLink( &( *winfile_local ).groups, filegroup );
 }
-TEXTSTR GetFileGroupText ( INDEX group, TEXTSTR path, int path_chars )
+TEXTSTR GetFileGroupText( INDEX group, TEXTSTR path, int path_chars )
 {
-	struct Group* filegroup = (struct Group *)GetLink( &(*winfile_local).groups, group );
-	if( !filegroup )
-	{
+	struct Group* filegroup = ( struct Group* )GetLink( &( *winfile_local ).groups, group );
+	if( !filegroup ) {
 		path[0] = 0;
 		return 0;
 	}
@@ -57677,27 +61437,33 @@ TEXTSTR ExpandPathVariable( CTEXTSTR path )
 	size_t  this_length;
 	INDEX   group;
 	struct  Group* filegroup;
-	if( path )
-	{
-		while( ( subst_path = (TEXTSTR)StrChr( tmp_path, '%' ) ) )
-		{
+	if( path ) {
+		while( ( subst_path = (TEXTSTR)StrChr( tmp_path, '%' ) ) ) {
 			end = (TEXTSTR)StrChr( ++subst_path, '%' );
 			//lprintf( "Found magic subst in string" );
 			if( end ) {
 				this_length = StrLen( tmp_path );
-				tmp = NewArray( TEXTCHAR, len = (end - subst_path) + 1 );
-				tnprintf( tmp, len * sizeof( TEXTCHAR ), "%*.*s", (int)(end - subst_path), (int)(end - subst_path), subst_path );
+				tmp = NewArray( TEXTCHAR, len = ( end - subst_path ) + 1 );
+				tnprintf( tmp, len * sizeof( TEXTCHAR ), "%*.*s", (int)( end - subst_path ), (int)( end - subst_path ), subst_path );
 				group = GetFileGroup( tmp, NULL );
 				if( group != INVALID_INDEX ) {
-					filegroup = (struct Group*)GetLink( &(*winfile_local).groups, group );
+					filegroup = ( struct Group* )GetLink( &( *winfile_local ).groups, group );
   // must deallocate tmp
 					Deallocate( TEXTCHAR*, tmp );
-					newest_path = NewArray( TEXTCHAR, len = (subst_path - tmp_path) + StrLen( filegroup->base_path ) + (this_length - (end - tmp_path)) + 1 );
+					newest_path = NewArray( TEXTCHAR, len = ( subst_path - tmp_path ) + StrLen( filegroup->base_path ) + ( this_length - ( end - tmp_path ) ) + 1 );
 					//=======================================================================
 					// Get rid of the ending '%' AND any '/' or '\' that might come after it
 					//=======================================================================
-					tnprintf( newest_path, len, "%*.*s%s/%s", (int)((subst_path - tmp_path) - 1), (int)((subst_path - tmp_path) - 1), tmp_path, filegroup->base_path,
-						((end + 1)[0] == '/' || (end + 1)[0] == '\\') ? (end + 2) : (end + 1) );
+					if( ( end[2] && ( end[1] == '/' || end[1] == '\\' ) ) || end[1] )
+						tnprintf( newest_path, len, "%*.*s%s" SYS_PATHCHAR "%s", (int)( ( subst_path - tmp_path ) - 1 )
+						        , (int)( ( subst_path - tmp_path ) - 1 )
+						        , tmp_path, filegroup->base_path
+						        , ( ( end + 1 )[0] == '/' || ( end + 1 )[0] == '\\' ) ? ( end + 2 ) : ( end + 1 ) );
+					else
+						tnprintf( newest_path, len, "%*.*s%s", (int)((subst_path - tmp_path) - 1)
+						        , (int)((subst_path - tmp_path) - 1)
+						        , tmp_path, filegroup->base_path
+						        );
 					Deallocate( TEXTCHAR*, tmp_path );
 					tmp_path = ExpandPathVariable( newest_path );
 					Deallocate( TEXTCHAR*, newest_path );
@@ -57707,12 +61473,20 @@ TEXTSTR ExpandPathVariable( CTEXTSTR path )
 					if( external_var ) {
   // must deallocate tmp
 						Deallocate( TEXTCHAR*, tmp );
-						newest_path = NewArray( TEXTCHAR, len = (subst_path - tmp_path) + StrLen( external_var ) + (this_length - (end - tmp_path)) + 1 );
+						newest_path = NewArray( TEXTCHAR, len = ( subst_path - tmp_path ) + StrLen( external_var ) + ( this_length - ( end - tmp_path ) ) + 1 );
 						//=======================================================================
 						// Get rid of the ending '%' AND any '/' or '\' that might come after it
 						//=======================================================================
-						tnprintf( newest_path, len, "%*.*s%s/%s", (int)((subst_path - tmp_path) - 1), (int)((subst_path - tmp_path) - 1), tmp_path, external_var,
-							((end + 1)[0] == '/' || (end + 1)[0] == '\\') ? (end + 2) : (end + 1) );
+						if( (end[2] && (end[1] == '/' || end[1] == '\\')) || end[1] )
+							tnprintf( newest_path, len, "%*.*s%s/%s", (int)( ( subst_path - tmp_path ) - 1 ), (int)( ( subst_path - tmp_path ) - 1 )
+							        , tmp_path
+							        , external_var
+							        , ( ( end + 1 )[0] == '/' || ( end + 1 )[0] == '\\' ) ? ( end + 2 ) : ( end + 1 ) );
+						else
+							tnprintf( newest_path, len, "%*.*s%s", (int)((subst_path - tmp_path) - 1), (int)((subst_path - tmp_path) - 1)
+							        , tmp_path
+							        , external_var
+							        );
 						tmp_path = ExpandPathVariable( newest_path );
 						Deallocate( TEXTCHAR*, newest_path );
 					}
@@ -57720,7 +61494,7 @@ TEXTSTR ExpandPathVariable( CTEXTSTR path )
 						tmp_path = tmp;
 				}
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
-				if( (*winfile_local).flags.bLogOpenClose )
+				if( ( *winfile_local ).flags.bLogOpenClose )
 					lprintf( "transform subst [%s]", tmp_path );
 #endif
 			}
@@ -57731,83 +61505,72 @@ TEXTSTR ExpandPathVariable( CTEXTSTR path )
 	}
 	return tmp_path;
 }
-TEXTSTR ExpandPathEx( CTEXTSTR path, struct file_system_interface *fsi )
+TEXTSTR ExpandPathEx( CTEXTSTR path, struct file_system_interface* fsi )
 {
 	TEXTSTR tmp_path = NULL;
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
-	if( (*winfile_local).flags.bLogOpenClose )
+	if( ( *winfile_local ).flags.bLogOpenClose )
 		lprintf( "input path is [%s]", path );
 #endif
 	LocalInit();
-	if( path )
-	{
-		if( !fsi && !IsAbsolutePath( path ) )
-		{
-			if( ( path[0] == '.' ) && ( ( path[1] == 0 ) || ( path[1] == '/' ) || ( path[1] == '\\' ) ) )
-			{
+	if( path ) {
+		if( !fsi && !IsAbsolutePath( path ) ) {
+			if( ( path[0] == '.' ) && ( ( path[1] == 0 ) || ( path[1] == '/' ) || ( path[1] == '\\' ) ) ) {
 				TEXTCHAR here[256];
 				size_t len;
 				GetCurrentPath( here, sizeof( here ) );
 				tmp_path = NewArray( TEXTCHAR, len = ( StrLen( here ) + StrLen( path ) ) );
 				tnprintf( tmp_path, len, "%s%s%s"
-						 , here
-						 , path[1]?"/":""
-						 , path[1]?(path + 2):"" );
+					, here
+					, path[1] ? SYS_PATHCHAR : ""
+					, path[1] ? ( path + 2 ) : "" );
 			}
-			else if( ( path[0] == '@' ) && ( ( path[1] == '/' ) || ( path[1] == '\\' ) ) )
-			{
+			else if( ( path[0] == '@' ) && ( ( path[1] == '/' ) || ( path[1] == '\\' ) ) ) {
 				CTEXTSTR here;
 				size_t len;
 				here = GetLibraryPath();
 				tmp_path = NewArray( TEXTCHAR, len = ( StrLen( here ) + StrLen( path ) ) );
-				tnprintf( tmp_path, len, "%s/%s", here, path + 2 );
+				tnprintf( tmp_path, len, "%s" SYS_PATHCHAR "%s", here, path + 2 );
 			}
-			else if( ( path[0] == '#' ) && ( ( path[1] == '/' ) || ( path[1] == '\\' ) ) )
-			{
+			else if( ( path[0] == '#' ) && ( ( path[1] == '/' ) || ( path[1] == '\\' ) ) ) {
 				CTEXTSTR here;
 				size_t len;
 				here = GetProgramPath();
 				tmp_path = NewArray( TEXTCHAR, len = ( StrLen( here ) + StrLen( path ) ) );
-				tnprintf( tmp_path, len, "%s/%s", here, path + 2 );
+				tnprintf( tmp_path, len, "%s" SYS_PATHCHAR "%s", here, path + 2 );
 			}
-			else if( ( path[0] == '~' ) && ( ( path[1] == '/' ) || ( path[1] == '\\' ) ) )
-			{
+			else if( ( path[0] == '~' ) && ( ( path[1] == '/' ) || ( path[1] == '\\' ) ) ) {
 				CTEXTSTR here;
 				size_t len;
-				here = OSALOT_GetEnvironmentVariable("HOME");
+				here = OSALOT_GetEnvironmentVariable( "HOME" );
 				tmp_path = NewArray( TEXTCHAR, len = ( StrLen( here ) + StrLen( path ) ) );
-				tnprintf( tmp_path, len, "%s/%s", here, path + 2 );
+				tnprintf( tmp_path, len, "%s" SYS_PATHCHAR "%s", here, path + 2 );
 			}
-			else if( ( path[0] == '*' ) && ( ( path[1] == '/' ) || ( path[1] == '\\' ) ) )
-			{
+			else if( ( path[0] == '*' ) && ( ( path[1] == '/' ) || ( path[1] == '\\' ) ) ) {
 				CTEXTSTR here;
 				size_t len;
-				here = (*winfile_local).data_file_root;
+				here = ( *winfile_local ).data_file_root;
 				tmp_path = NewArray( TEXTCHAR, len = ( StrLen( here ) + StrLen( path ) ) );
-				tnprintf( tmp_path, len, "%s/%s", here, path + 2 );
+				tnprintf( tmp_path, len, "%s" SYS_PATHCHAR "%s", here, path + 2 );
 			}
-			else if( ( path[0] == ';' ) && ( ( path[1] == '/' ) || ( path[1] == '\\' ) ) )
-			{
+			else if( ( path[0] == ';' ) && ( ( path[1] == '/' ) || ( path[1] == '\\' ) ) ) {
 				CTEXTSTR here;
 				size_t len;
-				here = (*winfile_local).local_data_file_root;
+				here = ( *winfile_local ).local_data_file_root;
 				tmp_path = NewArray( TEXTCHAR, len = ( StrLen( here ) + StrLen( path ) ) );
-				tnprintf( tmp_path, len, "%s/%s", here, path + 2 );
+				tnprintf( tmp_path, len, "%s" SYS_PATHCHAR "%s", here, path + 2 );
 			}
-			else if( path[0] == '^' && ( ( path[1] == '/' ) || ( path[1] == '\\' ) ) )
-			{
+			else if( path[0] == '^' && ( ( path[1] == '/' ) || ( path[1] == '\\' ) ) ) {
 				CTEXTSTR here;
 				size_t len;
 				here = GetStartupPath();
 				tmp_path = NewArray( TEXTCHAR, len = ( StrLen( here ) + StrLen( path ) ) );
-				tnprintf( tmp_path, len, "%s/%s", here, path + 2 );
+				tnprintf( tmp_path, len, "%s" SYS_PATHCHAR "%s", here, path + 2 );
 			}
-			else if( path[0] == '%' )
-			{
+			else if( path[0] == '%' ) {
 				tmp_path = ExpandPathVariable( path );
 			}
-			else
-			{
+			else {
 				tmp_path = StrDup( path );
 			}
 #if __ANDROID__
@@ -57821,33 +61584,31 @@ TEXTSTR ExpandPathEx( CTEXTSTR path, struct file_system_interface *fsi )
 					len = StrLen( here );
 				else
 					len = 0;
-		/*
-				if( (*winfile_local).flags.bLogOpenClose )
-					lprintf( "Fix dots in [%s]", tmp_path );
-				for( ofs = len+1; tmp_path[ofs]; ofs++ )
-				{
-					if( tmp_path[ofs] == '/' )
-						tmp_path[ofs] = '.';
-					if( tmp_path[ofs] == '\\' )
-						tmp_path[ofs] = '.';
-				}
-				if( (*winfile_local).flags.bLogOpenClose )
-				lprintf( "Fixed result [%s]", tmp_path );
-			*/
+				/*
+						if( (*winfile_local).flags.bLogOpenClose )
+							lprintf( "Fix dots in [%s]", tmp_path );
+						for( ofs = len+1; tmp_path[ofs]; ofs++ )
+						{
+							if( tmp_path[ofs] == '/' )
+								tmp_path[ofs] = '.';
+							if( tmp_path[ofs] == '\\' )
+								tmp_path[ofs] = '.';
+						}
+						if( (*winfile_local).flags.bLogOpenClose )
+						lprintf( "Fixed result [%s]", tmp_path );
+					*/
 			}
 #endif
 		}
-		else if( StrChr( path, '%' ) != NULL )
-		{
+		else if( StrChr( path, '%' ) != NULL ) {
 			tmp_path = ExpandPathVariable( path );
 		}
-		else
-		{
+		else {
 			tmp_path = StrDup( path );
 		}
 	}
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
-	if( (*winfile_local).flags.bLogOpenClose )
+	if( ( *winfile_local ).flags.bLogOpenClose )
 		lprintf( "output path is [%s]", tmp_path );
 #endif
 	return tmp_path;
@@ -57856,75 +61617,67 @@ TEXTSTR ExpandPath( CTEXTSTR path )
 {
 	return ExpandPathEx( path, NULL );
 }
-INDEX  SetGroupFilePath ( CTEXTSTR group, CTEXTSTR path )
+INDEX  SetGroupFilePath( CTEXTSTR group, CTEXTSTR path )
 {
-	struct Group *filegroup = GetGroupFilePath( group );
-	if( !filegroup )
-	{
+	struct Group* filegroup = GetGroupFilePath( group );
+	if( !filegroup ) {
 		TEXTCHAR tmp[256];
 		filegroup = New( struct Group );
 		filegroup->name = StrDup( group );
 		filegroup->base_path = StrDup( path );
 		tnprintf( tmp, sizeof( tmp ), "file group/%s", group );
 #ifndef __NO_OPTIONS__
-		if( (*winfile_local).have_default )
-		{
+		if( ( *winfile_local ).have_default ) {
 			TEXTCHAR tmp2[256];
 			SACK_GetProfileString( GetProgramName(), tmp, "", tmp2, sizeof( tmp2 ) );
-		if( StrCaseCmp( path, tmp2 ) )
+			if( StrCaseCmp( path, tmp2 ) )
 				SACK_WriteProfileString( GetProgramName(), tmp, path );
 		}
 #endif
-		AddLink( &(*winfile_local).groups, filegroup );
-		(*winfile_local).have_default = TRUE;
+		AddLink( &( *winfile_local ).groups, filegroup );
+		( *winfile_local ).have_default = TRUE;
 	}
-	else
-	{
+	else {
 		Deallocate( TEXTCHAR*, filegroup->base_path );
 		filegroup->base_path = StrDup( path );
 	}
-	return FindLink( &(*winfile_local).groups, filegroup );
+	return FindLink( &( *winfile_local ).groups, filegroup );
 }
 void SetDefaultFilePath( CTEXTSTR path )
 {
 	TEXTSTR tmp_path = NULL;
-	struct Group *filegroup;
+	struct Group* filegroup;
 	LocalInit();
-	filegroup = (struct Group *)GetLink( &(*winfile_local).groups, 0 );
+	filegroup = ( struct Group* )GetLink( &( *winfile_local ).groups, 0 );
 	tmp_path = ExpandPath( path );
-	if( (*winfile_local).groups && filegroup )
-	{
+	if( ( *winfile_local ).groups && filegroup ) {
 		Deallocate( TEXTSTR, filegroup->base_path );
-		filegroup->base_path = StrDup( tmp_path?tmp_path:path );
+		filegroup->base_path = StrDup( tmp_path ? tmp_path : path );
 	}
-	else
-	{
-		SetGroupFilePath( "Default", tmp_path?tmp_path:path );
+	else {
+		SetGroupFilePath( "Default", tmp_path ? tmp_path : path );
 	}
 	if( tmp_path )
 		Deallocate( TEXTCHAR*, tmp_path );
 }
-static TEXTSTR PrependBasePathEx( INDEX groupid, struct Group *group, CTEXTSTR filename, LOGICAL expand_path )
+static TEXTSTR PrependBasePathEx( INDEX groupid, struct Group* group, CTEXTSTR filename, LOGICAL expand_path )
 {
-	TEXTSTR real_filename = filename?ExpandPath( filename ):NULL;
+	TEXTSTR real_filename = filename ? ExpandPath( filename ) : NULL;
 	TEXTSTR fullname;
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
-	if( (*winfile_local).flags.bLogOpenClose )
+	if( ( *winfile_local ).flags.bLogOpenClose )
 		lprintf( "Prepend to {%s} %p %" _size_f, real_filename, group, groupid );
 #endif
-	if( (*winfile_local).groups )
-	{
+	if( ( *winfile_local ).groups ) {
 		//SetDefaultFilePath( GetProgramPath() );
-		if( !group )
-		{
+		if( !group ) {
 			if( groupid < 4096 )
-				group = (struct Group *)GetLink( &(*winfile_local).groups, groupid );
+				group = ( struct Group* )GetLink( &( *winfile_local ).groups, groupid );
 		}
 	}
-	if( !group || ( filename && ( IsAbsolutePath( real_filename ) ) ) )
-	{
+	if( !group || ( filename && ( IsAbsolutePath( real_filename ) ) ) ) {
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
-		if( (*winfile_local).flags.bLogOpenClose )
+		if( ( *winfile_local ).flags.bLogOpenClose )
 			lprintf( "already an absolute path.  [%s]", real_filename );
 #endif
 		return real_filename;
@@ -57936,12 +61689,12 @@ static TEXTSTR PrependBasePathEx( INDEX groupid, struct Group *group, CTEXTSTR f
 			tmp_path = ExpandPath( group->base_path );
 		else
 			tmp_path = group->base_path;
-		fullname = NewArray( TEXTCHAR, len = StrLen( filename ) + StrLen(tmp_path) + 2 );
+		fullname = NewArray( TEXTCHAR, len = StrLen( filename ) + StrLen( tmp_path ) + 2 );
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
-		if( (*winfile_local).flags.bLogOpenClose )
-			lprintf("prepend %s[%s] with %s", group->base_path, tmp_path, filename );
+		if( ( *winfile_local ).flags.bLogOpenClose )
+			lprintf( "prepend %s[%s] with %s", group->base_path, tmp_path, filename );
 #endif
-		tnprintf( fullname, len, "%s/%s", tmp_path, real_filename );
+		tnprintf( fullname, len, "%s" SYS_PATHCHAR "%s", tmp_path, real_filename );
 		{
 			// resolve recusive % paths...
 			TEXTSTR tmp2 = ExpandPath( fullname );
@@ -57954,29 +61707,28 @@ static TEXTSTR PrependBasePathEx( INDEX groupid, struct Group *group, CTEXTSTR f
 			static TEXTCHAR here[256];
 			static size_t len;
 			size_t ofs;
-			if( !here[0] )
-			{
+			if( !here[0] ) {
 				GetCurrentPath( here, sizeof( here ) );
 			}
 			if( StrStr( tmp_path, here ) )
 				len = StrLen( here );
 			else
 				len = 0;
-		/*
-			if( (*winfile_local).flags.bLogOpenClose )
-				lprintf( "Fix dots in [%s]", fullname );
-			for( ofs = len+1; fullname[ofs]; ofs++ )
-			{
-				if( fullname[ofs] == '/' )
-					fullname[ofs] = '.';
-				if( fullname[ofs] == '\\' )
-					fullname[ofs] = '.';
-			}
-		*/
+			/*
+				if( (*winfile_local).flags.bLogOpenClose )
+					lprintf( "Fix dots in [%s]", fullname );
+				for( ofs = len+1; fullname[ofs]; ofs++ )
+				{
+					if( fullname[ofs] == '/' )
+						fullname[ofs] = '.';
+					if( fullname[ofs] == '\\' )
+						fullname[ofs] = '.';
+				}
+			*/
 		}
 #endif
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
-		if( (*winfile_local).flags.bLogOpenClose )
+		if( ( *winfile_local ).flags.bLogOpenClose )
 			lprintf( "result %s", fullname );
 #endif
 		if( expand_path )
@@ -57985,13 +61737,13 @@ static TEXTSTR PrependBasePathEx( INDEX groupid, struct Group *group, CTEXTSTR f
 	}
 	return fullname;
 }
-static TEXTSTR PrependBasePath( INDEX groupid, struct Group *group, CTEXTSTR filename )
+static TEXTSTR PrependBasePath( INDEX groupid, struct Group* group, CTEXTSTR filename )
 {
-   return PrependBasePathEx(groupid,group,filename,TRUE );
+	return PrependBasePathEx( groupid, group, filename, TRUE );
 }
 TEXTSTR sack_prepend_path( INDEX group, CTEXTSTR filename )
 {
-	struct Group *filegroup = (struct Group *)GetLink( &(*winfile_local).groups, group );
+	struct Group* filegroup = ( struct Group* )GetLink( &( *winfile_local ).groups, group );
 	TEXTSTR result = PrependBasePath( group, filegroup, filename );
 	return result;
 }
@@ -57999,30 +61751,30 @@ TEXTSTR sack_prepend_path( INDEX group, CTEXTSTR filename )
 #define HANDLE int
 #define INVALID_HANDLE_VALUE -1
 #endif
-static void DetectUnicodeBOM( FILE *file ) {
-   //00 00 FE FF     UTF-32, big-endian
-   //FF FE 00 00     UTF-32, little-endian
-   //FE FF           UTF-16, big-endian
-   //FF FE           UTF-16, little-endian
-   //EF BB BF        UTF-8
-//Encoding	Representation (hexadecimal)	Representation (decimal)	Bytes as CP1252 characters
-//UTF-8[t 1]		EF BB BF		239 187 191
-//UTF-16 (BE)		FE FF			254 255
-//UTF-16 (LE)		FF FE			255 254
-//UTF-32 (BE)		00 00 FE FF		0 0 254 255
-//UTF-32 (LE)		FF FE 00 00[t 2]	255 254 0 0
-//UTF-7[t 1]		2B 2F 76 38             43 47 118 56	+/v9
-//			2B 2F 76 39		43 47 118 43	+/v+
-//			2B 2F 76 2B             43 47 118 47	+/v/
-//			2B 2F 76 2F[t 3]	43 47 118 57	+/v8
-//			2B 2F 76 38 2D[t 4]	43 47 118 56 45	+/v8-
-//
-//UTF-1[t 1]		F7 64 4C	247 100 76
-//UTF-EBCDIC[t 1]	DD 73 66 73	221 115 102 115
-//SCSU[t 1]		0E FE FF[t 5]	14 254 255
-//BOCU-1[t 1]		FB EE 28	251 238 40
-//GB-18030[t 1]		84 31 95 33	132 49 149 51
-	struct file* _file = (struct file*)file;
+static void DetectUnicodeBOM( FILE* file ) {
+	//00 00 FE FF     UTF-32, big-endian
+	//FF FE 00 00     UTF-32, little-endian
+	//FE FF           UTF-16, big-endian
+	//FF FE           UTF-16, little-endian
+	//EF BB BF        UTF-8
+ //Encoding	Representation (hexadecimal)	Representation (decimal)	Bytes as CP1252 characters
+ //UTF-8[t 1]		EF BB BF		239 187 191
+ //UTF-16 (BE)		FE FF			254 255
+ //UTF-16 (LE)		FF FE			255 254
+ //UTF-32 (BE)		00 00 FE FF		0 0 254 255
+ //UTF-32 (LE)		FF FE 00 00[t 2]	255 254 0 0
+ //UTF-7[t 1]		2B 2F 76 38             43 47 118 56	+/v9
+ //			2B 2F 76 39		43 47 118 43	+/v+
+ //			2B 2F 76 2B             43 47 118 47	+/v/
+ //			2B 2F 76 2F[t 3]	43 47 118 57	+/v8
+ //			2B 2F 76 38 2D[t 4]	43 47 118 56 45	+/v8-
+ //
+ //UTF-1[t 1]		F7 64 4C	247 100 76
+ //UTF-EBCDIC[t 1]	DD 73 66 73	221 115 102 115
+ //SCSU[t 1]		0E FE FF[t 5]	14 254 255
+ //BOCU-1[t 1]		FB EE 28	251 238 40
+ //GB-18030[t 1]		84 31 95 33	132 49 149 51
+	struct file* _file = ( struct file* )file;
 	// file was opened with 't' flag, test what sort of 't' the file might be.
 	// can result in conversion based on UNICODE (utf-16) compilation flag is set or not (UTF8).
 	if( _file->textmode == TM_UNKNOWN ) {
@@ -58042,34 +61794,41 @@ static void DetectUnicodeBOM( FILE *file ) {
 			if( bytes[1] == 0xBB && bytes[2] == 0xBF ) {
 				_file->textmode = TM_UTF8;
 				sack_fseek( file, 3, SEEK_SET );
-			} else {
+			}
+			else {
 				_file->textmode = TM_UTF8;
 			}
-		} else if( bytes[0] == 0xFF ) {
+		}
+		else if( bytes[0] == 0xFF ) {
 			// UTF32/16 LE test
 			if( bytes[1] == 0xFE ) {
 				if( bytes[2] == 0 && bytes[3] == 0 ) {
 					_file->textmode = TM_UTF32LE;
 				}
 			}
-		} else if( bytes[0] == 0xFE ) {
+		}
+		else if( bytes[0] == 0xFE ) {
 			// UTF16ZBE test
 			if( bytes[1] == 0xFF ) {
 				_file->textmode = TM_UTF16BE;
-			} else {
+			}
+			else {
 				_file->textmode = TM_UTF8;
 			}
-		} else if( bytes[0] == 0 && bytes[1] == 0 ) {
+		}
+		else if( bytes[0] == 0 && bytes[1] == 0 ) {
 			// UTF32BE test...
 			if( bytes[2] == 0xFE && bytes[3] == 0xFF ) {
 				_file->textmode = TM_UTF32BE;
-			} else
+			}
+			else
 				_file->textmode = TM_UTF8;
-		} else {
+		}
+		else {
 		}
 	}
 }
-static void DecodeFopenOpts( struct file *file, CTEXTSTR opts ) {
+static void DecodeFopenOpts( struct file* file, CTEXTSTR opts ) {
 	CTEXTSTR op = opts;
 	for( ; op[0]; op++ ) {
 		if( op[0] == 'w' || op[0] == 'a' || op[0] == 'r' || op[0] == '+' )
@@ -58077,11 +61836,13 @@ static void DecodeFopenOpts( struct file *file, CTEXTSTR opts ) {
 		if( op[0] == ' ' ) continue;
 		if( op[0] == 't' ) {
 			file->textmode = TM_UNKNOWN;
-		} else if( op[0] == 'b' ) {
+		}
+		else if( op[0] == 'b' ) {
  // also the default.
 			file->textmode = TM_BINARY;
-		} else if( op[0] == ',' ) {
-			const char *restore = op;
+		}
+		else if( op[0] == ',' ) {
+			const char* restore = op;
 			op++;
 			while( op[0] == ' ' ) op++;
 			if( op[0] == 'c' ) op++; else { op = restore; continue; }
@@ -58126,125 +61887,100 @@ static void DecodeFopenOpts( struct file *file, CTEXTSTR opts ) {
 HANDLE sack_open( INDEX group, CTEXTSTR filename, int opts, ... )
 {
 	HANDLE handle;
-	struct file *file;
+	struct file* file;
 	INDEX idx;
-	EnterCriticalSec( &(*winfile_local).cs_files );
-	LIST_FORALL( (*winfile_local).files, idx, struct file *, file )
+	EnterCriticalSec( &( *winfile_local ).cs_files );
+	LIST_FORALL( ( *winfile_local ).files, idx, struct file*, file )
 	{
-		if( StrCmp( file->name, filename ) == 0 )
-		{
+		if( StrCmp( file->name, filename ) == 0 ) {
 			break;
 		}
 	}
-	LeaveCriticalSec( &(*winfile_local).cs_files );
-	if( !file )
-	{
-		struct Group *filegroup = (struct Group *)GetLink( &(*winfile_local).groups, group );
+	LeaveCriticalSec( &( *winfile_local ).cs_files );
+	if( !file ) {
+		struct Group* filegroup = ( struct Group* )GetLink( &( *winfile_local ).groups, group );
 		file = New( struct file );
+		file->deleted = file->delete_on_close = 0;
 		file->name = StrDup( filename );
 		file->fullname = PrependBasePath( group, filegroup, filename );
 		file->wfullname = CharWConvert( file->fullname );
 		file->handles = NULL;
 		file->files = NULL;
 		file->group = group;
-		EnterCriticalSec( &(*winfile_local).cs_files );
-		AddLink( &(*winfile_local).files,file );
-		LeaveCriticalSec( &(*winfile_local).cs_files );
+		EnterCriticalSec( &( *winfile_local ).cs_files );
+		AddLink( &( *winfile_local ).files, file );
+		LeaveCriticalSec( &( *winfile_local ).cs_files );
 	}
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
-	if( (*winfile_local).flags.bLogOpenClose )
+	if( ( *winfile_local ).flags.bLogOpenClose )
 		lprintf( "Open File: [%s]", file->fullname );
 #endif
 #ifdef __LINUX__
 #  undef open
 	{
-#  ifdef UNICODE
-		char *tmpfile = CStrDup( file->fullname );
-		handle = open( tmpfile, opts );
-		Deallocate( char *, tmpfile );
-#  else
 		handle = open( file->fullname, opts );
-#  endif
 	}
 #  if !defined( __FILESYS_NO_FILE_LOGGING__ )
-	if( (*winfile_local).flags.bLogOpenClose )
+	if( ( *winfile_local ).flags.bLogOpenClose )
 		lprintf( "open %s %d %d", file->fullname, handle, opts );
 #  endif
 #else
-	switch( opts & 3 )
-	{
+	switch( opts & 3 ) {
 	case 0:
 	default:
-	handle = CreateFileW( file->wfullname
-							, GENERIC_READ
-							, FILE_SHARE_READ
-							, NULL
-							, ((opts&O_CREAT)?CREATE_ALWAYS:OPEN_EXISTING)
-							, FILE_ATTRIBUTE_NORMAL
-							, NULL );
-	break;
+		handle = CreateFileW( file->wfullname
+			, GENERIC_READ
+			, FILE_SHARE_READ
+			, NULL
+			, ( ( opts & O_CREAT ) ? CREATE_ALWAYS : OPEN_EXISTING )
+			, FILE_ATTRIBUTE_NORMAL
+			, NULL );
+		break;
 	case 1:
-	handle = CreateFileW( file->wfullname
-							, GENERIC_WRITE
-							, FILE_SHARE_READ|FILE_SHARE_WRITE
-							, NULL
-							, ((opts&O_CREAT)?CREATE_ALWAYS:OPEN_EXISTING)
-							, FILE_ATTRIBUTE_NORMAL
-							, NULL );
+		handle = CreateFileW( file->wfullname
+			, GENERIC_WRITE
+			, FILE_SHARE_READ | FILE_SHARE_WRITE
+			, NULL
+			, ( ( opts & O_CREAT ) ? CREATE_ALWAYS : OPEN_EXISTING )
+			, FILE_ATTRIBUTE_NORMAL
+			, NULL );
 		break;
 	case 2:
 	case 3:
-	handle = CreateFileW( file->wfullname
-							,(GENERIC_READ|GENERIC_WRITE)
-							, FILE_SHARE_READ|FILE_SHARE_WRITE
-							, NULL
-							, ((opts&O_CREAT)?CREATE_ALWAYS:OPEN_EXISTING)
-							, FILE_ATTRIBUTE_NORMAL
-							, NULL );
-	break;
+		handle = CreateFileW( file->wfullname
+			, ( GENERIC_READ | GENERIC_WRITE )
+			, FILE_SHARE_READ | FILE_SHARE_WRITE
+			, NULL
+			, ( ( opts & O_CREAT ) ? CREATE_ALWAYS : OPEN_EXISTING )
+			, FILE_ATTRIBUTE_NORMAL
+			, NULL );
+		break;
 	}
 #  if !defined( __FILESYS_NO_FILE_LOGGING__ )
-	if( (*winfile_local).flags.bLogOpenClose )
+	if( ( *winfile_local ).flags.bLogOpenClose )
 		lprintf( "open %s %p %08x", file->fullname, (POINTER)handle, opts );
 #  endif
 #endif
-	if( handle == INVALID_HANDLE_VALUE )
-	{
+	if( handle == INVALID_HANDLE_VALUE ) {
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
-		if( (*winfile_local).flags.bLogOpenClose )
+		if( ( *winfile_local ).flags.bLogOpenClose )
 			lprintf( "Failed to open file [%s]=[%s]", file->name, file->fullname );
 #endif
 		return INVALID_HANDLE_VALUE;
 	}
-	if( handle != INVALID_HANDLE_VALUE )
-	{
-		HANDLE *holder = New( HANDLE );
+	if( handle != INVALID_HANDLE_VALUE ) {
+		HANDLE* holder = New( HANDLE );
 		holder[0] = handle;
 		AddLink( &file->handles, holder );
 	}
 	return handle;
 }
-#ifdef WIN32
-HANDLE sack_openfile( INDEX group,CTEXTSTR filename, OFSTRUCT *of, int flags )
+struct file* FindFileByHandle( HANDLE file_file )
 {
-#ifdef _UNICODE
-	char *tmpname = WcharConvert( filename );
-#undef OpenFile
-	HANDLE result = (HANDLE)OpenFile(tmpname,of,flags);
-	Deallocate( char*, tmpname );
-	return result;
-#else
-#undef OpenFile
-	return (HANDLE)(uintptr_t)OpenFile(filename,of,flags);
-#endif
-}
-#endif
-struct file *FindFileByHandle( HANDLE file_file )
-{
-	struct file *file;
+	struct file* file;
 	INDEX idx;
-	EnterCriticalSec( &(*winfile_local).cs_files );
-	LIST_FORALL( (*winfile_local).files, idx, struct file *, file )
+	EnterCriticalSec( &( *winfile_local ).cs_files );
+	LIST_FORALL( ( *winfile_local ).files, idx, struct file*, file )
 	{
 		INDEX idx2;
 		HANDLE* check;
@@ -58256,14 +61992,14 @@ struct file *FindFileByHandle( HANDLE file_file )
 		if( check )
 			break;
 	}
-	LeaveCriticalSec( &(*winfile_local).cs_files );
+	LeaveCriticalSec( &( *winfile_local ).cs_files );
 	return file;
 }
 //----------------------------------------------------------------------------
-LOGICAL sack_iset_eof ( INDEX file_handle )
+LOGICAL sack_iset_eof( INDEX file_handle )
 {
-	HANDLE *holder = (HANDLE*)GetLink( &(*winfile_local).handles, file_handle );
-	HANDLE handle = holder?holder[0]:INVALID_HANDLE_VALUE;
+	HANDLE* holder = (HANDLE*)GetLink( &( *winfile_local ).handles, file_handle );
+	HANDLE handle = holder ? holder[0] : INVALID_HANDLE_VALUE;
 #ifdef _WIN32
 	return SetEndOfFile( handle );
 #else
@@ -58271,17 +62007,17 @@ LOGICAL sack_iset_eof ( INDEX file_handle )
 #endif
 }
 //----------------------------------------------------------------------------
-struct file *FindFileByFILE( FILE *file_file )
+struct file* FindFileByFILE( FILE* file_file )
 {
-	struct file *file;
+	struct file* file;
 	INDEX idx;
 	LocalInit();
-	EnterCriticalSec( &(*winfile_local).cs_files );
-	LIST_FORALL( (*winfile_local).files, idx, struct file *, file )
+	EnterCriticalSec( &( *winfile_local ).cs_files );
+	LIST_FORALL( ( *winfile_local ).files, idx, struct file*, file )
 	{
 		INDEX idx2;
-		FILE *check;
-		LIST_FORALL( file->files, idx2, FILE *, check )
+		FILE* check;
+		LIST_FORALL( file->files, idx2, FILE*, check )
 		{
 			if( check == file_file )
 				break;
@@ -58289,22 +62025,42 @@ struct file *FindFileByFILE( FILE *file_file )
 		if( check )
 			break;
 	}
-	LeaveCriticalSec( &(*winfile_local).cs_files );
+	LeaveCriticalSec( &( *winfile_local ).cs_files );
 	return file;
 }
-LOGICAL sack_set_eof ( HANDLE file_handle )
+//----------------------------------------------------------------------------
+struct file* FindFileByName( INDEX group, char const* filename, struct file_system_mounted_interface* mount, INDEX* allocedIndex )
 {
-	struct file *file;
-	file = FindFileByFILE( (FILE*)(uintptr_t)file_handle );
-	if( file )
+	struct file* file;
+	INDEX idx;
+	LocalInit();
+	EnterCriticalSec( &( *winfile_local ).cs_files );
+	LIST_FORALL( ( *winfile_local ).files, idx, struct file*, file )
 	{
-		if( file->mount )
-		{
+		if( ( file->group == group )
+			&& ( StrCmp( file->name, filename ) == 0 )
+			&& ( ( !mount ) || file->mount == mount ) ) {
+			if( allocedIndex ) {
+				AddLink( &file->files, allocedIndex );
+				allocedIndex[0] = FindLink( &file->files, allocedIndex );
+			}
+			break;
+		}
+	}
+	LeaveCriticalSec( &( *winfile_local ).cs_files );
+	return file;
+}
+//----------------------------------------------------------------------------
+LOGICAL sack_set_eof( HANDLE file_handle )
+{
+	struct file* file;
+	file = FindFileByFILE( (FILE*)(uintptr_t)file_handle );
+	if( file ) {
+		if( file->mount ) {
 			file->mount->fsi->truncate( (void*)(uintptr_t)file_handle );
 			//lprintf( "result is %d", file->mount->fsi->size( (void*)file_handle ) );
 		}
-		else
-		{
+		else {
 #ifdef _WIN32
 			;
 #else
@@ -58313,10 +62069,9 @@ LOGICAL sack_set_eof ( HANDLE file_handle )
 		}
 		return TRUE;
 	}
-	else
-	{
-		HANDLE *holder = (HANDLE*)GetLink( &(*winfile_local).handles, (INDEX)file_handle );
-		HANDLE handle = holder?holder[0]:INVALID_HANDLE_VALUE;
+	else {
+		HANDLE* holder = (HANDLE*)GetLink( &( *winfile_local ).handles, (INDEX)file_handle );
+		HANDLE handle = holder ? holder[0] : INVALID_HANDLE_VALUE;
 #ifdef _WIN32
 		return SetEndOfFile( handle );
 #else
@@ -58325,19 +62080,16 @@ LOGICAL sack_set_eof ( HANDLE file_handle )
 	}
 }
 //----------------------------------------------------------------------------
-int sack_ftruncate( FILE *file_file )
+int sack_ftruncate( FILE* file_file )
 {
-	struct file *file;
+	struct file* file;
 	file = FindFileByFILE( file_file );
-	if( file )
-	{
-		if( file->mount && file->mount->fsi )
-		{
+	if( file ) {
+		if( file->mount && file->mount->fsi ) {
 			file->mount->fsi->truncate( (void*)file_file );
 			//lprintf( "result is %d", file->mount->fsi->size( (void*)file_file ) );
 		}
-		else
-		{
+		else {
 #ifdef _WIN32
 			return _chsize( _fileno( file_file ), ftell( file_file ) ) == 0;
 #else
@@ -58351,17 +62103,17 @@ int sack_ftruncate( FILE *file_file )
 //----------------------------------------------------------------------------
 long sack_tell( INDEX file_handle )
 {
-	HANDLE *holder = (HANDLE*)GetLink( &(*winfile_local).handles, file_handle );
-	HANDLE handle = holder?holder[0]:INVALID_HANDLE_VALUE;
+	HANDLE* holder = (HANDLE*)GetLink( &( *winfile_local ).handles, file_handle );
+	HANDLE handle = holder ? holder[0] : INVALID_HANDLE_VALUE;
 #ifdef WIN32
  // must have GENERIC_READ and/or GENERIC_WRITE
 	uint32_t length = SetFilePointer( handle
 	// do not move pointer
-								, 0
+		, 0
   // hFile is not large enough to need this pointer
-								, NULL
+		, NULL
   // provides offset from current position
-								, FILE_CURRENT);
+		, FILE_CURRENT );
 	return length;
 #else
 	return lseek( handle, 0, SEEK_SET );
@@ -58376,7 +62128,7 @@ HANDLE sack_creat( INDEX group, CTEXTSTR file, int opts, ... )
 int sack_lseek( HANDLE file_handle, int pos, int whence )
 {
 #ifdef _WIN32
-	return SetFilePointer(file_handle,pos,NULL,whence);
+	return SetFilePointer( file_handle, pos, NULL, whence );
 #else
 	return lseek( file_handle, pos, whence );
 #endif
@@ -58387,7 +62139,7 @@ int sack_read( HANDLE file_handle, POINTER buffer, int size )
 #ifdef _WIN32
 	DWORD dwLastReadResult;
 	//lprintf( "..." );
-	return (ReadFile( (HANDLE)file_handle, buffer, size, &dwLastReadResult, NULL )?dwLastReadResult:-1 );
+	return ( ReadFile( (HANDLE)file_handle, buffer, size, &dwLastReadResult, NULL ) ? dwLastReadResult : -1 );
 #else
 	return read( file_handle, buffer, size );
 #endif
@@ -58397,7 +62149,7 @@ int sack_write( HANDLE file_handle, CPOINTER buffer, int size )
 {
 #ifdef _WIN32
 	DWORD dwLastWrittenResult;
-	return (WriteFile( (HANDLE)file_handle, (POINTER)buffer, size, &dwLastWrittenResult, NULL )?dwLastWrittenResult:-1 );
+	return ( WriteFile( (HANDLE)file_handle, (POINTER)buffer, size, &dwLastWrittenResult, NULL ) ? dwLastWrittenResult : -1 );
 #else
 	return write( file_handle, buffer, size );
 #endif
@@ -58410,12 +62162,11 @@ INDEX sack_icreat( INDEX group, CTEXTSTR file, int opts, ... )
 //----------------------------------------------------------------------------
 int sack_close( HANDLE file_handle )
 {
-	struct file *file = FindFileByHandle( (HANDLE)file_handle );
-	if( file )
-	{
+	struct file* file = FindFileByHandle( (HANDLE)file_handle );
+	if( file ) {
 		SetLink( &file->handles, (INDEX)file_handle, NULL );
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
-		if( (*winfile_local).flags.bLogOpenClose )
+		if( ( *winfile_local ).flags.bLogOpenClose )
 			lprintf( "Close %s", file->fullname );
 #endif
 		Deallocate( wchar_t*, file->wfullname );
@@ -58427,7 +62178,7 @@ int sack_close( HANDLE file_handle )
 	}
 	if( file_handle != INVALID_HANDLE_VALUE )
 #ifdef _WIN32
-		return CloseHandle((HANDLE)file_handle);
+		return CloseHandle( (HANDLE)file_handle );
 #else
 		return close( file_handle );
 #endif
@@ -58439,24 +62190,23 @@ INDEX sack_iopen( INDEX group, CTEXTSTR filename, int opts, ... )
 	HANDLE h;
 	INDEX result;
 	h = sack_open( group, filename, opts );
-	if( h == INVALID_HANDLE_VALUE )
-	{
+	if( h == INVALID_HANDLE_VALUE ) {
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
-		if( (*winfile_local).flags.bLogOpenClose )
+		if( ( *winfile_local ).flags.bLogOpenClose )
 			lprintf( "Failed to open %s", filename );
 #endif
 		return INVALID_INDEX;
 	}
-	EnterCriticalSec( &(*winfile_local).cs_files );
+	EnterCriticalSec( &( *winfile_local ).cs_files );
 	{
-		HANDLE *holder = New( HANDLE );
+		HANDLE* holder = New( HANDLE );
 		holder[0] = h;
-		AddLink( &(*winfile_local).handles, holder );
-		result = FindLink( &(*winfile_local).handles, holder );
+		AddLink( &( *winfile_local ).handles, holder );
+		result = FindLink( &( *winfile_local ).handles, holder );
 	}
-	LeaveCriticalSec( &(*winfile_local).cs_files );
+	LeaveCriticalSec( &( *winfile_local ).cs_files );
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
-	if( (*winfile_local).flags.bLogOpenClose )
+	if( ( *winfile_local ).flags.bLogOpenClose )
 		lprintf( "return iopen of [%s]=%p(%" _size_f ")?", filename, (void*)(uintptr_t)h, (size_t)result );
 #endif
 	return result;
@@ -58465,46 +62215,46 @@ INDEX sack_iopen( INDEX group, CTEXTSTR filename, int opts, ... )
 int sack_iclose( INDEX file_handle )
 {
 	int result;
-	EnterCriticalSec( &(*winfile_local).cs_files );
+	EnterCriticalSec( &( *winfile_local ).cs_files );
 	{
-		HANDLE *holder = (HANDLE*)GetLink( &(*winfile_local).handles, file_handle );
-		HANDLE handle = holder?holder[0]:INVALID_HANDLE_VALUE;
-		SetLink( &(*winfile_local).handles, file_handle, 0 );
+		HANDLE* holder = (HANDLE*)GetLink( &( *winfile_local ).handles, file_handle );
+		HANDLE handle = holder ? holder[0] : INVALID_HANDLE_VALUE;
+		SetLink( &( *winfile_local ).handles, file_handle, 0 );
 		Deallocate( HANDLE*, holder );
 		result = sack_close( handle );
 	}
-	LeaveCriticalSec( &(*winfile_local).cs_files );
+	LeaveCriticalSec( &( *winfile_local ).cs_files );
 	return result;
 }
 //----------------------------------------------------------------------------
 int sack_ilseek( INDEX file_handle, size_t pos, int whence )
 {
 	int result;
-	EnterCriticalSec( &(*winfile_local).cs_files );
+	EnterCriticalSec( &( *winfile_local ).cs_files );
 	{
-		 HANDLE *holder = (HANDLE*)GetLink( &(*winfile_local).handles, file_handle );
-		 HANDLE handle = holder?holder[0]:INVALID_HANDLE_VALUE;
+		HANDLE* holder = (HANDLE*)GetLink( &( *winfile_local ).handles, file_handle );
+		HANDLE handle = holder ? holder[0] : INVALID_HANDLE_VALUE;
 #ifdef _WIN32
-		result = SetFilePointer(handle,(LONG)pos,((PLONG)&pos)+1,whence);
+		result = SetFilePointer( handle, (LONG)pos, ( (PLONG)&pos ) + 1, whence );
 #else
 		result = lseek( handle, pos, whence );
 #endif
 	}
-	LeaveCriticalSec( &(*winfile_local).cs_files );
+	LeaveCriticalSec( &( *winfile_local ).cs_files );
 	return result;
 }
 //----------------------------------------------------------------------------
 int sack_iread( INDEX file_handle, POINTER buffer, int size )
 {
-	EnterCriticalSec( &(*winfile_local).cs_files );
+	EnterCriticalSec( &( *winfile_local ).cs_files );
 	{
-		 HANDLE *holder = (HANDLE*)GetLink( &(*winfile_local).handles, file_handle );
-		 HANDLE handle = holder?holder[0]:INVALID_HANDLE_VALUE;
+		HANDLE* holder = (HANDLE*)GetLink( &( *winfile_local ).handles, file_handle );
+		HANDLE handle = holder ? holder[0] : INVALID_HANDLE_VALUE;
 #ifdef _WIN32
 		DWORD dwLastReadResult;
 		//lprintf( "... %p %p", file_handle, h );
-		LeaveCriticalSec( &(*winfile_local).cs_files );
-		return (ReadFile( handle, (POINTER)buffer, size, &dwLastReadResult, NULL )?dwLastReadResult:-1 );
+		LeaveCriticalSec( &( *winfile_local ).cs_files );
+		return ( ReadFile( handle, (POINTER)buffer, size, &dwLastReadResult, NULL ) ? dwLastReadResult : -1 );
 #else
 		return read( handle, buffer, size );
 #endif
@@ -58513,52 +62263,46 @@ int sack_iread( INDEX file_handle, POINTER buffer, int size )
 //----------------------------------------------------------------------------
 int sack_iwrite( INDEX file_handle, CPOINTER buffer, int size )
 {
-	EnterCriticalSec( &(*winfile_local).cs_files );
+	EnterCriticalSec( &( *winfile_local ).cs_files );
 	{
-		 HANDLE *holder = (HANDLE*)GetLink( &(*winfile_local).handles, file_handle );
-		 HANDLE handle = holder?holder[0]:INVALID_HANDLE_VALUE;
+		HANDLE* holder = (HANDLE*)GetLink( &( *winfile_local ).handles, file_handle );
+		HANDLE handle = holder ? holder[0] : INVALID_HANDLE_VALUE;
 #ifdef _WIN32
 		DWORD dwLastWrittenResult;
-		LeaveCriticalSec( &(*winfile_local).cs_files );
-		return (WriteFile( handle, (POINTER)buffer, size, &dwLastWrittenResult, NULL )?dwLastWrittenResult:-1 );
+		LeaveCriticalSec( &( *winfile_local ).cs_files );
+		return ( WriteFile( handle, (POINTER)buffer, size, &dwLastWrittenResult, NULL ) ? dwLastWrittenResult : -1 );
 #else
 		return write( handle, buffer, size );
 #endif
 	}
 }
 //----------------------------------------------------------------------------
-int sack_unlinkEx( INDEX group, CTEXTSTR filename, struct file_system_mounted_interface *mount )
+int sack_unlinkEx( INDEX group, CTEXTSTR filename, struct file_system_mounted_interface* mount )
 {
 	int noMount = 0;
-	if( !mount )
-		mount = (*winfile_local).default_mount;
+	if( !mount ) {
+		if( !FileSysThreadInfo._mounted_file_systems ) threadInit();
+		mount = FileSysThreadInfo.mounted_file_systems;
+	}
 	if( !mount )
 		noMount = 1;
-	while( mount || noMount )
-	{
+	while( mount || noMount ) {
 		int okay = 1;
-		if( !noMount && mount->fsi )
-		{
-			if( mount->fsi->exists( mount->psvInstance, filename ) )
-			{
+		if( mount->fsi ) {
+			if( mount->fsi->exists( mount->psvInstance, filename ) ) {
 				mount->fsi->_unlink( mount->psvInstance, filename );
 				okay = 0;
 			}
 		}
-		else
-		{
+		else {
 			TEXTSTR tmp = PrependBasePath( group, NULL, filename );
-#ifdef _WIN32
-			okay = DeleteFile(tmp);
-#else
-			okay = unlink( filename );
-#endif
+			okay = sack_filesys_unlink( 0, filename );
 			Deallocate( TEXTCHAR*, tmp );
 		}
 		if( !okay )
 			return !okay;
 		if( !noMount )
-			mount = mount->next;
+			mount = mount->nextLayer;
 		else
 			break;
 	}
@@ -58567,29 +62311,116 @@ int sack_unlinkEx( INDEX group, CTEXTSTR filename, struct file_system_mounted_in
 //----------------------------------------------------------------------------
 int sack_unlink( INDEX group, CTEXTSTR filename )
 {
-	return sack_unlinkEx( group, filename, (*winfile_local).mounted_file_systems );
+	if( !FileSysThreadInfo._mounted_file_systems ) threadInit();
+	return sack_unlinkEx( group, filename, FileSysThreadInfo.mounted_file_systems );
 }
 //----------------------------------------------------------------------------
-int sack_rmdir( INDEX group, CTEXTSTR filename )
+int sack_mkdirEx( INDEX group, CTEXTSTR filename, struct file_system_mounted_interface* mount ) {
+	TEXTSTR tmp = PrependBasePath( group, NULL, filename );
+	while( mount ) {
+		int okay = 0;
+		if( !mount->writeable ) {
+			mount = mount->nextLayer; continue;
+		}
+		if( mount->fsi && mount->fsi->is_directory ) {
+			if( mount->fsi->is_directory( mount->psvInstance, tmp ) ) {
+#if defined( WIN32 ) && defined( MSCVER )
+				_set_doserrno( EEXIST );
+#else
+				errno = EEXIST;
+#endif
+				return FALSE;
+			}
+		}
+		if( mount->fsi && mount->fsi->_mkdir ) {
+			okay = mount->fsi->_mkdir( mount->psvInstance, tmp );
+			if( okay ) {
+				{
+					struct directory* d;
+					INDEX i;
+					LIST_FORALL( ( *winfile_local ).directories, i, struct directory*, d ) {
+						if( strcmp( d->name, filename ) == 0 ) {
+							d->deleted = 0;
+							break;
+						}
+					}
+					if( !d ) {
+						d = New( struct directory );
+						d->name = StrDup( filename );
+						d->fullname = (TEXTSTR)Hold( tmp );
+						d->mount = mount;
+						d->wfullname = CharWConvert( d->fullname );
+						d->deleted = 0;
+						AddLink( &( *winfile_local ).directories, d );
+					}
+				}
+			}
+		}
+		if( okay ) {
+			Deallocate( TEXTCHAR*, tmp );
+			return !okay;
+		}
+		mount = mount->nextLayer;
+	}
+	Deallocate( TEXTCHAR*, tmp );
+	return 0;
+}
+int sack_mkdir( INDEX group, CTEXTSTR filename ) {
+	if( !FileSysThreadInfo._mounted_file_systems ) threadInit();
+	return sack_mkdirEx( group, filename, FileSysThreadInfo.mounted_file_systems );
+}
+static int sack_filesys_mkdir( uintptr_t psv, CTEXTSTR filename )
+{
+	return MakePath( filename );
+}
+//----------------------------------------------------------------------------
+int sack_rmdirEx( INDEX group, CTEXTSTR filename, struct file_system_mounted_interface* mount ) {
+	TEXTSTR tmp = PrependBasePath( group, NULL, filename );
+	while( mount ) {
+		int okay = 1;
+		if( !mount->writeable ) {
+			mount = mount->nextLayer; continue;
+		}
+		{
+			struct directory* d;
+			INDEX i;
+			LIST_FORALL( ( *winfile_local ).directories, i, struct directory*, d ) {
+				if( d->mount == mount && strcmp( d->name, filename ) == 0 ) {
+					d->deleted = 1;
+					break;
+				}
+			}
+		}
+		if( mount->fsi && mount->fsi->_rmdir ) {
+			okay = mount->fsi->_rmdir( mount->psvInstance, tmp );
+		}
+		if( okay ) {
+			Deallocate( TEXTCHAR*, tmp );
+			return okay;
+		}
+		mount = mount->nextLayer;
+	}
+	Deallocate( TEXTCHAR*, tmp );
+ // lie... we'll try to take care of that directory later, if they close the file in it.
+	return 1;
+}
+int sack_rmdir( INDEX group, CTEXTSTR filename ) {
+	if( !FileSysThreadInfo._mounted_file_systems ) threadInit();
+	return sack_rmdirEx( group, filename, FileSysThreadInfo.mounted_file_systems );
+}
+static int sack_filesys_rmdir( uintptr_t psv, CTEXTSTR filename )
 {
 #ifdef __LINUX__
 	int okay;
-	TEXTSTR tmp = PrependBasePath( group, NULL, filename );
-#ifdef UNICODE
-	char *tmpname = CStrDup( tmp );
-	okay = rmdir( tmpname );
-	Deallocate( char*, tmpname );
-#else
 	okay = rmdir( filename );
-#endif
-	Deallocate( TEXTCHAR*, tmp );
- // unlink returns TRUE is 0, else error...
+	// unlink returns TRUE is 0, else error...
 	return !okay;
 #else
 	int okay;
-	TEXTSTR tmp = PrependBasePath( group, NULL, filename );
-	okay = RemoveDirectory(tmp);
-	Deallocate( TEXTCHAR*, tmp );
+	//TEXTSTR tmp = PrependBasePath( group, NULL, filename );
+	wchar_t* wfilename = CharWConvert( filename );
+	okay = _wrmdir( wfilename );
+	Deallocate( wchar_t*, wfilename );
  // unlink returns TRUE is 0, else error...
 	return !okay;
 #endif
@@ -58597,57 +62428,45 @@ int sack_rmdir( INDEX group, CTEXTSTR filename )
 #undef open
 #undef fopen
 //----------------------------------------------------------------------------
-FILE * sack_fopenEx( INDEX group, CTEXTSTR filename, CTEXTSTR opts, struct file_system_mounted_interface *mount )
+FILE* sack_fopenEx( INDEX group, CTEXTSTR filename, CTEXTSTR opts, struct file_system_mounted_interface* mount )
 {
-	FILE *handle = NULL;
-	struct file *file;
-	INDEX idx;
+	FILE* handle = NULL;
+	struct file* file;
 	INDEX allocedIndex = INVALID_INDEX;
 	LOGICAL memalloc = FALSE;
-	LOGICAL single_mount = (mount != NULL );
+	LOGICAL single_mount = ( mount != NULL );
 	LocalInit();
-	EnterCriticalSec( &(*winfile_local).cs_files );
-	if( !mount )
-		mount = (*winfile_local).mounted_file_systems;
+	EnterCriticalSec( &( *winfile_local ).cs_files );
+	if( !mount ) {
+		if( !FileSysThreadInfo._mounted_file_systems ) threadInit();
+		mount = FileSysThreadInfo.mounted_file_systems;
+	}
 	if( !StrChr( opts, 'r' ) && !StrChr( opts, '+' ) )
-		while( mount )
   // skip roms...
-		{
+		while( mount ) {
 			//lprintf( "check mount %p %d", mount, mount->writeable );
 			if( mount->writeable )
 				break;
-			mount = mount->next;
+			mount = mount->nextLayer;
 		}
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
-	if( (*winfile_local).flags.bLogOpenClose )
-		lprintf( "open %s %p(%s) %s (%d)", filename, mount, mount->name, opts, mount?mount->writeable:1 );
+	if( ( *winfile_local ).flags.bLogOpenClose )
+		lprintf( "open %s %p(%s) %s (%d)", filename, mount, mount->name, opts, mount ? mount->writeable : 1 );
 #endif
-	LIST_FORALL( (*winfile_local).files, idx, struct file *, file )
-	{
-		if( ( file->group == group )
-			&& ( StrCmp( file->name, filename ) == 0 )
-			&& ( file->mount == mount ) )
-		{
-			AddLink( &file->files, &allocedIndex );
-			allocedIndex = FindLink( &file->files, &allocedIndex );
-			break;
-		}
-	}
-	LeaveCriticalSec( &(*winfile_local).cs_files );
-	if( !file )
-	{
+	file = FindFileByName( group, filename, mount, &allocedIndex );
+	LeaveCriticalSec( &( *winfile_local ).cs_files );
+	if( !file ) {
 		TEXTSTR tmpname = NULL;
-		struct Group *filegroup = (struct Group *)GetLink( &(*winfile_local).groups, group );
+		struct Group* filegroup = ( struct Group* )GetLink( &( *winfile_local ).groups, group );
 		file = New( struct file );
+		file->deleted = file->delete_on_close = 0;
 		memalloc = TRUE;
 		DecodeFopenOpts( file, opts );
-		if( !StrChr( opts, 'n' ) && StrChr( filename, '%' ) )
-		{
+		if( !StrChr( opts, 'n' ) && StrChr( filename, '%' ) ) {
 			tmpname = ExpandPathVariable( filename );
 			filename = tmpname;
 		}
-		if( !StrChr( opts, 'n' ) && (filename[0] == '@') || (filename[0] == '*') || (filename[0] == '~') )
-		{
+		if( !StrChr( opts, 'n' ) && ( filename[0] == '@' ) || ( filename[0] == '*' ) || ( filename[0] == '~' ) ) {
 			tmpname = ExpandPathEx( filename, NULL );
 			filename = tmpname;
 		}
@@ -58655,29 +62474,25 @@ FILE * sack_fopenEx( INDEX group, CTEXTSTR filename, CTEXTSTR opts, struct file_
 		file->files = NULL;
 		file->name = StrDup( filename );
 		file->mount = mount;
-		if( ( !file->mount || !file->mount->fsi ) && !IsAbsolutePath( filename ) )
-		{
+		if( ( !file->mount || !file->mount->fsi ) && !IsAbsolutePath( filename ) ) {
 			tmpname = ExpandPath( filename );
 			file->fullname = PrependBasePath( group, filegroup, tmpname );
 			Deallocate( TEXTCHAR*, tmpname );
 		}
-		else
-		{
-			if( mount && group == 0 )
-			{
+		else {
+			if( mount && group == 0 ) {
 				file->fullname = StrDup( file->name );
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
-				if( (*winfile_local).flags.bLogOpenClose )
+				if( ( *winfile_local ).flags.bLogOpenClose )
 					lprintf( "full is %s", file->fullname );
 #endif
 			}
-			else
-			{
+			else {
 				TEXTSTR tmp;
 				tmp = PrependBasePathEx( group, filegroup, file->name, !mount );
 				file->fullname = ExpandPath( tmp );
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
-				if( (*winfile_local).flags.bLogOpenClose )
+				if( ( *winfile_local ).flags.bLogOpenClose )
 					lprintf( "full is %s %d", file->fullname, (int)group );
 #endif
 				Deallocate( TEXTSTR, tmp );
@@ -58685,220 +62500,138 @@ FILE * sack_fopenEx( INDEX group, CTEXTSTR filename, CTEXTSTR opts, struct file_
 			//file->fullname = file->name;
 		}
 		file->group = group;
-		if( (file->fullname[0] == '@') || (file->fullname[0] == '*') || (file->fullname[0] == '~') )
-		{
+		if( ( file->fullname[0] == '@' ) || ( file->fullname[0] == '*' ) || ( file->fullname[0] == '~' ) ) {
 			TEXTSTR tmpname = ExpandPathEx( file->fullname, NULL );
 			Deallocate( TEXTSTR, file->fullname );
 			file->fullname = tmpname;
 		}
-		if( !StrChr( opts, 'n' ) && StrChr( file->fullname, '%' ) )
-		{
+		if( !StrChr( opts, 'n' ) && StrChr( file->fullname, '%' ) ) {
 			if( allocedIndex != INVALID_INDEX )
 				SetLink( &file->files, allocedIndex, NULL );
-			if( memalloc )
-			{
-				DeleteLink( &(*winfile_local).files, file );
+			if( memalloc ) {
+				DeleteLink( &( *winfile_local ).files, file );
 				Deallocate( TEXTCHAR*, file->name );
 				Deallocate( TEXTCHAR*, file->fullname );
-				Deallocate( struct file *, file );
+				Deallocate( struct file*, file );
 			}
 			//DebugBreak();
 			return NULL;
 		}
-		EnterCriticalSec( &(*winfile_local).cs_files );
+		EnterCriticalSec( &( *winfile_local ).cs_files );
 		if( allocedIndex != INVALID_INDEX )
-			SetLink( &(*winfile_local).files,allocedIndex, file );
+			SetLink( &( *winfile_local ).files, allocedIndex, file );
 		else
-			AddLink( &(*winfile_local).files, file );
-		LeaveCriticalSec( &(*winfile_local).cs_files );
+			AddLink( &( *winfile_local ).files, file );
+		LeaveCriticalSec( &( *winfile_local ).cs_files );
+	}
+	else {
+ // file is undeleted now.
+		file->deleted = 0;
 	}
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
-	if( (*winfile_local).flags.bLogOpenClose )
+	if( ( *winfile_local ).flags.bLogOpenClose )
 		lprintf( "Open File: [%s]", file->fullname );
 #endif
-	if( mount && mount->fsi )
-	{
-		if( StrChr( opts, 'r' ) && !StrChr( opts, '+' ) || !StrChr( opts, 'w' ) )
-		{
-			struct file_system_mounted_interface *test_mount = mount;
-			while( !handle && test_mount )
-			{
-				if( test_mount->fsi )
-				{
-#if UNICODE
-					char *_fullname = CStrDup( file->fullname );
-#else
-#  define _fullname file->fullname
-#endif
+	if( mount && mount->fsi ) {
+		if( StrChr( opts, 'r' ) && !StrChr( opts, '+' ) || !StrChr( opts, 'w' ) ) {
+			struct file_system_mounted_interface* test_mount = mount;
+			while( !handle && test_mount ) {
+				if( test_mount->fsi ) {
 					file->mount = test_mount;
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
-					if( (*winfile_local).flags.bLogOpenClose )
+					if( ( *winfile_local ).flags.bLogOpenClose )
 						lprintf( "Call mount %s to check if file exists %s", test_mount->name, file->fullname );
 #endif
-					if( test_mount->fsi->exists( test_mount->psvInstance, _fullname ) )
-					{
-						handle = (FILE*)test_mount->fsi->open( test_mount->psvInstance, _fullname, opts );
+					if( test_mount->fsi->exists( test_mount->psvInstance, file->fullname ) ) {
+						handle = (FILE*)test_mount->fsi->open( test_mount->psvInstance, file->fullname, opts );
 					}
-					else if( single_mount )
-					{
-#if UNICODE
-						Deallocate( char *, _fullname );
-#else
-#  undef _fullname
-#endif
-						if( allocedIndex != INVALID_INDEX )
-							SetLink( &file->files, allocedIndex, NULL );
-						return NULL;
+					else {
+						errno = ENOENT;
+						if( single_mount ) {
+							if( allocedIndex != INVALID_INDEX )
+								SetLink( &file->files, allocedIndex, NULL );
+								return NULL;
+						}
 					}
-#if UNICODE
-					Deallocate( char *, _fullname );
-#endif
 				}
-				else
-					goto default_fopen;
-				test_mount = test_mount->next;
+				test_mount = test_mount->nextLayer;
 			}
 		}
-		else
-		{
-			struct file_system_mounted_interface *test_mount = mount;
+		else {
+			struct file_system_mounted_interface* test_mount = mount;
 			//lprintf( "full is %s", file->fullname );
-			while( !handle && test_mount )
-			{
+			while( !handle && test_mount ) {
 				file->mount = test_mount;
-				if( test_mount->fsi && test_mount->writeable )
-				{
-#ifdef UNICODE
-					char* _fullname = CStrDup( file->fullname );
-#else
-#  define _fullname file->fullname
-#endif
+				if( test_mount->fsi && test_mount->writeable ) {
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
-					if( (*winfile_local).flags.bLogOpenClose )
+					if( ( *winfile_local ).flags.bLogOpenClose )
 						lprintf( "Call mount %s to open file %s", test_mount->name, file->fullname );
 #endif
-					handle = (FILE*)test_mount->fsi->open( test_mount->psvInstance, _fullname, opts );
-#ifdef UNICODE
-					Deallocate( char*, _fullname );
-#else
-#  undef _fullname
-#endif
+					handle = (FILE*)test_mount->fsi->open( test_mount->psvInstance, file->fullname, opts );
 				}
-				else
-					goto default_fopen;
-				test_mount = test_mount->next;
+				test_mount = test_mount->nextLayer;
 			}
 		}
 	}
-	if( !handle )
-	{
-default_fopen:
-		//file->mount = NULL;
-#ifdef __LINUX__
-#  ifdef UNICODE
-		char *tmpname = CStrDup( file->fullname );
-		char *tmpopts = CStrDup( opts );
-		handle = fopen( tmpname, tmpopts );
-		Deallocate( char*, tmpname );
-		Deallocate( char*, tmpopts );
-#  else
-		handle = fopen( file->fullname, opts );
-#  endif
-#else
-#  ifdef _STRSAFE_H_INCLUDED_
-#    ifdef UNICODE
-		char *tmpname = CStrDup( file->fullname );
-		char *tmpopts = CStrDup( opts );
-		fopen_s( &handle, tmpname, tmpopts );
-		Deallocate( char*, tmpname );
-		Deallocate( char*, tmpopts );
-#    else
-		{
-			wchar_t *tmp = CharWConvert( file->fullname );
-			wchar_t *wopts = CharWConvert( opts );
-			handle = _wfopen( tmp, wopts );
-			//_wfopen_s( &handle, tmp, wopts );
-			Deallocate( wchar_t *, tmp );
-			Deallocate( wchar_t *, wopts );
-		}
-#    endif
-#  else
-		handle = fopen( file->fullname, opts );
-#  endif
-#endif
+	if( !handle ) {
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
-		if( (*winfile_local).flags.bLogOpenClose )
-			lprintf( "native opened %s", file->fullname );
-#endif
-	}
-	if( !handle )
-	{
-#if !defined( __FILESYS_NO_FILE_LOGGING__ )
-		if( (*winfile_local).flags.bLogOpenClose )
+		if( ( *winfile_local ).flags.bLogOpenClose )
 			lprintf( "Failed to open file [%s]=[%s]", file->name, file->fullname );
 #endif
-		DeleteLink( &(*winfile_local).files, file );
+		DeleteLink( &( *winfile_local ).files, file );
 		Deallocate( TEXTCHAR*, file->name );
 		Deallocate( TEXTCHAR*, file->fullname );
 		Deallocate( struct file*, file );
 		SetLink( &file->files, allocedIndex, NULL );
 		return NULL;
 	}
-#if !defined( __FILESYS_NO_FILE_LOGGING__ )
-	if( (*winfile_local).flags.bLogOpenClose )
-		lprintf( "sack_open %s (%s)", file->fullname, opts );
-#endif
 	AddLink( &file->files, handle );
-#if !defined( __FILESYS_NO_FILE_LOGGING__ )
-	if( (*winfile_local).flags.bLogOpenClose )
-		lprintf( "Added FILE* %p and list is %p", handle, file->files );
-#endif
 	return handle;
 }
 //----------------------------------------------------------------------------
-FILE*  sack_fopen ( INDEX group, CTEXTSTR filename, CTEXTSTR opts )
+FILE* sack_fopen( INDEX group, CTEXTSTR filename, CTEXTSTR opts )
 {
 	return sack_fopenEx( group, filename, opts, NULL );
 }
 //----------------------------------------------------------------------------
-FILE*  sack_fsopenEx( INDEX group
-					 , CTEXTSTR filename
-					 , CTEXTSTR opts
-					 , int share_mode
-					 , struct file_system_mounted_interface *mount )
+FILE* sack_fsopenEx( INDEX group
+	, CTEXTSTR filename
+	, CTEXTSTR opts
+	, int share_mode
+	, struct file_system_mounted_interface* mount )
 {
-	FILE *handle = NULL;
-	struct file *file;
+	FILE* handle = NULL;
+	struct file* file;
 	INDEX idx;
 	LOGICAL single_mount = ( mount != NULL );
 	LocalInit();
-	EnterCriticalSec( &(*winfile_local).cs_files );
-	if( !mount )
-		mount = (*winfile_local).mounted_file_systems;
+	EnterCriticalSec( &( *winfile_local ).cs_files );
+	if( !mount ) {
+		if( !FileSysThreadInfo._mounted_file_systems ) threadInit();
+		mount = FileSysThreadInfo.mounted_file_systems;
+	}
 	if( !StrChr( opts, 'r' ) && !StrChr( opts, '+' ) )
-		while( mount )
   // skip roms...
-		{
+		while( mount ) {
 			//lprintf( "check mount %p %d", mount, mount->writeable );
 			if( mount->writeable )
 				break;
-			mount = mount->next;
+			mount = mount->nextLayer;
 		}
-	LIST_FORALL( (*winfile_local).files, idx, struct file *, file )
+	LIST_FORALL( ( *winfile_local ).files, idx, struct file*, file )
 	{
 		if( ( file->group == group )
 			&& ( StrCmp( file->name, filename ) == 0 )
-			&& ( file->mount == mount ) )
-		{
+			&& ( file->mount == mount ) ) {
 			break;
 		}
 	}
-	LeaveCriticalSec( &(*winfile_local).cs_files );
-	if( !file )
-	{
-		struct Group *filegroup = (struct Group *)GetLink( &(*winfile_local).groups, group );
+	LeaveCriticalSec( &( *winfile_local ).cs_files );
+	if( !file ) {
+		struct Group* filegroup = ( struct Group* )GetLink( &( *winfile_local ).groups, group );
 		file = New( struct file );
 		DecodeFopenOpts( file, opts );
+		file->deleted = file->delete_on_close = 0;
 		file->handles = NULL;
 		file->files = NULL;
 		file->name = StrDup( filename );
@@ -58908,161 +62641,94 @@ FILE*  sack_fsopenEx( INDEX group
 			file->fullname = PrependBasePath( group, filegroup, filename );
 		else
 			file->fullname = StrDup( filename );
-		EnterCriticalSec( &(*winfile_local).cs_files );
-		AddLink( &(*winfile_local).files,file );
-		LeaveCriticalSec( &(*winfile_local).cs_files );
+		EnterCriticalSec( &( *winfile_local ).cs_files );
+		AddLink( &( *winfile_local ).files, file );
+		LeaveCriticalSec( &( *winfile_local ).cs_files );
 	}
-	if( mount && mount->fsi )
-	{
-		if( StrChr( opts, 'r' ) && !StrChr( opts, '+' ) || !StrChr( opts, 'w' ) )
-		{
-			struct file_system_mounted_interface *test_mount = mount;
-			while( !handle && test_mount && test_mount->fsi )
-			{
-#ifdef UNICODE
-				char *_fullname = CStrDup( file->fullname );
-#else
-#  define _fullname file->fullname
-#endif
+	if( mount && mount->fsi ) {
+		if( StrChr( opts, 'r' ) && !StrChr( opts, '+' ) || !StrChr( opts, 'w' ) ) {
+			struct file_system_mounted_interface* test_mount = mount;
+			while( !handle && test_mount && test_mount->fsi ) {
 				file->mount = test_mount;
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
-				if( (*winfile_local).flags.bLogOpenClose )
+				if( ( *winfile_local ).flags.bLogOpenClose )
 					lprintf( "Call mount %s to check if file exists %s", test_mount->name, file->fullname );
 #endif
-				if( test_mount->fsi->exists( test_mount->psvInstance, _fullname ) )
-				{
-					handle = (FILE*)test_mount->fsi->open( test_mount->psvInstance, _fullname, opts );
+				if( test_mount->fsi->exists( test_mount->psvInstance, file->fullname ) ) {
+					handle = (FILE*)test_mount->fsi->open( test_mount->psvInstance, file->fullname, opts );
 				}
-#ifdef UNICODE
-				Deallocate( char *, _fullname );
-#else
-#  undef _fullname
-#endif
-				if( !handle && single_mount )
-				{
+				if( !handle && single_mount ) {
 					return NULL;
 				}
-				test_mount = test_mount->next;
+				test_mount = test_mount->nextLayer;
 			}
 		}
-		else
-		{
-			struct file_system_mounted_interface *test_mount = mount;
+		else {
+			struct file_system_mounted_interface* test_mount = mount;
 			//lprintf( "full is %s", file->fullname );
-			while( !handle && test_mount )
-			{
+			while( !handle && test_mount ) {
 				file->mount = test_mount;
-				if( test_mount->fsi && test_mount->writeable )
-				{
-#ifdef UNICODE
-					char* _fullname = CStrDup( file->fullname );
-#else
-#  define _fullname file->fullname
-#endif
+				if( test_mount->fsi && test_mount->writeable ) {
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
-					if( (*winfile_local).flags.bLogOpenClose )
+					if( ( *winfile_local ).flags.bLogOpenClose )
 						lprintf( "Call mount %s to open file %s", test_mount->name, file->fullname );
 #endif
-					handle = (FILE*)test_mount->fsi->open( test_mount->psvInstance, _fullname, opts );
-#ifdef UNICODE
-					Deallocate( char*, _fullname );
-#else
-#  undef _fullname
-#endif
+					handle = (FILE*)test_mount->fsi->open( test_mount->psvInstance, file->fullname, opts );
 				}
-				else
-					goto default_fopen;
-				test_mount = test_mount->next;
+				test_mount = test_mount->nextLayer;
 			}
 		}
-			//file->fsi = mount?mount->fsi:NULL;
 	}
-	if( !handle )
-	{
-default_fopen:
-#ifdef __LINUX__
-#  ifdef UNICODE
-		char *tmpname = CStrDup( file->fullname );
-		char *tmpopts = CStrDup( opts );
-		handle = fopen( tmpname, tmpopts );
-		Deallocate( char*, tmpname );
-		Deallocate( char*, tmpopts );
-#  else
-		handle = fopen( file->fullname, opts );
-#  endif
-#else
-		{
-			wchar_t *tmp = CharWConvert( file->fullname );
-			wchar_t *wopts = CharWConvert( opts );
-			handle = _wfsopen( tmp, wopts, share_mode );
-			Deallocate( wchar_t *, tmp );
-			Deallocate( wchar_t *, wopts );
-		}
-#endif
-	}
-	if( !handle )
-	{
-#if !defined( __FILESYS_NO_FILE_LOGGING__ )
-		if( (*winfile_local).flags.bLogOpenClose )
-			lprintf( "Failed to open file [%s]=[%s]", file->name, file->fullname );
-#endif
-		return NULL;
+	if( !handle ) {
+		return handle;
 	}
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
-	if( (*winfile_local).flags.bLogOpenClose )
+	if( ( *winfile_local ).flags.bLogOpenClose )
 		lprintf( "sack_open %s (%s)", file->fullname, opts );
 #endif
-	EnterCriticalSec( &(*winfile_local).cs_files );
+	EnterCriticalSec( &( *winfile_local ).cs_files );
 	AddLink( &file->files, handle );
-	LeaveCriticalSec( &(*winfile_local).cs_files );
+	LeaveCriticalSec( &( *winfile_local ).cs_files );
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
-	if( (*winfile_local).flags.bLogOpenClose )
+	if( ( *winfile_local ).flags.bLogOpenClose )
 		lprintf( "Added FILE* %p and list is %p", handle, file->files );
 #endif
 	return handle;
 }
 //----------------------------------------------------------------------------
-FILE*  sack_fsopen( INDEX group, CTEXTSTR filename, CTEXTSTR opts, int share_mode )
+FILE* sack_fsopen( INDEX group, CTEXTSTR filename, CTEXTSTR opts, int share_mode )
 {
-/*(*winfile_local).mounted_file_systems*/
+/*FileSysThreadInfo.mounted_file_systems*/
 	return sack_fsopenEx( group, filename, opts, share_mode, NULL );
 }
 //----------------------------------------------------------------------------
-static size_t sack_fsizeEx ( FILE *file_file, struct file_system_mounted_interface *mount )
+static size_t sack_fsizeEx( FILE* file_file, struct file_system_mounted_interface* mount )
 {
 	if( mount && mount->fsi )
 		return mount->fsi->size( file_file );
-	{
-		size_t here = ftell( file_file );
-		size_t length;
-		fseek( file_file, 0, SEEK_END );
-		length = ftell( file_file );
-		fseek( file_file, (long)here, SEEK_SET );
-		return length;
-	}
+	return (size_t)0;
 }
-size_t sack_fsize ( FILE *file_file ) {
-	struct file *file;
+size_t sack_fsize( FILE* file_file ) {
+	struct file* file;
 	file = FindFileByFILE( file_file );
-	return sack_fsizeEx( file_file, file?file->mount:NULL );
+	return sack_fsizeEx( file_file, file ? file->mount : NULL );
 }
-static size_t sack_ftellEx ( FILE *file_file, struct file_system_mounted_interface *mount )
+static size_t sack_ftellEx( FILE* file_file, struct file_system_mounted_interface* mount )
 {
 	if( mount && mount->fsi )
 		return mount->fsi->tell( file_file );
 	return ftell( file_file );
 }
-size_t sack_ftell ( FILE *file_file ) {
-	struct file *file;
+size_t sack_ftell( FILE* file_file ) {
+	struct file* file;
 	file = FindFileByFILE( file_file );
 	if( file && file->mount && file->mount->fsi )
-		return sack_ftellEx(  file_file, file->mount );
+		return sack_ftellEx( file_file, file->mount );
 	return sack_ftellEx( file_file, NULL );
 }
-size_t  sack_fseekEx ( FILE *file_file, size_t pos, int whence, struct file_system_mounted_interface *mount )
+size_t  sack_fseekEx( FILE* file_file, size_t pos, int whence, struct file_system_mounted_interface* mount )
 {
-	if( mount && mount->fsi )
-	{
+	if( mount && mount->fsi ) {
 		return mount->fsi->seek( file_file, pos, whence );
 	}
 	if( fseek( file_file, (long)pos, whence ) )
@@ -59070,17 +62736,16 @@ size_t  sack_fseekEx ( FILE *file_file, size_t pos, int whence, struct file_syst
 	//struct file *file = FindFileByFILE( file_file );
 	return ftell( file_file );
 }
-size_t  sack_fseek ( FILE *file_file, size_t pos, int whence ){
-	struct file *file;
+size_t  sack_fseek( FILE* file_file, size_t pos, int whence ) {
+	struct file* file;
 	file = FindFileByFILE( file_file );
 	if( file && file->mount && file->mount->fsi )
 		return sack_fseekEx( file_file, pos, whence, file->mount );
 	return sack_fseekEx( file_file, pos, whence, NULL );
 }
-static int  sack_fflushEx ( FILE *file_file, struct file_system_mounted_interface *mount )
+static int  sack_fflushEx( FILE* file_file, struct file_system_mounted_interface* mount )
 {
-	if( mount && mount->fsi )
-	{
+	if( mount && mount->fsi ) {
 		return mount->fsi->flush( file_file );
 		//DeleteLink( &file->files, file_file );
 		//file->fsi->close( file_file );
@@ -59090,82 +62755,88 @@ static int  sack_fflushEx ( FILE *file_file, struct file_system_mounted_interfac
 	}
 	return fflush( file_file );
 }
-int  sack_fflush ( FILE *file_file )
+int  sack_fflush( FILE* file_file )
 {
-	struct file *file;
+	struct file* file;
 	file = FindFileByFILE( file_file );
-	if( file && file->mount && file->mount->fsi )
-	{
+	if( file && file->mount && file->mount->fsi ) {
 		return sack_fflushEx( file_file, file->mount );
 	}
 	return fflush( file_file );
 }
 //----------------------------------------------------------------------------
-int  sack_fclose ( FILE *file_file )
+int  sack_fclose( FILE* file_file )
 {
-	struct file *file;
+	struct file* file;
 	if( !file_file ) return -1;
-	EnterCriticalSec( &(*winfile_local).cs_files );
+	EnterCriticalSec( &( *winfile_local ).cs_files );
 	file = FindFileByFILE( file_file );
-	if( file )
-	{
+	if( file ) {
 		int status;
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
-		if( (*winfile_local).flags.bLogOpenClose )
+		if( ( *winfile_local ).flags.bLogOpenClose )
 			lprintf( "Closing %s", file->fullname );
 #endif
 		if( file->mount && file->mount->fsi )
 			status = file->mount->fsi->_close( file_file );
-		else
+		else {
 			status = fclose( file_file );
+			if( file->deleted ) {
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
-		if( (*winfile_local).flags.bLogOpenClose )
+				if( ( *winfile_local ).flags.bLogOpenClose )
+					lprintf( "deleted FILE* %p to be actually deleted...", file_file );
+#endif
+				sack_unlink( 0, file->fullname );
+			}
+		}
+#if !defined( __FILESYS_NO_FILE_LOGGING__ )
+		if( ( *winfile_local ).flags.bLogOpenClose )
 			lprintf( "deleted FILE* %p and list is %p", file_file, file->files );
 #endif
 		DeleteLink( &file->files, file_file );
 		if( !GetLinkCount( file->files ) ) {
-			DeleteLink( &(*winfile_local).files, file );
-			LeaveCriticalSec( &(*winfile_local).cs_files );
+			DeleteLink( &( *winfile_local ).files, file );
+			LeaveCriticalSec( &( *winfile_local ).cs_files );
 			DeleteListEx( &file->files DBG_SRC );
 			Deallocate( TEXTCHAR*, file->name );
 			Deallocate( TEXTCHAR*, file->fullname );
 			Deallocate( struct file*, file );
 		}
 		else
-			LeaveCriticalSec( &(*winfile_local).cs_files );
+			LeaveCriticalSec( &( *winfile_local ).cs_files );
 		return status;
 	}
-	LeaveCriticalSec( &(*winfile_local).cs_files );
+	LeaveCriticalSec( &( *winfile_local ).cs_files );
 	return fclose( file_file );
 }
 //----------------------------------------------------------------------------
-static void transcodeOutputText( struct file *file, POINTER buffer, size_t size, POINTER *outbuf, size_t *outsize ) {
+static void transcodeOutputText( struct file* file, POINTER buffer, size_t size, POINTER* outbuf, size_t* outsize ) {
 }
 //----------------------------------------------------------------------------
-static void transcodeInputText( struct file *file, POINTER buffer, size_t size, POINTER *outbuf, size_t *outsize ) {
+static void transcodeInputText( struct file* file, POINTER buffer, size_t size, POINTER* outbuf, size_t* outsize ) {
 }
 //----------------------------------------------------------------------------
-size_t  sack_fread ( POINTER buffer, size_t size, int count,FILE *file_file )
+size_t  sack_fread( POINTER buffer, size_t size, int count, FILE* file_file )
 {
-	struct file *file;
+	struct file* file;
 	file = FindFileByFILE( file_file );
 	if( file && file->mount && file->mount->fsi )
 		return file->mount->fsi->_read( file_file, (char*)buffer, size * count );
 	return fread( buffer, size, count, file_file );
 }
 //----------------------------------------------------------------------------
-size_t  sack_fwrite ( CPOINTER buffer, size_t size, int count,FILE *file_file )
+size_t  sack_fwrite( CPOINTER buffer, size_t size, int count, FILE* file_file )
 {
-	struct file *file;
+	struct file* file;
 	file = FindFileByFILE( file_file );
-	if( file && file->mount && file->mount->fsi )
-	{
+	if( file && file->mount && file->mount->fsi ) {
 		size_t result;
-		if( file->mount->fsi->copy_write_buffer && file->mount->fsi->copy_write_buffer() )
-		{
-			POINTER dupbuf = malloc( size*count + 3 );
-#pragma warning( disable: 6387 )
-			memcpy( dupbuf, buffer, size*count );
+		if( file->mount->fsi->copy_write_buffer && file->mount->fsi->copy_write_buffer() ) {
+			POINTER dupbuf = malloc( size * count + 3 );
+#ifdef _MSC_VER
+#  pragma warning( disable: 6387 )
+#endif
+			memcpy( dupbuf, buffer, size * count );
 			result = file->mount->fsi->_write( file_file, (const char*)dupbuf, size * count );
 			free( dupbuf );
 		}
@@ -59176,7 +62847,7 @@ size_t  sack_fwrite ( CPOINTER buffer, size_t size, int count,FILE *file_file )
 	return fwrite( (POINTER)buffer, size, count, file_file );
 }
 //----------------------------------------------------------------------------
-TEXTSTR sack_fgets ( TEXTSTR buffer, size_t size,FILE *file_file )
+TEXTSTR sack_fgets( TEXTSTR buffer, size_t size, FILE* file_file )
 {
 #ifdef _UNICODE
 	//char *tmpbuf = NewArray( char, size+1);
@@ -59186,27 +62857,22 @@ TEXTSTR sack_fgets ( TEXTSTR buffer, size_t size,FILE *file_file )
 	//StrCpyEx( buffer, tmp_wbuf, size );
 	return buffer;
 #else
-	struct file *file;
+	struct file* file;
 	file = FindFileByFILE( file_file );
-	if( file && file->mount && file->mount->fsi )
-	{
+	if( file && file->mount && file->mount->fsi ) {
 		size_t n;
-		char *output = buffer;
-		size = size-1;
+		char* output = buffer;
+		size = size - 1;
 		buffer[size] = 0;
-		for( n = 0; n < size; n++ )
-		{
-			if( file->mount->fsi->_read( file_file, output, 1 ) )
-			{
-				if( output[0] == '\n' )
-				{
+		for( n = 0; n < size; n++ ) {
+			if( file->mount->fsi->_read( file_file, output, 1 ) ) {
+				if( output[0] == '\n' ) {
 					output[1] = 0;
 					return buffer;
 				}
 				output++;
 			}
-			else
-			{
+			else {
 				output[0] = 0;
 				return NULL;
 			}
@@ -59219,20 +62885,25 @@ TEXTSTR sack_fgets ( TEXTSTR buffer, size_t size,FILE *file_file )
 #endif
 }
 //----------------------------------------------------------------------------
-LOGICAL sack_existsEx ( const char *filename, struct file_system_mounted_interface *fsi )
+LOGICAL sack_existsEx( const char* filename, struct file_system_mounted_interface* mount )
 {
-	FILE *tmp;
-	if( fsi && fsi->fsi && fsi->fsi->exists )
-	{
-		int result = fsi->fsi->exists( fsi->psvInstance, filename );
+	FILE* tmp;
+	if( mount && mount->fsi && mount->fsi->exists ) {
+		int result = mount->fsi->exists( mount->psvInstance, filename );
 		return result;
 	}
 	else {
+		{
+			struct file* file = FindFileByName( 0, filename, mount, NULL );
+			if( file )
+				if( file->deleted ) return FALSE;
+		}
 #ifdef WIN32
-		wchar_t *wfilename = CharWConvert( filename );
-		if( (tmp = _wfopen( wfilename, L"rb" )) ) {
+		wchar_t* wfilename = CharWConvert( filename );
+		{ wchar_t* tmp; if( LONG_PATHCHAR ) for( tmp = wfilename; tmp[0]; tmp++ ) if( tmp[0] == '/' ) tmp[0] = LONG_PATHCHAR; }
+		if( ( tmp = _wfopen( wfilename, L"rb" ) ) ) {
 #else
-		if( (tmp = fopen( filename, "rb" )) ) {
+		if( ( tmp = fopen( filename, "rb" ) ) ) {
 #endif
 			fclose( tmp );
 #ifdef WIN32
@@ -59243,65 +62914,64 @@ LOGICAL sack_existsEx ( const char *filename, struct file_system_mounted_interfa
 #ifdef WIN32
 		Deallocate( wchar_t*, wfilename );
 #endif
-	}
+		}
 	return FALSE;
-}
+	}
 //----------------------------------------------------------------------------
-LOGICAL sack_exists( const char * filename )
+LOGICAL sack_exists( const char* filename )
 {
-	struct file_system_mounted_interface *mount = (*winfile_local).mounted_file_systems;
-	while( mount )
-	{
-		if( sack_existsEx( filename, mount ) )
-		{
-			(*winfile_local).last_find_mount = mount;
+	if( !FileSysThreadInfo._mounted_file_systems ) threadInit();
+	struct file_system_mounted_interface* mount = FileSysThreadInfo.mounted_file_systems;
+	while( mount ) {
+		if( sack_existsEx( filename, mount ) ) {
+			( *winfile_local ).last_find_mount = mount;
 			return TRUE;
 		}
-		mount = mount->next;
+		mount = mount->nextLayer;
 	}
 	return FALSE;
 }
 //----------------------------------------------------------------------------
-LOGICAL sack_isPathEx ( const char *filename, struct file_system_mounted_interface *fsi )
+LOGICAL sack_isPathEx( const char* filename, struct file_system_mounted_interface* mount )
 {
-	FILE *tmp;
-	if( fsi && fsi->fsi && fsi->fsi->exists )
-	{
-		int result = fsi->fsi->is_directory( fsi->psvInstance, filename );
+	if( mount && mount->fsi && mount->fsi->exists ) {
+		{
+			struct directory* d;
+			INDEX i;
+			LIST_FORALL( ( *winfile_local ).directories, i, struct directory*, d ) {
+				if( d->mount == mount && strcmp( d->name, filename ) == 0 ) {
+					if( d->deleted ) return FALSE;
+					break;
+				}
+			}
+		}
+		int result = mount->fsi->is_directory( mount->psvInstance, filename );
 		return result;
 	}
-	else if( ( tmp = fopen( filename, "rb" ) ) )
-	{
-		fclose( tmp );
-		return TRUE;
-	}
 	return FALSE;
 }
 //----------------------------------------------------------------------------
-LOGICAL sack_isPath( const char * filename )
+LOGICAL sack_isPath( const char* filename )
 {
-	struct file_system_mounted_interface *mount = (*winfile_local).mounted_file_systems;
-	while( mount )
-	{
-		if( sack_isPathEx( filename, mount ) )
-		{
-			(*winfile_local).last_find_mount = mount;
+	if( !FileSysThreadInfo._mounted_file_systems ) threadInit();
+	struct file_system_mounted_interface* mount = FileSysThreadInfo.mounted_file_systems;
+	while( mount ) {
+		if( sack_isPathEx( filename, mount ) ) {
+			( *winfile_local ).last_find_mount = mount;
 			return TRUE;
 		}
-		mount = mount->next;
+		mount = mount->nextLayer;
 	}
 	return FALSE;
 }
 //----------------------------------------------------------------------------
-int  sack_renameEx ( CTEXTSTR file_source, CTEXTSTR new_name, struct file_system_mounted_interface *mount )
+int  sack_renameEx( CTEXTSTR file_source, CTEXTSTR new_name, struct file_system_mounted_interface* mount )
 {
 	int status;
-	if( mount && mount->fsi )
-	{
+	if( mount && mount->fsi ) {
 		return mount->fsi->rename( mount->psvInstance, file_source, new_name );
 	}
-	else
-	{
+	else {
 		TEXTSTR tmp_src = ExpandPath( file_source );
 		TEXTSTR tmp_dst = ExpandPath( new_name );
 #ifdef WIN32
@@ -59309,8 +62979,8 @@ int  sack_renameEx ( CTEXTSTR file_source, CTEXTSTR new_name, struct file_system
 #else
 #  ifdef UNICODE
 		{
-			char *tmpnames = CStrDup( tmp_src );
-			char *tmpnamed = CStrDup( tmp_dst );
+			char* tmpnames = CStrDup( tmp_src );
+			char* tmpnamed = CStrDup( tmp_dst );
 			status = rename( tmpnames, tmpnamed );
 			Deallocate( char*, tmpnames );
 			Deallocate( char*, tmpnamed );
@@ -59327,28 +62997,28 @@ int  sack_renameEx ( CTEXTSTR file_source, CTEXTSTR new_name, struct file_system
 //----------------------------------------------------------------------------
 int  sack_rename( CTEXTSTR file_source, CTEXTSTR new_name )
 {
-	return sack_renameEx( file_source, new_name, (*winfile_local).default_mount );
+	if( !FileSysThreadInfo._mounted_file_systems ) threadInit();
+	return sack_renameEx( file_source, new_name, FileSysThreadInfo.mounted_file_systems );
 }
 //----------------------------------------------------------------------------
-size_t GetSizeofFile( TEXTCHAR *name, uint32_t* unused )
+size_t GetSizeofFile( TEXTCHAR * name, uint32_t * unused )
 {
 	size_t size;
 #ifdef __LINUX__
 #  ifdef UNICODE
-	char *tmpname = CStrDup( name );
+	char* tmpname = CStrDup( name );
 		  // open MYFILE.TXT
 	int hFile = open( tmpname,
 			 // open for reading
-						  O_RDONLY );
+		O_RDONLY );
 	Deallocate( char*, tmpname );
 #  else
 		  // open MYFILE.TXT
 	int hFile = open( name,
 			 // open for reading
-						  O_RDONLY );
+		O_RDONLY );
 #  endif
-	if( hFile >= 0 )
-	{
+	if( hFile >= 0 ) {
 		size = lseek( hFile, 0, SEEK_END );
 		close( hFile );
 		return size;
@@ -59357,11 +63027,10 @@ size_t GetSizeofFile( TEXTCHAR *name, uint32_t* unused )
 		return 0;
 #else
 	HANDLE hFile = CreateFile( name, 0, 0, NULL, OPEN_EXISTING, 0, NULL );
-	if( hFile != INVALID_HANDLE_VALUE )
-	{
+	if( hFile != INVALID_HANDLE_VALUE ) {
 		size = GetFileSize( hFile, (DWORD*)unused );
-		if( sizeof( size ) > 4  && unused )
-			size |= (uint64_t)(*unused) << 32;
+		if( sizeof( size ) > 4 && unused )
+			size |= (uint64_t)( *unused ) << 32;
 		CloseHandle( hFile );
 		return size;
 	}
@@ -59371,26 +63040,25 @@ size_t GetSizeofFile( TEXTCHAR *name, uint32_t* unused )
 }
 //-------------------------------------------------------------------------
 uint32_t GetFileTimeAndSize( CTEXTSTR name
-							, LPFILETIME lpCreationTime
-							,  LPFILETIME lpLastAccessTime
-							,  LPFILETIME lpLastWriteTime
-							, int *IsDirectory
-							)
+	, LPFILETIME lpCreationTime
+	, LPFILETIME lpLastAccessTime
+	, LPFILETIME lpLastWriteTime
+	, int* IsDirectory
+)
 {
 	uint32_t size;
 #ifdef __LINUX__
 		  // open MYFILE.TXT
 	int hFile = open( name,
 			 // open for reading
-						  O_RDONLY );
-	if( hFile >= 0 )
-	{
+		O_RDONLY );
+	if( hFile >= 0 ) {
 		struct stat statbuf;
 		fstat( hFile, &statbuf );
 		if( lpCreationTime )
 			lpCreationTime[0] = statbuf.st_ctime;
 		if( lpLastAccessTime )
-			lpLastAccessTime[0] =  statbuf.st_atime;
+			lpLastAccessTime[0] = statbuf.st_atime;
 		if( lpLastWriteTime )
 			lpLastWriteTime[0] = statbuf.st_mtime;
 		//convert( &realtime, (time_t*)&statbuf.st_mtime );
@@ -59403,17 +63071,15 @@ uint32_t GetFileTimeAndSize( CTEXTSTR name
 #else
 	HANDLE hFile = CreateFile( name, 0, 0, NULL, OPEN_EXISTING, 0, NULL );
 	uint32_t extra_size;
-	if( hFile != INVALID_HANDLE_VALUE )
-	{
+	if( hFile != INVALID_HANDLE_VALUE ) {
 		size = GetFileSize( hFile, (DWORD*)&extra_size );
 		GetFileTime( hFile, lpCreationTime, lpLastAccessTime, lpLastWriteTime );
-		if( IsDirectory )
-		{
+		if( IsDirectory ) {
 			uint32_t dwAttr = GetFileAttributes( name );
 			if( dwAttr & FILE_ATTRIBUTE_DIRECTORY )
-				(*IsDirectory) = 1;
+				( *IsDirectory ) = 1;
 			else
-				(*IsDirectory) = 0;
+				( *IsDirectory ) = 0;
 		}
 		CloseHandle( hFile );
 		return size;
@@ -59422,52 +63088,204 @@ uint32_t GetFileTimeAndSize( CTEXTSTR name
 		return (uint32_t)-1;
 #endif
 }
-struct file_system_interface *sack_get_filesystem_interface( CTEXTSTR name )
+struct file_system_interface* sack_get_filesystem_interface( CTEXTSTR name )
 {
-	struct file_interface_tracker *fit;
+	struct file_interface_tracker* fit;
 	INDEX idx;
-	LIST_FORALL( (*winfile_local).file_system_interface, idx, struct file_interface_tracker *, fit )
+	LIST_FORALL( ( *winfile_local ).file_system_interface, idx, struct file_interface_tracker*, fit )
 	{
 		if( StrCaseCmp( fit->name, name ) == 0 )
 			return fit->fsi;
 	}
 	return NULL;
 }
-void sack_set_default_filesystem_interface( struct file_system_interface *fsi )
+void sack_set_default_filesystem_interface( struct file_system_interface* fsi )
 {
-	(*winfile_local).default_file_system_interface = fsi;
+	( *winfile_local ).default_file_system_interface = fsi;
 }
-void sack_register_filesystem_interface( CTEXTSTR name, struct file_system_interface *fsi )
+void sack_register_filesystem_interface( CTEXTSTR name, struct file_system_interface* fsi )
 {
-	struct file_interface_tracker *fit = New( struct file_interface_tracker );
+	struct file_interface_tracker* fit = New( struct file_interface_tracker );
 	fit->name = StrDup( name );
 	fit->fsi = fsi;
 	LocalInit();
-	AddLink( &(*winfile_local).file_system_interface, fit );
+	AddLink( &( *winfile_local ).file_system_interface, fit );
 }
-static void * CPROC sack_filesys_open( uintptr_t psv, const char *filename, const char *opts );
-static int CPROC sack_filesys_close( void*file ) { return fclose(  (FILE*)file ); }
-static size_t CPROC sack_filesys_read( void*file, void*buf, size_t len ) { return fread( buf, 1, len, (FILE*)file ); }
-static size_t CPROC sack_filesys_write( void*file, const void*buf, size_t len ) { return fwrite( buf, 1, len, (FILE*)file ); }
-static size_t CPROC sack_filesys_seek( void*file, size_t pos, int whence ) { return fseek( (FILE*)file, (long)pos, whence ), ftell( (FILE*)file ); }
-static int CPROC sack_filesys_unlink( uintptr_t psv, const char*filename ) {
-	int okay = 0;
-#ifdef UNICODE
-	TEXTCHAR *_filename = DupCStr( filename );
-#  define filename _filename
-#endif
 #ifdef WIN32
-	okay = DeleteFileA( filename );
+typedef NTSTATUS( NTAPI* sNtSetInformationFile )
+( HANDLE FileHandle,
+	PIO_STATUS_BLOCK IoStatusBlock,
+	PVOID FileInformation,
+	ULONG Length,
+	FILE_INFORMATION_CLASS FileInformationClass );
+sNtSetInformationFile pNtSetInformationFile;
+#ifdef __GNUC__
+#  undef DeleteFile
+#  define DeleteFile DoDeleteFile
 #else
-	okay = unlink( filename );
+typedef enum _REAL_FILE_INFORMATION_CLASS {
+	DupFileDirectoryInformation = 1,
+	FileFullDirectoryInformation,
+	FileBothDirectoryInformation,
+	FileBasicInformation,
+	FileStandardInformation,
+	FileInternalInformation,
+	FileEaInformation,
+	FileAccessInformation,
+	FileNameInformation,
+	FileRenameInformation,
+	FileLinkInformation,
+	FileNamesInformation,
+	FileDispositionInformation,
+	FilePositionInformation,
+	FileFullEaInformation,
+	FileModeInformation,
+	FileAlignmentInformation,
+	FileAllInformation,
+	FileAllocationInformation,
+	FileEndOfFileInformation,
+	FileAlternateNameInformation,
+	FileStreamInformation,
+	FilePipeInformation,
+	FilePipeLocalInformation,
+	FilePipeRemoteInformation,
+	FileMailslotQueryInformation,
+	FileMailslotSetInformation,
+	FileCompressionInformation,
+	FileObjectIdInformation,
+	FileCompletionInformation,
+	FileMoveClusterInformation,
+	FileQuotaInformation,
+	FileReparsePointInformation,
+	FileNetworkOpenInformation,
+	FileAttributeTagInformation,
+	FileTrackingInformation,
+	FileIdBothDirectoryInformation,
+	FileIdFullDirectoryInformation,
+	FileValidDataLengthInformation,
+	FileShortNameInformation,
+	FileIoCompletionNotificationInformation,
+	FileIoStatusBlockRangeInformation,
+	FileIoPriorityHintInformation,
+	FileSfioReserveInformation,
+	FileSfioVolumeInformation,
+	FileHardLinkInformation,
+	FileProcessIdsUsingFileInformation,
+	FileNormalizedNameInformation,
+	FileNetworkPhysicalNameInformation,
+	FileIdGlobalTxDirectoryInformation,
+	FileIsRemoteDeviceInformation,
+	FileAttributeCacheInformation,
+	FileNumaNodeInformation,
+	FileStandardLinkInformation,
+	FileRemoteProtocolInformation,
+	FileMaximumInformation
+} REAL_FILE_INFORMATION_CLASS, * PREAL_FILE_INFORMATION_CLASS;
+typedef struct _FILE_BASIC_INFORMATION {
+	LARGE_INTEGER CreationTime;
+	LARGE_INTEGER LastAccessTime;
+	LARGE_INTEGER LastWriteTime;
+	LARGE_INTEGER ChangeTime;
+	DWORD FileAttributes;
+} FILE_BASIC_INFORMATION, * PFILE_BASIC_INFORMATION;
+typedef struct _FILE_DISPOSITION_INFORMATION {
+	BOOLEAN DeleteFile;
+} FILE_DISPOSITION_INFORMATION, * PFILE_DISPOSITION_INFORMATION;
 #endif
-#ifdef UNICODE
-	Deallocate( char *, _filename );
-#  undef filename
+LOGICAL windowDeepDelete( const char* path )
+{
+	WCHAR* pathw = CharWConvert( path );
+	HANDLE handle;
+	BY_HANDLE_FILE_INFORMATION info;
+	FILE_DISPOSITION_INFORMATION disposition;
+	IO_STATUS_BLOCK iosb;
+	NTSTATUS status;
+	handle = CreateFileW( pathw,
+		FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | DELETE,
+		FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+		NULL,
+		OPEN_EXISTING,
+		FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+		NULL );
+	Deallocate( WCHAR*, pathw );
+	if( handle == INVALID_HANDLE_VALUE ) {
+		//SET_REQ_WIN32_ERROR(req, GetLastError());
+		return FALSE;
+	}
+	if( !GetFileInformationByHandle( handle, &info ) ) {
+		//SET_REQ_WIN32_ERROR(req, GetLastError());
+		CloseHandle( handle );
+		return FALSE;
+	}
+	if( info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ) {
+		/* Do not allow deletion of directories, unless it is a symlink. When the
+		 * path refers to a non-symlink directory, report EPERM as mandated by
+		 * POSIX.1. */
+		 /* Check if it is a reparse point. If it's not, it's a normal directory. */
+		if( !( info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT ) ) {
+			CloseHandle( handle );
+			return FALSE;
+		}
+		/* Read the reparse point and check if it is a valid symlink. If not, don't
+		 * unlink. */
+		 /*
+		 if (fs__readlink_handle(handle, NULL, NULL) < 0) {
+		   DWORD error = GetLastError();
+		   if (error == ERROR_SYMLINK_NOT_SUPPORTED)
+			 error = ERROR_ACCESS_DENIED;
+		   CloseHandle(handle);
+		   return FALSE;
+		 }
+	   */
+	}
+	if( info.dwFileAttributes & FILE_ATTRIBUTE_READONLY ) {
+		/* Remove read-only attribute */
+		FILE_BASIC_INFORMATION basic = { 0 };
+		basic.FileAttributes = ( info.dwFileAttributes & ~FILE_ATTRIBUTE_READONLY ) |
+			FILE_ATTRIBUTE_ARCHIVE;
+		status = pNtSetInformationFile( handle,
+			&iosb,
+			&basic,
+			sizeof basic,
+			(FILE_INFORMATION_CLASS)FileBasicInformation );
+		if( !NT_SUCCESS( status ) ) {
+			CloseHandle( handle );
+			return FALSE;
+		}
+	}
+	/* Try to set the delete flag. */
+	disposition.DeleteFile = TRUE;
+	status = pNtSetInformationFile( handle,
+		&iosb,
+		&disposition,
+		sizeof disposition,
+		(FILE_INFORMATION_CLASS)FileDispositionInformation );
+	if( NT_SUCCESS( status ) ) {
+	}
+	else {
+		return FALSE;
+	}
+	CloseHandle( handle );
+	return TRUE;
+}
 #endif
+static int CPROC sack_filesys_unlink( uintptr_t psv, const char* filename ) {
+	int okay = 0;
+	if( !FileSysThreadInfo._mounted_file_systems ) threadInit();
+	struct file* file = FindFileByName( 0, filename, ( *winfile_local )._mounted_file_systems, NULL );
+	if( file ) file->deleted = 1;
+#ifdef WIN32
+	okay = windowDeepDelete( filename );
+	if( !okay ) okay = DeleteFileA( filename );
+#else
+	okay = !unlink( filename );
+#endif
+	if( !okay ) {
+		file->delete_on_close = 1;
+	}
 	return okay;
 }
-static size_t CPROC sack_filesys_size( void*file ) {
+static size_t CPROC sack_filesys_size( void* file ) {
 	size_t here = ftell( (FILE*)file );
 	size_t length;
 	fseek( (FILE*)file, 0, SEEK_END );
@@ -59490,41 +63308,43 @@ static size_t CPROC sack_filesys_size( void*file ) {
 #endif
 	return length;
 }
-static size_t CPROC sack_filesys_tell( void*file ) { return ftell( (FILE*)file ); }
-static void CPROC sack_filesys_truncate( void*file ) {
+static size_t CPROC sack_filesys_tell( void* file ) { return ftell( (FILE*)file ); }
+static void CPROC sack_filesys_truncate( void* file ) {
+#ifdef _MSC_VER
  // disable ignoring return value of chsize; nothing to do if it fails.
-#pragma warning( disable:  6031 )
+#  pragma warning( disable:  6031 )
+#endif
 #if _WIN32
 	_chsize_s( fileno( (FILE*)file ), _ftelli64( (FILE*)file ) );
 #else
 	ftruncate( fileno( (FILE*)file ), ftell( (FILE*)file ) );
 #endif
 }
-static int CPROC sack_filesys_flush( void*file ) { return fflush( (FILE*)file ); }
-static int CPROC sack_filesys_exists( uintptr_t psv, const char*file );
-static LOGICAL CPROC sack_filesys_rename( uintptr_t psvInstance, const char *original_name, const char *new_name );
+static int CPROC sack_filesys_flush( void* file ) { return fflush( (FILE*)file ); }
+static int CPROC sack_filesys_exists( uintptr_t psv, const char* file );
+static LOGICAL CPROC sack_filesys_rename( uintptr_t psvInstance, const char* original_name, const char* new_name );
 static LOGICAL CPROC sack_filesys_copy_write_buffer( void ) { return FALSE; }
 struct find_cursor_data {
-	char *root;
-	wchar_t *filemask;
-	char *mask;
+	char* root;
+	wchar_t* filemask;
+	char* mask;
 	char namebuf[256];
 #ifdef WIN32
 	intptr_t findHandle;
 	struct _wfinddata_t fileinfo;
 #else
 	DIR* handle;
-	struct dirent *de;
+	struct dirent* de;
 #endif
 };
-static	struct find_cursor * CPROC sack_filesys_find_create_cursor ( uintptr_t psvInstance, const char *root, const char *filemask ){
-	struct find_cursor_data *cursor = New( struct find_cursor_data );
+static	struct find_cursor* CPROC sack_filesys_find_create_cursor( uintptr_t psvInstance, const char* root, const char* filemask ) {
+	struct find_cursor_data* cursor = New( struct find_cursor_data );
 	char maskbuf[512];
 	MemSet( cursor, 0, sizeof( *cursor ) );
 	//snprintf( maskbuf, 512, "%s/%s", root ? root : ".", filemask?filemask:"*" );
-	snprintf( maskbuf, 512, "%s/%s", root ? root : ".", "*" );
+	snprintf( maskbuf, 512, "%s" SYS_PATHCHAR "%s", root ? root : ".", "*" );
 	cursor->mask = StrDup( filemask );
-	cursor->root = StrDup( root?root:"." );
+	cursor->root = StrDup( root ? root : "." );
 	{
 // StrDup( filemask ? filemask : "*" );
 		char* mask = ExpandPath( maskbuf );
@@ -59532,61 +63352,66 @@ static	struct find_cursor * CPROC sack_filesys_find_create_cursor ( uintptr_t ps
 		Deallocate( char*, mask );
 	}
 #ifdef WIN32
-   // windows mode is delayed until findfirst
+	// windows mode is delayed until findfirst
 #else
-	cursor->handle = opendir( root?root:"." );
+	cursor->handle = opendir( root ? root : "." );
 #endif
-	return (struct find_cursor *)cursor;
+	return ( struct find_cursor* )cursor;
 }
-static	int CPROC sack_filesys_find_first( struct find_cursor *_cursor ){
-	struct find_cursor_data *cursor = (struct find_cursor_data *)_cursor;
+static	int CPROC sack_filesys_find_first( struct find_cursor* _cursor ) {
+	struct find_cursor_data* cursor = ( struct find_cursor_data* )_cursor;
 #ifdef WIN32
 	cursor->findHandle = _wfindfirst( cursor->filemask, &cursor->fileinfo );
-	if( cursor->findHandle == -1 )
-	{
-		int err = errno;
-		lprintf( "error:%d", err );
-	}
 	return ( cursor->findHandle != -1 );
 #else
 	if( cursor->handle ) {
 		do {
 			cursor->de = readdir( cursor->handle );
+			//lprintf( "filefound? %s", cursor->de->d_name );
+			if( cursor->de && cursor->de->d_type == DT_DIR) {
+				//lprintf( "result with dir? %s", cursor->de->d_name );
+					break;
+			}
 		} while( cursor->de && !CompareMask( cursor->mask, cursor->de->d_name, 0 ) );
 		return ( cursor->de != NULL );
 	}
 	return 0;
 #endif
 }
-static	int CPROC sack_filesys_find_close( struct find_cursor *_cursor ){
-	struct find_cursor_data *cursor = (struct find_cursor_data *)_cursor;
+static	int CPROC sack_filesys_find_close( struct find_cursor* _cursor ) {
+	struct find_cursor_data* cursor = ( struct find_cursor_data* )_cursor;
 #ifdef WIN32
 	findclose( cursor->findHandle );
 #else
 	if( cursor->handle )
 		closedir( cursor->handle );
 #endif
-	Deallocate( char *, cursor->root );
-	Deallocate( char *, cursor->mask );
-	Deallocate( wchar_t *, cursor->filemask );
-	Deallocate( struct find_cursor_data *, cursor );
+	Deallocate( char*, cursor->root );
+	Deallocate( char*, cursor->mask );
+	Deallocate( wchar_t*, cursor->filemask );
+	Deallocate( struct find_cursor_data*, cursor );
 	return 0;
 }
-static	int CPROC sack_filesys_find_next( struct find_cursor *_cursor ){
-   int r;
-   struct find_cursor_data *cursor = (struct find_cursor_data *)_cursor;
+static	int CPROC sack_filesys_find_next( struct find_cursor* _cursor ) {
+	int r;
+	struct find_cursor_data* cursor = ( struct find_cursor_data* )_cursor;
 #ifdef WIN32
-   r = !_wfindnext( cursor->findHandle, &cursor->fileinfo );
+	r = !_wfindnext( cursor->findHandle, &cursor->fileinfo );
 #else
 	do {
 		cursor->de = readdir( cursor->handle );
+			//lprintf( "filefound? %s", cursor->de->d_name );
+			if( cursor->de && cursor->de->d_type == DT_DIR) {
+				//lprintf( "result with dir? %s", cursor->de->d_name );
+				break;
+			}
 	} while( cursor->de && !CompareMask( cursor->mask, cursor->de->d_name, 0 ) );
-   r = (cursor->de != NULL );
+	r = ( cursor->de != NULL );
 #endif
-   return r;
+	return r;
 }
-static	char * CPROC sack_filesys_find_get_name( struct find_cursor *_cursor ){
-   struct find_cursor_data *cursor = (struct find_cursor_data *)_cursor;
+static	char* CPROC sack_filesys_find_get_name( struct find_cursor* _cursor ) {
+	struct find_cursor_data* cursor = ( struct find_cursor_data* )_cursor;
 #ifdef WIN32
 #   ifdef UNDER_CE
 	return cursor->fileinfo.cFileName;
@@ -59602,11 +63427,11 @@ static	char * CPROC sack_filesys_find_get_name( struct find_cursor *_cursor ){
 	return cursor->namebuf;
 #   endif
 #else
-   return cursor->de->d_name;
+	return cursor->de->d_name;
 #endif
 }
-static	size_t CPROC sack_filesys_find_get_size( struct find_cursor *_cursor ) {
-	struct find_cursor_data *cursor = (struct find_cursor_data *)_cursor;
+static	size_t CPROC sack_filesys_find_get_size( struct find_cursor* _cursor ) {
+	struct find_cursor_data* cursor = ( struct find_cursor_data* )_cursor;
 #ifdef WIN32
 	if( cursor )
 		return cursor->fileinfo.size;
@@ -59620,15 +63445,15 @@ static	size_t CPROC sack_filesys_find_get_size( struct find_cursor *_cursor ) {
 			lprintf( "getsize stat error:%d", errno );
 			return -2;
 		}
-		if( S_ISREG(s.st_mode) )
+		if( S_ISREG( s.st_mode ) )
 			return s.st_size;
 		return -1;
 	}
 #endif
 	return 0;
 }
-static	uint64_t CPROC sack_filesys_find_get_ctime( struct find_cursor *_cursor ) {
-	struct find_cursor_data *cursor = (struct find_cursor_data *)_cursor;
+static	uint64_t CPROC sack_filesys_find_get_ctime( struct find_cursor* _cursor ) {
+	struct find_cursor_data* cursor = ( struct find_cursor_data* )_cursor;
 #ifdef WIN32
 	if( cursor )
 		return cursor->fileinfo.time_create;
@@ -59647,8 +63472,8 @@ static	uint64_t CPROC sack_filesys_find_get_ctime( struct find_cursor *_cursor )
 #endif
 	return 0;
 }
-static	uint64_t CPROC sack_filesys_find_get_wtime( struct find_cursor *_cursor ) {
-	struct find_cursor_data *cursor = (struct find_cursor_data *)_cursor;
+static	uint64_t CPROC sack_filesys_find_get_wtime( struct find_cursor* _cursor ) {
+	struct find_cursor_data* cursor = ( struct find_cursor_data* )_cursor;
 #ifdef WIN32
 	if( cursor )
 		return cursor->fileinfo.time_write;
@@ -59667,21 +63492,21 @@ static	uint64_t CPROC sack_filesys_find_get_wtime( struct find_cursor *_cursor )
 #endif
 	return 0;
 }
-static	LOGICAL CPROC sack_filesys_find_is_directory( struct find_cursor *_cursor ){
-	struct find_cursor_data *cursor = (struct find_cursor_data *)_cursor;
+static	LOGICAL CPROC sack_filesys_find_is_directory( struct find_cursor* _cursor ) {
+	struct find_cursor_data* cursor = ( struct find_cursor_data* )_cursor;
 #ifdef WIN32
 #  ifdef UNDER_CE
-	return ( cursor->fileinfo.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY);
+	return ( cursor->fileinfo.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY );
 #  else
-	return (cursor->fileinfo.attrib & _A_SUBDIR );
+	return ( cursor->fileinfo.attrib & _A_SUBDIR );
 #  endif
 #else
 	char buffer[MAX_PATH_NAME];
-	snprintf( buffer, MAX_PATH_NAME, "%s%s%s", cursor->root, cursor->root[0]?"/":"", cursor->de->d_name );
+	snprintf( buffer, MAX_PATH_NAME, "%s%s%s", cursor->root, cursor->root[0] ? "/" : "", cursor->de->d_name );
 	return IsPath( buffer );
 #endif
 }
-static	LOGICAL CPROC sack_filesys_is_directory( uintptr_t psvInstance, const char *buffer ){
+static	LOGICAL CPROC sack_filesys_is_directory( uintptr_t psvInstance, const char* buffer ) {
 	return IsPath( buffer );
 }
 static struct file_system_interface native_fsi = {
@@ -59714,28 +63539,39 @@ static struct file_system_interface native_fsi = {
 		, NULL
 		, sack_filesys_find_get_ctime
 		, sack_filesys_find_get_wtime
+ // legacy support
+		, sack_filesys_mkdir
+ // legacy support
+		, sack_filesys_rmdir
 } ;
 PRIORITY_PRELOAD( InitWinFileSysEarly, OSALOT_PRELOAD_PRIORITY - 1 )
 {
 	LocalInit();
 	if( !sack_get_filesystem_interface( "native" ) )
 		sack_register_filesystem_interface( "native", &native_fsi );
-	if( !(*winfile_local).default_mount )
-		(*winfile_local).default_mount = sack_mount_filesystem( "native", &native_fsi, 1000, (uintptr_t)NULL, TRUE );
+	if( !( *winfile_local )._default_mount )
+		( *winfile_local )._default_mount = sack_mount_filesystem( "native", &native_fsi, 1000, (uintptr_t)NULL, TRUE );
+	FileSysThreadInfo.default_mount = ( *winfile_local )._default_mount;
+#ifdef WIN32
+	pNtSetInformationFile = (sNtSetInformationFile)LoadFunction(
+		"ntdll.dll",
+		"NtSetInformationFile" );
+#endif
 }
 #if !defined( __NO_OPTIONS__ )
 PRELOAD( InitWinFileSys )
 {
 #  if !defined( __FILESYS_NO_FILE_LOGGING__ )
-	(*winfile_local).flags.bLogOpenClose = SACK_GetProfileIntEx( "SACK/filesys", "Log open and close", (*winfile_local).flags.bLogOpenClose, TRUE );
+	( *winfile_local ).flags.bLogOpenClose = SACK_GetProfileIntEx( "SACK/filesys", "Log open and close", ( *winfile_local ).flags.bLogOpenClose, TRUE );
 #  endif
 }
 #endif
-static void * CPROC sack_filesys_open( uintptr_t psv, const char *filename, const char *opts ) {
-	void *result;
+static void* CPROC sack_filesys_open( uintptr_t psv, const char* filename, const char* opts ) {
+	void* result;
 #ifdef _WIN32
 	wchar_t* wfilename = CharWConvert( filename );
 	wchar_t* wopts = CharWConvert( opts );
+	{ wchar_t* tmp; if( LONG_PATHCHAR ) for( tmp = wfilename; tmp[0]; tmp++ ) if( tmp[0] == '/' ) tmp[0] = LONG_PATHCHAR; }
 	result = _wfopen( wfilename, wopts );
 	Deallocate( wchar_t*, wfilename );
 	Deallocate( wchar_t*, wopts );
@@ -59744,98 +63580,133 @@ static void * CPROC sack_filesys_open( uintptr_t psv, const char *filename, cons
 #endif
 	return result;
 }
-static int CPROC sack_filesys_exists( uintptr_t psv, const char *filename ) {
-	int result;
-#ifdef UNICODE
-	TEXTSTR _filename = DupCStr( filename );
-#define filename _filename
+static int CPROC sack_filesys_exists( uintptr_t psv, const char* filename ) {
+	//int result;
+	//result = sack_existsEx( filename, NULL );//(*winfile_local).default_mount );
+	FILE* tmp;
+#ifdef WIN32
+	wchar_t* wfilename = CharWConvert( filename );
+	{ wchar_t* tmp; if( LONG_PATHCHAR ) for( tmp = wfilename; tmp[0]; tmp++ ) if( tmp[0] == '/' ) tmp[0] = LONG_PATHCHAR; }
+	if( ( tmp = _wfopen( wfilename, L"rb" ) ) ) {
+#else
+	if( ( tmp = fopen( filename, "rb" ) ) ) {
 #endif
-//(*winfile_local).default_mount );
-	result = sack_existsEx( filename, NULL );
-#ifdef UNICODE
-	Deallocate( TEXTSTR, _filename );
-#undef filename
+		fclose( tmp );
+#ifdef WIN32
+		Deallocate( wchar_t*, wfilename );
 #endif
-	return result;
+		return TRUE;
+	}
+#ifdef WIN32
+	Deallocate( wchar_t*, wfilename );
+#endif
+	return FALSE;
+	}
+struct file_system_mounted_interface* sack_get_default_mount( void ) {
+	return FileSysThreadInfo.default_mount;
 }
-struct file_system_mounted_interface *sack_get_default_mount( void ) { return (*winfile_local).default_mount; }
-struct file_system_interface * sack_get_mounted_filesystem_interface( struct file_system_mounted_interface *mount ){
+struct file_system_interface* sack_get_mounted_filesystem_interface( struct file_system_mounted_interface* mount ) {
 	if( mount )
 		return mount->fsi;
 	return NULL;
 }
-uintptr_t sack_get_mounted_filesystem_instance( struct file_system_mounted_interface *mount ){
+uintptr_t sack_get_mounted_filesystem_instance( struct file_system_mounted_interface* mount ) {
 	if( mount )
 		return mount->psvInstance;
 	return 0;
 }
-struct file_system_mounted_interface *sack_get_mounted_filesystem( const char *name )
+struct file_system_mounted_interface* sack_get_mounted_filesystem( const char* name )
 {
-	struct file_system_mounted_interface *root = (*winfile_local).mounted_file_systems;
-	while( root )
-	{
+	if( !FileSysThreadInfo._mounted_file_systems )FileSysThreadInfo._mounted_file_systems = &( *winfile_local )._mounted_file_systems;
+	struct file_system_mounted_interface* root = FileSysThreadInfo.mounted_file_systems;
+	while( root ) {
 		if( root->name ) if( stricmp( root->name, name ) == 0 ) break;
-		root = NextThing( root );
+		root = root->nextLayer;
 	}
 	return root;
 }
-void sack_unmount_filesystem( struct file_system_mounted_interface *mount )
+void sack_unmount_filesystem( struct file_system_mounted_interface* mount )
 {
-	if( mount )
-		UnlinkThing( mount );
+	if( mount->meLayer )
+		mount->meLayer[0] = mount->nextLayer;
 }
-LOGICAL CPROC sack_filesys_rename( uintptr_t psvInstance, const char *original_name, const char *new_name ){
+LOGICAL CPROC sack_filesys_rename( uintptr_t psvInstance, const char* original_name, const char* new_name ) {
 	return sack_renameEx( original_name, new_name, NULL );
 }
-struct file_system_mounted_interface *sack_mount_filesystem( const char *name, struct file_system_interface *fsi, int priority, uintptr_t psvInstance, LOGICAL writable )
+static void link_mount( struct file_system_mounted_interface* mount ) {
+	struct file_system_mounted_interface* root = FileSysThreadInfo.mounted_file_systems;
+	if( !root || ( root->priority >= mount->priority ) ) {
+		if( mount->nextLayer = FileSysThreadInfo.mounted_file_systems )
+			root->meLayer = &mount->nextLayer;
+		mount->meLayer = &FileSysThreadInfo.mounted_file_systems;
+		if( !root )
+			FileSysThreadInfo.default_mount = mount;
+ // higher priorirty, layer this thread's higher priority version.
+		FileSysThreadInfo.mounted_file_systems = mount;
+	}
+	else {
+		// allow a way to get away from the default filesystem.
+		struct file_system_mounted_interface* check, * check_ = root;
+		if( !root->nextLayer ) {
+			root->nextLayer = mount;
+			mount->meLayer = &root->nextLayer;
+			mount->nextLayer = NULL;
+		}
+		else {
+			for( check = root->nextLayer; check; check = check->nextLayer ) {
+				if( check->priority >= mount->priority ) {
+					check_->nextLayer = mount;
+					mount->nextLayer = check;
+					mount->meLayer = check_->meLayer;
+					check_->meLayer = &mount->nextLayer;
+					break;
+				}
+				check_ = check;
+			}
+			if( !check ) {
+				check_->nextLayer = mount;
+				mount->nextLayer = NULL;
+				mount->meLayer = &check_->nextLayer;
+			}
+		}
+	}
+}
+// does this get a new name too? does it have to?
+struct file_system_mounted_interface* sack_remount_filesystem( const char* name, struct file_system_mounted_interface* oldMount, int priority, LOGICAL writable )
 {
-	struct file_system_mounted_interface *root = (*winfile_local).mounted_file_systems;
-	struct file_system_mounted_interface *mount = New( struct file_system_mounted_interface );
-	mount->name = name?strdup( name ):NULL;
+	if( !FileSysThreadInfo._mounted_file_systems ) threadInit();
+	struct file_system_mounted_interface* mount = New( struct file_system_mounted_interface );
+	mount->name = name ? strdup( name ) : NULL;
+	mount->priority = priority?priority:oldMount->priority;
+	mount->writeable = oldMount->writeable && writable;
+	mount->psvInstance = oldMount->psvInstance;
+	mount->fsi = oldMount->fsi;
+	link_mount( mount );
+	return mount;
+}
+struct file_system_mounted_interface* sack_mount_filesystem( const char* name, struct file_system_interface* fsi, int priority, uintptr_t psvInstance, LOGICAL writable )
+{
+	if( !FileSysThreadInfo._mounted_file_systems ) threadInit();
+	struct file_system_mounted_interface* mount = New( struct file_system_mounted_interface );
+	mount->name = name ? strdup( name ) : NULL;
 	mount->priority = priority;
 	mount->psvInstance = psvInstance;
 	mount->writeable = writable;
 	mount->fsi = fsi;
 	//lprintf( "Create mount called %s ", name );
-	if( !root || ( root->priority >= priority ) )
-	{
-		if( !root || root == (*winfile_local).mounted_file_systems )
-		{
-			LinkThing( (*winfile_local).mounted_file_systems, mount );
-		}
-		else
-		{
-			LinkThingBefore( root, mount );
-		}
-	}
-	else while( root )
-	{
-		if( root->priority >= priority )
-		{
- //-V595
-			LinkThingBefore( root, mount );
-			break;
-		}
-		if( !NextThing( root ) )
-		{
-			LinkThingAfter( root, mount );
-			break;
-		}
-		root = NextThing( root );
-	}
+	link_mount( mount );
 	return mount;
 }
-int sack_vfprintf( FILE *file_handle, const char *format, va_list args )
+int sack_vfprintf( FILE * file_handle, const char* format, va_list args )
 {
-	struct file *file;
+	struct file* file;
 	file = FindFileByFILE( file_handle );
-	if( file->mount && file->mount->fsi )
-	{
+	if( file->mount && file->mount->fsi ) {
 		PVARTEXT pvt;
 		PTEXT output;
 		int r;
 #ifdef UNICODE
-		TEXTCHAR *_format = DupCStr( format );
+		TEXTCHAR* _format = DupCStr( format );
 #define format _format
 #endif
 		pvt = VarTextCreate();
@@ -59852,23 +63723,22 @@ int sack_vfprintf( FILE *file_handle, const char *format, va_list args )
 	else
 		return vfprintf( file_handle, format, args );
 }
-int sack_fprintf( FILE *file, const char *format, ... )
+int sack_fprintf( FILE * file, const char* format, ... )
 {
 	va_list args;
 	va_start( args, format );
 	return sack_vfprintf( file, format, args );
 }
-int sack_fputs( const char *format,FILE *file )
+int sack_fputs( const char* format, FILE * file )
 {
-	if( format )
-	{
+	if( format ) {
 		size_t len = strlen( format );
 		return (int)( sack_fwrite( format, 1, (int)len, file ) & 0x7FFFFFFF );
 	}
 	return 0;
 }
-uintptr_t sack_ioctl( FILE *file_handle, uintptr_t opCode, ... ) {
-	struct file *file;
+uintptr_t sack_ioctl( FILE * file_handle, uintptr_t opCode, ... ) {
+	struct file* file;
 	va_list args;
 	va_start( args, opCode );
 	file = FindFileByFILE( file_handle );
@@ -59876,11 +63746,11 @@ uintptr_t sack_ioctl( FILE *file_handle, uintptr_t opCode, ... ) {
 		return file->mount->fsi->ioctl( (uintptr_t)file_handle, opCode, args );
 	}
 	else {
-		 // unknown file handle; ignore unknown ioctl.
+		// unknown file handle; ignore unknown ioctl.
 	}
-	return 0;
+	return ENOTSUP;
 }
-uintptr_t sack_fs_ioctl( struct file_system_mounted_interface *mount, uintptr_t opCode, ... ) {
+uintptr_t sack_fs_ioctl( struct file_system_mounted_interface* mount, uintptr_t opCode, ... ) {
 	va_list args;
 	va_start( args, opCode );
 	if( mount && mount->fsi && mount->fsi->fs_ioctl ) {
@@ -59889,7 +63759,7 @@ uintptr_t sack_fs_ioctl( struct file_system_mounted_interface *mount, uintptr_t 
 	else {
 		// unknown file handle; ignore unknown ioctl.
 	}
-	return 0;
+	return ENOTSUP;
 }
 LOGICAL SetFileLength( CTEXTSTR path, size_t length )
 {
@@ -59912,7 +63782,32 @@ LOGICAL SetFileLength( CTEXTSTR path, size_t length )
 	sack_iclose( file );
 	return TRUE;
 }
+void sack_filesys_enable_thread_mounts( void ) {
+	FileSysThreadInfo.default_mount = NULL;
+	FileSysThreadInfo._mounted_file_systems = &FileSysThreadInfo.thread_local_mounted_file_systems;
+}
+int sack_flock( FILE* file_ ) {
+	struct file *file = FindFileByFILE( file_ );
+	if( file ) {
+		if( file->mount->fsi->_lock )
+			return file->mount->fsi->_lock( file_ );
+	}
+	return 0;
+}
+int sack_funlock( FILE* file_ ) {
+	struct file* file = FindFileByFILE( file_ );
+	if( file ) {
+		if( file->mount->fsi->_unlock )
+			return file->mount->fsi->_unlock( file_ );
+	}
+	return 0;
+}
 FILESYS_NAMESPACE_END
+#ifdef _MSC_VER
+#  pragma warning( default: 6387 )
+ // disable ignoring return value of chsize; nothing to do if it fails.
+#  pragma warning( default: 6031 )
+#endif
 #define NO_UNICODE_C
 #ifdef _MSC_VER
 #ifndef _CRT_SECURE_NO_WARNINGS
@@ -59962,7 +63857,7 @@ try_mask:
 	{
 		if( mask[m] == '\t' || mask[m] == '|' )
 		{
-			lprintf( "Found mask seperator - skipping to next mask :%s", mask + m + 1 );
+			//lprintf( "Found mask seperator - skipping to next mask :%s", mask + m + 1 );
 			n = 0;
 			m++;
 			continue;
@@ -60215,7 +64110,7 @@ struct find_cursor *GetScanFileCursor( void *pInfo ) {
 					SimpleRegisterAndCreateGlobal( winfile_local );
 				//lprintf( "... %p", winfile_local );
 				pData->single_mount = FALSE;
-				pData->scanning_mount = (*winfile_local).mounted_file_systems;
+				pData->scanning_mount = FileSysThreadInfo.mounted_file_systems;
 			}
 			else
 				pData->single_mount = TRUE;
@@ -60226,7 +64121,7 @@ struct find_cursor *GetScanFileCursor( void *pInfo ) {
 					Release( tmp_base );
 				return 0;
 			}
-			if( pData->scanning_mount->fsi )
+			if( pData->scanning_mount->fsi && pData->scanning_mount->fsi->find_create_cursor )
 			{
 				char *tmp1, *tmp2;
 				//lprintf( "create cursor" );
@@ -60245,7 +64140,7 @@ struct find_cursor *GetScanFileCursor( void *pInfo ) {
 		{
 			if( pData->new_mount )
 			{
-				if( pData->scanning_mount->fsi )
+				if( pData->scanning_mount->fsi && pData->scanning_mount->fsi->find_create_cursor )
 				{
 					//lprintf( "create cursor (new mount)" );
 					tmp_base = ExpandPathEx( base, pData->scanning_mount->fsi );
@@ -60292,7 +64187,7 @@ struct find_cursor *GetScanFileCursor( void *pInfo ) {
 		}
 		findmaskw(pInfo) = CharWConvertLen( findmask( pInfo ), strlen( findmask( pInfo ) ) );
 		if( findbasename(pInfo)[0] )
-			tnprintf( findmask, sizeof(findmask), "%s/*", findbasename(pInfo) );
+			tnprintf( findmask, sizeof(findmask), "%s" PATHCHAR "*", findbasename(pInfo) );
 		else {
 			tnprintf( findmask, sizeof( findmask ), "*" );
 		}
@@ -60345,7 +64240,7 @@ struct find_cursor *GetScanFileCursor( void *pInfo ) {
 				//closedir( findhandle( pInfo ) );
 #endif
 			}
-			pData->scanning_mount = NextThing( pData->scanning_mount );
+			pData->scanning_mount =  pData->scanning_mount ->nextLayer;
 			if( !pData->scanning_mount || pData->single_mount )
 			{
 				(*pData->root_info) = pData->prior;
@@ -60384,7 +64279,7 @@ getnext:
 		{
 			PMFD prior = pData->prior;
 			//lprintf( "nothing left to find..." );
-			if( pData->scanning_mount->fsi )
+			if( pData->scanning_mount && pData->scanning_mount->fsi )
 				pData->scanning_mount->fsi->find_close( findcursor(pInfo) );
 			else
 			{
@@ -60394,7 +64289,7 @@ getnext:
 				closedir( (DIR*)findhandle(pInfo));
 #endif
 			}
-			pData->scanning_mount = NextThing( pData->scanning_mount );
+			pData->scanning_mount =  pData->scanning_mount ->nextLayer;
 			//lprintf( "Step mount... %p %d", pData->scanning_mount, pData->single_mount );
 			if( !pData->scanning_mount || pData->single_mount )
 			{
@@ -60455,7 +64350,7 @@ getnext:
 		{
 			tnprintf( pData->file_buffer, MAX_PATH_NAME, "%s", pData->scanning_mount->fsi->find_get_name( findcursor(pInfo) ) );
 			if( findbasename( pInfo )[0] )
-				tnprintf( pData->buffer, MAX_PATH_NAME, "%s/%s", findbasename(pInfo), pData->file_buffer );
+				tnprintf( pData->buffer, MAX_PATH_NAME, "%s" PATHCHAR "%s", findbasename(pInfo), pData->file_buffer );
 			else
 				tnprintf( pData->buffer, MAX_PATH_NAME, "%s", pData->file_buffer );
 		}
@@ -60464,14 +64359,14 @@ getnext:
 #ifdef WIN32
 #  ifdef UNDER_CE
 			tnprintf( pData->file_buffer, MAX_PATH_NAME, "%s", finddata( pInfo )->cFileName );
-			tnprintf( pData->buffer, MAX_PATH_NAME, "%s/%s", findbasename(pInfo), finddata(pInfo)->cFileName );
+			tnprintf( pData->buffer, MAX_PATH_NAME, "%s" PATHCHAR "%s", findbasename(pInfo), finddata(pInfo)->cFileName );
 #  else
 			tnprintf( pData->file_buffer, MAX_PATH_NAME, "%ls", finddata(pInfo)->name );
-			tnprintf( pData->buffer, MAX_PATH_NAME, "%s%s%s", findbasename(pInfo), findbasename( pInfo )[0]?"/":"", pData->file_buffer );
+			tnprintf( pData->buffer, MAX_PATH_NAME, "%s%s%s", findbasename(pInfo), findbasename( pInfo )[0]?PATHCHAR:"", pData->file_buffer );
 #  endif
 #else
 			tnprintf( pData->file_buffer, MAX_PATH_NAME, "%s", de->d_name );
-			tnprintf( pData->buffer, MAX_PATH_NAME, "%s%s%s", findbasename(pInfo), findbasename( pInfo )[0]?"/":"", de->d_name );
+			tnprintf( pData->buffer, MAX_PATH_NAME, "%s%s%s", findbasename(pInfo), findbasename( pInfo )[0]?PATHCHAR:"", de->d_name );
 #endif
 		}
 	}
@@ -60483,7 +64378,7 @@ getnext:
 			{
 				tnprintf( pData->buffer, MAX_PATH_NAME, "%s%s%s"
 					  , pData->prior?pData->prior->buffer:""
-					  , pData->prior?"/":""
+					  , pData->prior?PATHCHAR:""
 					, pData->scanning_mount->fsi->find_get_name( findcursor(pInfo) )
 					);
 			}
@@ -60493,18 +64388,18 @@ getnext:
 #  ifdef UNDER_CE
 				tnprintf( pData->buffer, MAX_PATH_NAME, "%s%s%s"
 						  , pData->prior?pData->prior->buffer:""
-						  , pData->prior?"/":""
+						  , pData->prior?PATHCHAR:""
 						  , finddata(pInfo)->cFileName );
 #  else
 				tnprintf( pData->buffer, MAX_PATH_NAME, "%s%s%ls"
 						  , pData->prior?pData->prior->buffer:""
-						  , pData->prior?"/":""
+						  , pData->prior?PATHCHAR:""
 						  , finddata(pInfo)->name );
 #  endif
 #else
 				tnprintf( pData->buffer, MAX_PATH_NAME, "%s%s%s"
 					  , pData->prior?pData->prior->buffer:""
-					  , pData->prior?"/":""
+					  , pData->prior?PATHCHAR:""
 					  , de->d_name );
 					  lprintf( "resulting is %s", pData->buffer );
 #endif
@@ -60581,21 +64476,21 @@ getnext:
 				if( pData->scanning_mount && pData->scanning_mount->fsi )
 				{
 					/*ofs = */
-tnprintf( tmpbuf, sizeof( tmpbuf ), "%s/%s", findbasename( pInfo ), pData->scanning_mount->fsi->find_get_name( findcursor( pInfo ) ) );
+tnprintf( tmpbuf, sizeof( tmpbuf ), "%s" PATHCHAR "%s", findbasename( pInfo ), pData->scanning_mount->fsi->find_get_name( findcursor( pInfo ) ) );
 				}
 				else
 				{
 #ifdef WIN32
 #  ifdef UNDER_CE
 					/*ofs = */
-tnprintf( tmpbuf, sizeof( tmpbuf ), "%s/%s", findbasename( pInfo ), finddata( pInfo )->cFileName );
+tnprintf( tmpbuf, sizeof( tmpbuf ), "%s" PATHCHAR "%s", findbasename( pInfo ), finddata( pInfo )->cFileName );
 #  else
 					/*ofs = */
-tnprintf( tmpbuf, sizeof( tmpbuf ), "%s/%ls", findbasename( pInfo ), finddata( pInfo )->name );
+tnprintf( tmpbuf, sizeof( tmpbuf ), "%s" PATHCHAR "%ls", findbasename( pInfo ), finddata( pInfo )->name );
 #  endif
 #else
 					/*ofs = */
-tnprintf( tmpbuf, sizeof( tmpbuf ), "%s/%s", findbasename( pInfo ), de->d_name );
+tnprintf( tmpbuf, sizeof( tmpbuf ), "%s" PATHCHAR "%s", findbasename( pInfo ), de->d_name );
 #endif
 				}
 				//lprintf( "process sub... %s %s", tmpbuf, findmask(pInfo)  );
@@ -61417,7 +65312,7 @@ void ConvertTickToTime( int64_t tick, PSACK_TIME st ) {
 	struct tm tm;
 	tv.tv_sec = ( tick >> 8 ) / 1000;
 	tv.tv_usec =  ( ( tick >> 8 ) % 1000 ) * 1000;
-	gmtime_r( &tv.tv_sec, &tm );
+	localtime_r( &tv.tv_sec, &tm );
 	st->yr = tm.tm_year + 1900;
 	st->mo = tm.tm_mon+1;
 	st->dy = tm.tm_mday;
@@ -61429,7 +65324,7 @@ void ConvertTickToTime( int64_t tick, PSACK_TIME st ) {
 	st->zmn = (tz*15) % 60;
 #endif
 }
-int64_t GetTimeOfDay( void )
+int64_t GetTimeOfDay( uint64_t* tick, int8_t* ptz )
 {
 	//struct timezone tzp;
 	int tz = GetTimeZone();
@@ -61439,6 +65334,10 @@ int64_t GetTimeOfDay( void )
 	else
  // -840/15 = -56  720/15 = 48
 		tz = (((tz / 100) * 60) + (tz % 100)) / 15;
+	tick[0] = timeGetTime64ns();
+	tick[0] += (int64_t)tz * 900 * (int64_t)1000000000;
+	ptz[0] = tz;
+	return ( tick[0] /1000000 )<<8 | (tz&0xFF);
 #ifdef _WIN32
 	// Note: some broken versions only have 8 trailing zero's, the correct epoch has 9 trailing zero's
 	// This magic number is the number of 100 nanosecond intervals since January 1, 1601 (UTC)
@@ -62105,7 +66004,7 @@ void SystemLogFL( const TEXTCHAR *message FILELINE_PASS )
 	else
 		sourcefile[0] = 0;
 	if( (*syslog_local).flags.bLogThreadID )
-		tnprintf( threadid, sizeof( threadid ), "%012" _64fX "~", GetMyThreadID() );
+		tnprintf( threadid, sizeof( threadid ), "%012" _64fX "~", GetThisThreadID() );
 	if( pFile )
 		tnprintf( buffer, sizeof( buffer )
 				  , "%s%s%s%s%s%s%s"
@@ -62341,7 +66240,7 @@ static INDEX CPROC _real_vlprintf ( CTEXTSTR format, va_list args )
 		// argsize - the program's giving us file and line
 		// debug for here or not, this must be used.
 		if( (*syslog_local).flags.bLogThreadID )
-			tnprintf( threadid, sizeof( threadid ), "%012" _64fX "~", GetMyThreadID() );
+			tnprintf( threadid, sizeof( threadid ), "%012" _64fX "~", GetThisThreadID() );
 #ifdef UNDER_CE
 		tnprintf( buffer + ofs, 4095 - ofs, "%s%s%s"
 				  , (*syslog_local).flags.bLogThreadID?threadid:""
@@ -62628,7 +66527,7 @@ struct va_args_tag {
 #define init_args(name) name.argCount = 0; name.argsize = 0; name.args = NULL;
   // 32 bits.
 #define ARG_STACK_SIZE 4
-#define PushArgument( argset, argType, type, arg )	                                 ((argset.args = (arg_list*)Preallocate( argset.args		                        , argset.argsize += ((sizeof( enum configArgType )				                 + sizeof( type )				                                   + (ARG_STACK_SIZE-1) )&-ARG_STACK_SIZE) ) )	        ?(argset.argCount++)	                                                        ,((*(enum configArgType*)(argset.args))=(argType))	                         ,(*(type*)(((uintptr_t)argset.args)+sizeof(enum configArgType)) = (arg))	   ,0	                                                                        :0)
+#define PushArgument( argset, argType, type, arg )	                                 ((argset.args = (arg_list*)Preallocate( argset.args		                        , argset.argsize += ((sizeof( enum configArgType )				                 + sizeof( type )				                                   + (ARG_STACK_SIZE-1) )&-ARG_STACK_SIZE) ) )	        ?(argset.argCount++)	                                                        ,((*(enum configArgType*)(argset.args))=(argType))	                         ,(*(type*)((((uintptr_t)argset.args)+sizeof(enum configArgType)+ (ARG_STACK_SIZE-1) )&-ARG_STACK_SIZE) = (arg))	   ,0	                                                                        :0)
 #define PopArguments( argset ) { Release( argset.args ); argset.args=NULL; }
 #define pass_args(argset) (( (argset).tmp_args = (argset).args )	                        ,(*(arg_list*)(&argset.tmp_args)))
 /*
@@ -62920,7 +66819,7 @@ struct config_element_tag
 				// either the count will be specified, or this will have to
 				// be auto expanded....
 };
-#define CONFIG_EMPTY_EXTRA ,NULL,NULL,NULL,{0,0,0,0},0,{0}
+#define CONFIG_EMPTY_EXTRA ,NULL,NULL,NULL,{0,0,0,0},0,{{0}}
 typedef struct config_test_tag
 {
 	// this constant list could be a more optimized structure like
@@ -65764,16 +69663,16 @@ CTEXTSTR FormatColor( CDATA color )
 #define SYSTEM_SOURCE
 #endif
 SACK_SYSTEM_NAMESPACE
-SYSTEM_PROC( void, ParseIntoArgs )( TEXTCHAR *lpCmdLine, int *pArgc, TEXTCHAR ***pArgv )
+SYSTEM_PROC( void, ParseIntoArgs )( TEXTCHAR const* lpCmdLine, int *pArgc, TEXTCHAR ***pArgv )
 {
-	TEXTCHAR *args = lpCmdLine;
-	TEXTCHAR  *p;
+	TEXTCHAR const* args = lpCmdLine;
+	TEXTCHAR const* p;
 	TEXTCHAR **pp;
-   //TEXTCHAR argc; // result variable, count is a temp counter...
+	//TEXTCHAR argc; // result variable, count is a temp counter...
  // result variable, pp is a temp pointer
-   TEXTCHAR **argv;
+	TEXTCHAR **argv;
 	TEXTCHAR quote = 0;
-   int escape = 0;
+	int escape = 0;
 	int count = 0;
 	int lastchar;
  // auto continue spaces...
@@ -65786,16 +69685,16 @@ SYSTEM_PROC( void, ParseIntoArgs )( TEXTCHAR *lpCmdLine, int *pArgc, TEXTCHAR **
 		if( escape ) {
 			if( p[0] == '\"' || p[0] == '\'' ) {
 				escape = 0;
-            count++;
+				count++;
 			}
 			else {
 				escape = 0;
-            count += 2;
+				count += 2;
 			}
 		}
 		else if( p[0] == '\\' ) {
 			escape = 1;
-         count++;
+			count++;
 		}
 		else if( quote )
 		{
@@ -65829,13 +69728,13 @@ SYSTEM_PROC( void, ParseIntoArgs )( TEXTCHAR *lpCmdLine, int *pArgc, TEXTCHAR **
  // complete this argument
 		count++;
 	else if( p != args )
-      count++;
+		count++;
 	if( count )
 	{
-		TEXTCHAR *start;
+		TEXTCHAR const* start;
  // auto continue spaces...
 		lastchar = ' ';
-      //lprintf( "Array is %d (+2?)", count );
+		//lprintf( "Array is %d (+2?)", count );
 		pp = argv = NewArray( TEXTCHAR*, count + 2 );
 		//argc = count - 2;
 		p = args;
@@ -65859,9 +69758,7 @@ SYSTEM_PROC( void, ParseIntoArgs )( TEXTCHAR *lpCmdLine, int *pArgc, TEXTCHAR **
 						start = p;
 					if( p[0] == quote )
 					{
-						p[0] = 0;
-						pp[count++] = StrDup( start );
-						p[0] = quote;
+						pp[count++] = DupCStrLen( start, p - start );
 						quote = 0;
 						start = NULL;
 						lastchar = ' ';
@@ -65878,10 +69775,8 @@ SYSTEM_PROC( void, ParseIntoArgs )( TEXTCHAR *lpCmdLine, int *pArgc, TEXTCHAR **
  // and there's a space
 						if( lastchar != ' ' && p[0] == ' ' )
 						{
-							p[0] = 0;
-							pp[count++] = StrDup( start );
+							pp[count++] = DupCStrLen( start, p - start );
 							start = NULL;
-							p[0] = ' ';
 						}
 						else if( lastchar == ' ' && p[0] != ' ' )
 						{
@@ -65898,14 +69793,14 @@ SYSTEM_PROC( void, ParseIntoArgs )( TEXTCHAR *lpCmdLine, int *pArgc, TEXTCHAR **
 		if( start )
 			pp[count++] = StrDup( start );
 		pp[count] = NULL;
-      if( pArgc )
+		if( pArgc )
 			(*pArgc) = count;
-      if( pArgv )
+		if( pArgv )
 			(*pArgv) = argv;
 	}
 	else
 	{
-      if( pArgc )
+		if( pArgc )
 			(*pArgc) = 0;
 		if( pArgv )
 		{
@@ -66049,6 +69944,7 @@ typedef struct loaded_library_tag
 	PLIST system_tasks;
 	PLIBRARY libraries;
 	PTREEROOT pFunctionTree;
+	LOGICAL allow_spawn;
 	int nLibrary;
 	LOGICAL (CPROC*ExternalLoadLibrary)( const char *filename );
  // please Release or Deallocate the reutrn value
@@ -68168,6 +72064,13 @@ void SetProgramName( CTEXTSTR filename )
 	SystemInit();
 	l.filename = filename;
 }
+DeclareThreadVar LOGICAL disallow_spawn;
+LOGICAL sack_system_allow_spawn( void ) {
+	return !disallow_spawn;
+}
+void sack_system_disallow_spawn( void ) {
+	disallow_spawn = TRUE;
+}
 #undef Seek
 SACK_SYSTEM_NAMESPACE_END
 #define NO_UNICODE_C
@@ -68461,8 +72364,29 @@ SYSTEM_PROC( PTASK_INFO, LaunchPeerProgramExx )( CTEXTSTR program, CTEXTSTR path
 															  )
 {
 	PTASK_INFO task;
-	TEXTSTR expanded_path = ExpandPath( program );
-	TEXTSTR expanded_working_path = path?ExpandPath( path ):ExpandPath( "." );
+	if( !sack_system_allow_spawn() ) return NULL;
+// = ExpandPath( program );
+	TEXTSTR expanded_path;
+	TEXTSTR expanded_working_path = path ? ExpandPath( path ) : NULL;
+	if( path ) {
+		path = ExpandPath( path );
+		if( IsAbsolutePath( program ) ) {
+			expanded_path = ExpandPath( program );
+		}
+		else {
+			PVARTEXT pvtPath;
+			pvtPath = VarTextCreate();
+			if( path[0] == '.' && path[1] == 0 )
+				vtprintf( pvtPath, "%s", program );
+			else
+				vtprintf( pvtPath, "%s" "/" "%s", path, program );
+			expanded_path = ExpandPath( GetText( VarTextPeek( pvtPath ) ) );
+			VarTextDestroy( &pvtPath );
+		}
+	} else {
+		path = ExpandPath( "." );
+		expanded_path = ExpandPath( program );
+	}
 	if( program && program[0] )
 	{
 #ifdef WIN32
@@ -68734,13 +72658,15 @@ SYSTEM_PROC( PTASK_INFO, LaunchPeerProgramExx )( CTEXTSTR program, CTEXTSTR path
 			if( OutputHandler )
 			{
 				if( pipe(task->hStdIn.pair) < 0 ) {
-					Release( expanded_working_path );
+					if( expanded_working_path )
+						Release( expanded_working_path );
 					Release( expanded_path );
 					return NULL;
 				}
 				task->hStdIn.handle = task->hStdIn.pair[1];
 				if( pipe(task->hStdOut.pair) < 0 ) {
-					Release( expanded_working_path );
+					if (expanded_working_path)
+						Release( expanded_working_path );
 					Release( expanded_path );
 					return NULL;
 				}
@@ -68748,11 +72674,6 @@ SYSTEM_PROC( PTASK_INFO, LaunchPeerProgramExx )( CTEXTSTR program, CTEXTSTR path
 			}
 			// always have to thread to taskend so waitpid can clean zombies.
 			ThreadTo( WaitForTaskEnd, (uintptr_t)task );
-			if( path )
-			{
-				GetCurrentPath( saved_path, sizeof( saved_path ) );
-				SetCurrentPath( path );
-			}
 			if( !( newpid = fork() ) )
 			{
 				// after fork; check that args has a space for
@@ -68770,6 +72691,8 @@ SYSTEM_PROC( PTASK_INFO, LaunchPeerProgramExx )( CTEXTSTR program, CTEXTSTR path
 					newArgs[0] = (char*)program;
 					args = (PCTEXTSTR)newArgs;
 				}
+				if( path )
+					chdir( path );
 				char *_program = CStrDup( program );
 				// in case exec fails, we need to
 				// drop any registered exit procs...
@@ -68827,12 +72750,8 @@ SYSTEM_PROC( PTASK_INFO, LaunchPeerProgramExx )( CTEXTSTR program, CTEXTSTR path
 			// how can I know if the command failed?
 			// well I can't - but the user's callback will be invoked
 			// when the above exits.
-			if( path )
-			{
-				// if path is NULL we didn't change the path...
-				SetCurrentPath( saved_path );
-			}
-			Release( expanded_working_path );
+			if (expanded_working_path)
+				Release( expanded_working_path );
 			Release( expanded_path );
 			return task;
 		}
@@ -70033,9 +73952,13 @@ PROCREG_PROC( LOGICAL, RegisterFunctionExx )( PCLASSROOT root
 					oldname->data.proc.procname = newname->data.proc.procname;
 					newname->data.proc.name = NULL;
 				}
-				else if( oldname->data.proc.proc == proc )
-					Log( "And fortunatly it's the same address... all is well..." );
-				else
+				else if( oldname->data.proc.proc == proc ) {
+#ifdef _DEBUG
+					CTEXTSTR file = GetRegisteredValue( (CTEXTSTR)&oldname->tree, "Source File" );
+					int line = (int)(uintptr_t)GetRegisteredValueEx( (CTEXTSTR)&oldname->tree, "Source Line", TRUE );
+					lprintf( "Duplicate function registration, it's the same address as before... %s(%d) %s(%d) %s %s", file, line, pFile, nLine, name_class, public_name );
+#endif
+				}else
 				{
 					TEXTSTR s1, s2;
 #ifndef NO_LOGGING
@@ -71047,7 +74970,7 @@ static uintptr_t CPROC SetOptionSet( uintptr_t psv, arg_list args )
 #ifndef __NO_OPTIONS__
 	PARAM( args, TEXTSTR, key );
 	PARAM( args, CTEXTSTR, value );
-	size_t valueLen = strlen( value );
+	size_t valueLen = value?strlen( value ):0;
 	TEXTCHAR *buf = (TEXTCHAR*)malloc( valueLen + 2 );
 	if( l.flags.bFindEndif || l.flags.bFindElse )
 		return psv;
@@ -71192,6 +75115,7 @@ void ReadConfiguration( void )
 		AddConfigurationMethod( pch, "endif", EndTestOption );
 		AddConfigurationMethod( pch, "else", ElseTestOption );
 		AddConfigurationMethod( pch, "service=%w library=%w load=%w unload=%w", HandleLibrary );
+		AddConfigurationMethod( pch, "alias service '%m' = '%m'", HandleAlias );
 		AddConfigurationMethod( pch, "alias service %w %w", HandleAlias );
 		AddConfigurationMethod( pch, "module %w", HandleModule );
 		AddConfigurationMethod( pch, "pmodule %w", HandlePrivateModule );
@@ -71211,8 +75135,8 @@ void ReadConfiguration( void )
 			if( l.config_filename )
 			{
 				success = ProcessConfigurationFile( pch, l.config_filename, 0 );
-				if( !success )
-					lprintf( "Failed to open custom interface configuration file:%s", l.config_filename );
+				//if( !success )
+				//	lprintf( "Failed to open custom interface configuration file:%s", l.config_filename );
 				return;
 			}
 			if( !success )
@@ -71609,7 +75533,7 @@ public ref class ProcReg
 				if( oldname )
 				{
 					if( oldname->data.stdproc.proc == Delegate )
-						Log( "And fortunatly it's the same address... all is well..." );
+						lprintf( "And fortunatly it's the same address... all is well: %s", newname->name );
 					else
 					{
 						xlprintf( 2 )( "proc %s/%s regisry by %s of %s(%s) conflicts with %s(%s)..."
@@ -73769,6 +77693,7 @@ static void MD5_memset (uint8_t* output, int value, unsigned int len)
  */
 #ifndef INCLUDED_SHA1_H_
 #define INCLUDED_SHA1_H_
+#define _SHA1_H_
 #ifdef SHA1_SOURCE
 #define SHA1_PROC(type,name) EXPORT_METHOD type CPROC name
 #else
@@ -76861,8 +80786,8 @@ void SRG_GetEntropyBuffer( struct random_context *ctx, uint32_t *buffer, uint32_
 		//    if get_bits == 32
 		//    but bits_used is 1-7, then it would have to pull 5 bytes to get the 32 required
 		//    so truncate get_bits to 25-31 bits
-		if( 32 < (get_bits + (ctx->bits_used & 0x7)) )
-			get_bits = (32 - (ctx->bits_used & 0x7));
+		if( 32 < (get_bits + (ctx->bits_used & 0x1f)) )
+			get_bits = (32 - (ctx->bits_used & 0x1f));
 		// if resultBits is 1-7 offset, then would have to store up to 5 bytes of value
 		//    so have to truncate to just the up to 4 bytes that will fit.
 		if( (get_bits+ resultBits) > 32 )
@@ -77067,11 +80992,27 @@ char *SRG_ID_Generator4( void ) {
 	used[usingCtx] = 0;
 	return EncodeBase64Ex( (uint8*)buf, (16 + 16), &outlen, (const char *)1 );
 }
+char *SRG_ID_ShortGenerator4( void ) {
+	    struct random_context *ctx;
+	uint32_t buf[(12)/4];
+	size_t outlen;
+	static struct random_context *_ctx[SRG_MAX_GENERATOR_THREADS];
+	static uint32_t used[SRG_MAX_GENERATOR_THREADS];
+	int usingCtx;
+	usingCtx = 0;
+	ctx = getGenerator( _ctx, used, SRG_CreateEntropy4, &usingCtx );
+        SRG_GetEntropyBuffer( ctx, buf, 8 * (12) );
+	used[usingCtx] = 0;
+	return EncodeBase64Ex( (uint8*)buf, (12), &outlen, (const char *)1 );
+}
 #ifndef SALTY_RANDOM_GENERATOR_SOURCE
 #define SALTY_RANDOM_GENERATOR_SOURCE
 #endif
+#ifdef _MSC_VER
+// integer partial expresions summed into 64 bit.
 // partial lower bit expressions
-#pragma warning( disable: 26451 )
+#  pragma warning( disable: 26451 )
+#endif
 static struct crypt_local
 {
 	char * use_salt;
@@ -77692,9 +81633,18 @@ PRELOAD( CryptTestBuiltIn ) {
 #endif
 }
 #endif
+#ifdef _MSC_VER
+// integer partial expresions summed into 64 bit.
+// partial lower bit expressions
+#  pragma warning( default: 26451 )
+#endif
+#ifdef _MSC_VER
+// integer partial expresions summed into 64 bit.
+// partial lower bit expressions
 // disable warnings about integer partial expressions being used
 // to sum to larger integers.
-#pragma warning( disable: 26451 )
+#  pragma warning( disable: 26451 )
+#endif
 struct block_shuffle_key
 {
 	size_t width;
@@ -78106,6 +82056,13 @@ void BlockShuffle_BusBytes( struct byte_shuffle_key *key
 		bytes_output[0] = map[bytes_input[0]];
 	}
 }
+#ifdef _MSC_VER
+// integer partial expresions summed into 64 bit.
+// partial lower bit expressions
+// disable warnings about integer partial expressions being used
+// to sum to larger integers.
+#  pragma warning( default: 26451 )
+#endif
 #ifdef _WIN64
 #ifndef __64__
 #define __64__
