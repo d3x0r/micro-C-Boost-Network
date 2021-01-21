@@ -188,7 +188,19 @@ operations.  Uses windows `InterlockedExchanged()` function.
 PLIST, PLINKQUEUE are strongly threadsafe by default.  All other containers are also thread safe, but are not worthy of comment.
 The actual point is that PLIST and PLINKQUEUE types are optimally thread safe even when interacting on the same list or queue.
 
+## Building
 
+`TARGETNAME` symbol should be defined to match the final target name that this is compiled into.
+
+```
+# (win32)
+gcc "-DTARGETNAME=""a.exe""" -o a.exe test.c sack_ucb_networking.c
+
+# (bash)
+gcc "-DTARGETNAME=\"a.exe\"" -o a.exe test.c sack_ucb_networking.c
+```
+
+Otherwise simply compiling `sack_usb_networking.c` and including `sack_ucb_network.h` in your own code and compiling is all that is required.
 
 ## Compile Time Options 
 
