@@ -365,47 +365,63 @@ The HTTP State of the request is available using `GetWebSocketHttpState`.  Which
 accessor methods to get the resource path, headers, and content of an HTTP message (either request and response).
 
 ``` C
+
 uintptr_t on_http_request(PCLIENT pc, uintptr_t psv){
 	struct HttpState *pHttpState = GetWebSocketHttpState( pc );
 
- /* Gets the specific result code at the header of the packet -
+
+/* Gets the specific result code at the header of the packet -
    http 2.0 OK sort of thing.                                  */
 PTEXT HTTPAPI GetHttpResponce( HTTPState pHttpState );
-/* Get the method of the request in ht e http state.
-*/
-HTTP_EXPORT PTEXT HTTPAPI GetHttpMethod( struct HttpState *pHttpState );
+
+
+/* Get the method of the request in ht e http state. */
+PTEXT HTTPAPI GetHttpMethod( struct HttpState *pHttpState );
+
+
 /*Get the value of a HTTP header field, by name
    Parameters
 	pHttpState: the state to get the header field from.
 	name: name of the field to get (checked case insensitive)
 */
-HTTP_EXPORT PTEXT HTTPAPI GetHTTPField( HTTPState pHttpState, CTEXTSTR name );
+PTEXT HTTPAPI GetHTTPField( HTTPState pHttpState, CTEXTSTR name );
+
+
 /* Gets the specific request code at the header of the packet -
    http 2.0 OK sort of thing.                                  */
-HTTP_EXPORT PTEXT HTTPAPI GetHttpRequest( HTTPState pHttpState );
+PTEXT HTTPAPI GetHttpRequest( HTTPState pHttpState );
+
+
 /* \Returns the body of the HTTP packet (the part of data
    specified by content-length or by termination of the
    connection(? think I didn't implement that right)      */
-HTTP_EXPORT PTEXT HTTPAPI GetHttpContent( HTTPState pHttpState );
+PTEXT HTTPAPI GetHttpContent( HTTPState pHttpState );
+
+
 /* \Returns the resource path/name of the HTTP packet (the part of data
    specified by content-length or by termination of the
    connection(? think I didn't implement that right)      */
-HTTP_EXPORT PTEXT HTTPAPI GetHttpResource( HTTPState pHttpState );
+PTEXT HTTPAPI GetHttpResource( HTTPState pHttpState );
+
+
 /* Returns a list of fields that were included in a request header.
    members of the list are of type struct HttpField.
    see also: ProcessHttpFields and ProcessCGIFields
 */
-HTTP_EXPORT PLIST HTTPAPI GetHttpHeaderFields( HTTPState pHttpState );
-HTTP_EXPORT int HTTPAPI GetHttpVersion( HTTPState pHttpState );
-HTTP_EXPORT
- /* Enumerates the various http header fields by passing them
+PLIST HTTPAPI GetHttpHeaderFields( HTTPState pHttpState );
+int HTTPAPI GetHttpVersion( HTTPState pHttpState );
+
+
+
+/* Enumerates the various http header fields by passing them
    each sequentially to the specified callback.
    Parameters
    pHttpState :  _nt_
    _nt_ :        _nt_
    psv :         _nt_                                        */
 void HTTPAPI ProcessCGIFields( HTTPState pHttpState, void (CPROC*f)( uintptr_t psv, PTEXT name, PTEXT value ), uintptr_t psv );
-HTTP_EXPORT
+
+
  /* Enumerates the various http header fields by passing them
    each sequentially to the specified callback.
    Parameters
@@ -413,31 +429,23 @@ HTTP_EXPORT
    _nt_ :        _nt_
    psv :         _nt_                                        */
 void HTTPAPI ProcessHttpFields( HTTPState pHttpState, void (CPROC*f)( uintptr_t psv, PTEXT name, PTEXT value ), uintptr_t psv );
-HTTP_EXPORT
- /* Resets a processing state, so it can start collecting the
+
+
+/* Resets a processing state, so it can start collecting the
    next state. After a ProcessHttp results with true, this
    should be called after processing the packet content.
    Parameters
    pHttpState :  state to reset for next read...             */
 void HTTPAPI EndHttp( HTTPState pHttpState );
-HTTP_EXPORT
+
+
 /* reply message - 200/OK with this body, sent as Content-Type that was requested */
 void HTTPAPI SendHttpMessage( HTTPState pHttpState, PCLIENT pc, PTEXT body );
-HTTP_EXPORT
+
+
 /* generate response message, specifies the numeric (200), the text (OK), the content type field value, and the body to send */
 void HTTPAPI SendHttpResponse ( HTTPState pHttpState, PCLIENT pc, int numeric, CTEXTSTR text, CTEXTSTR content_type, PTEXT body );
-/* Callback type used when creating an http server.
- If there is no registered handler match, then this is called.
- This should return FALSE if there was no content, allowing a 404 status result.
- Additional ways of dispatching need to be implemented (like handlers for paths, wildcards...)
- */
-typedef LOGICAL (CPROC *ProcessHttpRequest)( uintptr_t psv
-												 , HTTPState pHttpState );
 
-	
-
-	return 0; // some data about this request.	
-}
 ```
 
 An example HTTP close callback; allows releasing any data specified.
@@ -493,7 +501,7 @@ SetWebSocketErrorCallback( PCLIENT pc, web_socket_error callback );
 TLS can be enabled on an opened server.  This replaces the initial open callback notification
 with TLS negotiation using the specified certificate.
 
-```
+``` C
 	// you will need certificate information and optional keypair to use
 	LOGICAL result = ssl_BeginServer( server
         		, CPOINTER cert, size_t certlen
@@ -509,6 +517,26 @@ with TLS negotiation using the specified certificate.
 	);
 ```
 
+### 
+
+`ssl_BeginClientSession()` is used to initiate TLS negotiations on the client side.  
+It is passed optional keypair, keypassword, and additional certificate chain.
+It returns TRUE/FALSE for success/failure.
+
+``` C
+	PCLIENT pc = OpenTCPClientAddr( "somewhere.com", 1234, NULL, NULL, NULL );
+	if( ssl_BeginClientSession )( pc
+	                            , NULL  // CPOINTER keypair
+				    , 0     // size_t keylen
+				    , NULL  // CPOINTER keypass
+				    , 0     // size_t keypasslen
+				    , NULL  // CPOINTER rootCert
+				    , 0     // size_t rootCertLen 
+				    ) ) {
+		printf( "Success..." );
+	}
+```
+
 ### Is SSL Enabled?
 
 This can also be used in the connect callback, a client socket will either be
@@ -517,9 +545,12 @@ insecure, allowing the application to alternatively accept the client.
 
 A secure socket needs to use a different function to send data; `ssl_Send()` instead of `SendTCP()`.
 
-```
-		if( ssl_IsClientSecure( server ) ) {
+``` C
+		if( ssl_IsClientSecure( socket ) ) {
                 	// yes, yes it is.
+			ssl_Send( socket, buffer, length );
+                } else {
+			SendTCP( socket, buffer, length );
                 }
 ```
 
@@ -540,7 +571,7 @@ a server to multi-home multiple domains.
 
 ### Is network Started?
 
-```
+``` C
 	if( NetworkAlive() ) {
         	printf( "Yes" );
         } else {
