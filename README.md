@@ -194,10 +194,11 @@ The actual point is that PLIST and PLINKQUEUE types are optimally thread safe ev
 
 ```
 # (win32)
-gcc "-DTARGETNAME=""a.exe""" -o a.exe test.c sack_ucb_networking.c
+gcc -o a.exe test.c sack_ucb_networking.c
+
 
 # (bash)
-gcc "-DTARGETNAME=\"a.exe\"" -o a.exe test.c sack_ucb_networking.c
+gcc -o a.exe test.c sack_ucb_networking.c
 ```
 
 Otherwise simply compiling `sack_usb_networking.c` and including `sack_ucb_network.h` in your own code and compiling is all that is required.
