@@ -85,7 +85,6 @@ namespace sack {
 #  define _POSIX_C_SOURCE 200112L
 #endif
 #include <stdlib.h>
-#include <stdio.h>
 #include <stdint.h>
 #if _MSC_VER
 #  ifdef EXCLUDE_SAFEINT_H
@@ -516,7 +515,6 @@ But WHO doesn't have stdint?  BTW is sizeof( size_t ) == sizeof( void* )
  // CHAR_BIT
 #  include <limits.h>
  // typelib requires this
-#  include <stdarg.h>
 #  ifdef _MSC_VER
 #    ifndef UNDER_CE
  // memlib requires this, and it MUST be included befoer string.h if it is used.
@@ -5108,11 +5106,24 @@ typedef void (CPROC*TaskOutput)(uintptr_t, PTASK_INFO task, CTEXTSTR buffer, siz
 #define LPP_OPTION_NEW_CONSOLE          16
 #define LPP_OPTION_SUSPEND              32
 #define LPP_OPTION_ELEVATE              64
+struct environmentValue {
+	char* field;
+	char* value;
+};
 SYSTEM_PROC( PTASK_INFO, LaunchPeerProgramExx )( CTEXTSTR program, CTEXTSTR path, PCTEXTSTR args
                                                , int flags
                                                , TaskOutput OutputHandler
                                                , TaskEnd EndNotice
                                                , uintptr_t psv
+                                                DBG_PASS
+                                               );
+SYSTEM_PROC( PTASK_INFO, LaunchPeerProgram_v2 )( CTEXTSTR program, CTEXTSTR path, PCTEXTSTR args
+                                               , int flags
+                                               , TaskOutput OutputHandler
+                                               , TaskOutput OutputHandler2
+                                               , TaskEnd EndNotice
+                                               , uintptr_t psv
+                                               , PLIST envStrings
                                                 DBG_PASS
                                                );
 SYSTEM_PROC( PTASK_INFO, LaunchProgramEx )( CTEXTSTR program, CTEXTSTR path, PCTEXTSTR args, TaskEnd EndNotice, uintptr_t psv );
@@ -5553,10 +5564,20 @@ namespace sack {
 /* Memory namespace contains functions for allocating and
    releasing memory. Also contains methods for accessing shared
    memory (if available on the target platform).
-   Allocate
-   Release
-   Hold
-   OpenSpace                                                    */
+   Allocate / New - get new memory
+   Release / Deallocate - allow others to use this memory
+   Hold - keep the memory; requires an additional Release.
+   Reallocate - given an existing block, allocate a new block, and copy the minimum of what's already in the block, and the new block size.  It is possible this is the same address, which is just extended into a free block.
+   OpenSpace - Low level system memory; requested by filename and region name and provides sharing;  NULL, NULL is just new memory.
+   GetHeapMemStats - Run diagnostics on the heap blocks.
+   SetAllocateLogging - enable allocate/deallocate loggging for debugging; returns the previous logging state.
+   SetAllocateDebug -  disables additional runtime checks compiled in for debug builds/
+   SetManualAllocateCheck - GetHeapMemStats is run every Allocate/Deallocate in debug mode; this disables that behavior, and expects the libary's user to check as required.
+   SetCriticalLogging - Enable/disable critical section logging; does of course influence timing when enabled.
+   SetMinAllocate - defines a minimum size that will be tracked internally; if every block is at least 100 bytes (for example), there is less chance at fragmentation when allocating 32-96 byte blocks.
+   SetHeapUnit - How much to expand the heap when more space is required.   Very large allocations will end up with their own memory mapped; but the sum of all small allocations will fill up a block of memory, and this controls the expansion rate.
+   AlignOfMemBlock - Get the alignment of a memory block; allows reallocate
+                                                */
 namespace memory {
 #endif
 typedef struct memory_block_tag* PMEM;
@@ -17088,13 +17109,13 @@ NETWORK_PROC( void, NetworkUnlockEx )( PCLIENT pc, int readWrite DBG_PASS );
 typedef void (CPROC*cReadComplete)(PCLIENT, POINTER, size_t );
 typedef void (CPROC*cReadCompleteEx)(PCLIENT, POINTER, size_t, SOCKADDR * );
 typedef void (CPROC*cCloseCallback)(PCLIENT);
-typedef void (CPROC*cWriteComplete)(PCLIENT );
+typedef void (CPROC*cWriteComplete)(PCLIENT, CPOINTER buffer, size_t len );
 typedef void (CPROC*cNotifyCallback)(PCLIENT server, PCLIENT newClient);
 typedef void (CPROC*cConnectCallback)(PCLIENT, int);
 typedef void (CPROC*cppReadComplete)(uintptr_t, POINTER, size_t );
 typedef void (CPROC*cppReadCompleteEx)(uintptr_t,POINTER, size_t, SOCKADDR * );
 typedef void (CPROC*cppCloseCallback)(uintptr_t);
-typedef void (CPROC*cppWriteComplete)(uintptr_t );
+typedef void (CPROC*cppWriteComplete)(uintptr_t, CPOINTER buffer, size_t len );
 typedef void (CPROC*cppNotifyCallback)(uintptr_t, PCLIENT newClient);
 typedef void (CPROC*cppConnectCallback)(uintptr_t, int);
 enum SackNetworkErrorIdentifier {
@@ -17637,6 +17658,13 @@ NETWORK_PROC( int, GetMacAddress)(PCLIENT pc, uint8_t* buf, size_t *buflen );
 //int get_mac_addr (char *device, unsigned char *buffer)
 NETWORK_PROC( PLIST, GetMacAddresses)( void );
 NETWORK_PROC( LOGICAL, sack_network_is_active )( PCLIENT pc );
+// mark that a socket has outstanding work.  If a close is handled while in network read
+// prevent the automatic close until work is cleared.
+NETWORK_PROC( void, AddNetWork )( PCLIENT lpClient, uintptr_t psv );
+// clear outstanding work on a socket.  Once all work is cleared, and the socket is flagged
+// to close, then a oustanding close operation will be performed when the last work is cleared.
+//
+NETWORK_PROC( void, ClearNetWork )( PCLIENT lpClient, uintptr_t psv );
 NETWORK_PROC( void, RemoveClientExx )(PCLIENT lpClient, LOGICAL bBlockNofity, LOGICAL bLinger DBG_PASS );
 /* <combine sack::network::RemoveClientExx@PCLIENT@LOGICAL@LOGICAL bLinger>
    \ \                                                                      */
@@ -18209,6 +18237,33 @@ struct HttpField {
 	PTEXT name;
 	PTEXT value;
 };
+struct HTTPRequestHeader {
+	char* field;
+	char* value;
+};
+struct HTTPRequestOptions {
+  // deafult GET
+	const char* method;
+     // path part of the request
+	PTEXT url;
+ // address part of request (ip:port)
+	PTEXT address;
+ // list of TEXTCAHR*
+	PLIST headers;
+  // content to send with request, if any
+	CPOINTER content;
+// lengt of content to send with request
+	size_t contentLen;
+ // set to true to request over SSL;
+	LOGICAL ssl;
+ //optionally this can be used to specify the certain, if not set, uses parameter, which will otherwise be NULL.
+	const char* certChain;
+	// specify the agent field, default to SACK(System)
+	const char* agent;
+	// if set, will be called when content buffer has been sent.
+	void ( *writeComplete )( uintptr_t userData );
+	uintptr_t userData;
+};
 typedef struct HttpState *HTTPState;
 enum ProcessHttpResult{
 	HTTP_STATE_RESULT_NOTHING = 0,
@@ -18254,7 +18309,7 @@ HTTP_EXPORT int HTTPAPI ProcessHttp( PCLIENT pc, HTTPState pHttpState );
 HTTP_EXPORT
  /* Gets the specific result code at the header of the packet -
    http 2.0 OK sort of thing.                                  */
-PTEXT HTTPAPI GetHttpResponce( HTTPState pHttpState );
+PTEXT HTTPAPI GetHttpResponse( HTTPState pHttpState );
 /* Get the method of the request in ht e http state.
 */
 HTTP_EXPORT PTEXT HTTPAPI GetHttpMethod( struct HttpState *pHttpState );
@@ -18336,6 +18391,8 @@ HTTP_EXPORT PTEXT HTTPAPI GetHttp( PTEXT site, PTEXT resource, LOGICAL secure );
 /* results with just the content of the message; no access to other information avaialble */
 HTTP_EXPORT PTEXT HTTPAPI GetHttps( PTEXT address, PTEXT url, const char *certChain );
 /* results with the http state of the message response; Allows getting other detailed information about the result */
+HTTP_EXPORT HTTPState HTTPAPI GetHttpsQueryEx( PTEXT address, PTEXT url, const char* certChain, struct HTTPRequestOptions* options );
+/* results with the http state of the message response; Allows getting other detailed information about the result */
 HTTP_EXPORT HTTPState  HTTPAPI PostHttpQuery( PTEXT site, PTEXT resource, PTEXT content );
 /* results with the http state of the message response; Allows getting other detailed information about the result */
 HTTP_EXPORT HTTPState  HTTPAPI GetHttpQuery( PTEXT site, PTEXT resource );
@@ -18343,6 +18400,8 @@ HTTP_EXPORT HTTPState  HTTPAPI GetHttpQuery( PTEXT site, PTEXT resource );
 HTTP_EXPORT HTTPState HTTPAPI GetHttpsQuery( PTEXT site, PTEXT resource, const char *certChain );
 /* return the numeric response code of a http reply. */
 HTTP_EXPORT int HTTPAPI GetHttpResponseCode( HTTPState pHttpState );
+/* return the text response code of an http reply */
+HTTP_EXPORT const char* HTTPAPI GetHttpResponseStatus( HTTPState pHttpState );
 #define CreateHttpServer(interface_address,site,psv) CreateHttpServerEx( interface_address,NULL,site,NULL,psv )
 #define CreateHttpServer2(interface_address,site,default_handler,psv) CreateHttpServerEx( interface_address,NULL,site,default_handler,psv )
 // receives events for either GET if aspecific OnHttpRequest has not been defined for the specific resource
@@ -18435,10 +18494,12 @@ struct HttpState {
 	enum ReadChunkState read_chunk_state;
 	uint32_t last_read_tick;
 	PTHREAD waiter;
+	LOGICAL closed;
 	PCLIENT *pc;
 	struct httpStateFlags {
 		BIT_FIELD keep_alive : 1;
 		BIT_FIELD close : 1;
+		BIT_FIELD no_content_length : 1;
 		BIT_FIELD upgrade : 1;
 		BIT_FIELD h2c_upgrade : 1;
 		BIT_FIELD ws_upgrade : 1;
@@ -18447,6 +18508,7 @@ struct HttpState {
 		BIT_FIELD success : 1;
 	}flags;
 	CRITICALSECTION lock;
+	struct HTTPRequestOptions* options;
 };
 struct HttpServer {
 	PCLIENT server;
@@ -18512,7 +18574,6 @@ void GatherHttpData( struct HttpState *pHttpState )
 		pMergedLine = SegConcat( NULL, pNewLine, 0, GetTextSize( pHttpState->partial ) + GetTextSize( pInput ) );
 		LineRelease( pNewLine );
 		pHttpState->partial = pMergedLine;
-		//lprintf( "Setting content to partial... " );
 		pHttpState->content = pHttpState->partial;
 	}
 	unlockHttp( pHttpState );
@@ -18576,7 +18637,7 @@ void ProcessURL_CGI( struct HttpState *pHttpState, PLIST *cgi_fields,PTEXT param
 				return;
 			else
   // okay, stripped the end off, use the start...
-            break;
+	    break;
 		}
 	}
 	//lprintf( "Input was %s", GetText( params ) );
@@ -18608,11 +18669,12 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
 	lockHttp( pHttpState );
 	if( pHttpState->final )
 	{
-		if( !pHttpState->method ) {
+		//if( !pHttpState->method )
+		{
 			//lprintf( "Reading more, after returning a packet before... %d", pHttpState->response_version );
 			if( pHttpState->response_version ) {
 				GatherHttpData( pHttpState );
-				//lprintf( "return http nothing  %d", pHttpState->flags.success );
+				//lprintf( "return http nothing  %d %d %d", pHttpState->content_length, pHttpState->flags.success, pHttpState->returned_status );
 				if( pHttpState->flags.success && !pHttpState->returned_status ) {
 					unlockHttp( pHttpState );
 					pHttpState->returned_status = 1;
@@ -18735,7 +18797,7 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
 							}
 							else
 							{
-                        //lprintf( "Parsing http state content for something.." );
+			//lprintf( "Parsing http state content for something.." );
 								pLine = SegCreate( pos - start - pHttpState->bLine );
 								MemCpy( line = GetText( pLine ), c + start, (pos - start - pHttpState->bLine)*sizeof(TEXTCHAR));
 								line[pos-start- pHttpState->bLine] = 0;
@@ -18753,7 +18815,8 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
  // initialize to assume it's incomplete; NOT OK.  (requests should be OK)
 											pHttpState->numeric_code = HTTP_STATE_RESULT_CONTENT;
 											request = NEXTLINE( request );
-											pHttpState->method = SegBreak( request );
+                                                                                        pHttpState->method = SegBreak( request );
+                                                                                        pHttpState->flags.no_content_length = 0;
 										}
 										else if( TextSimilar( request, "POST" ) )
 										{
@@ -18761,6 +18824,7 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
 											pHttpState->numeric_code = HTTP_STATE_RESULT_CONTENT;
 											request = NEXTLINE( request );
 											pHttpState->method = SegBreak( request );
+											pHttpState->flags.no_content_length = 0;
 										}
 										// this loop is used for both client and server http requests...
 										// this will be the first part of a HTTP response (this one will have a result code, the other is just version)
@@ -18778,11 +18842,18 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
 													nextword = next;
 													if( nextword )
 													{
-														next = NEXTLINE( nextword );
+// NEXTLINE( nextword );
+														next = NULL;
 														if( pHttpState->text_code )
 															Release( pHttpState->text_code );
-														pHttpState->text_code = StrDup( GetText( nextword ) );
+														{
+															PTEXT words = BuildLine( nextword );
+															pHttpState->text_code = StrDup( GetText( words ) );
+															LineRelease( words );
+														}
 													}
+													if( pHttpState->numeric_code == 101 )
+														pHttpState->flags.no_content_length = 0;
 												}
 												else
 												{
@@ -18919,7 +18990,8 @@ SegSplit( &pCurrent, start );
 				if( TextLike( field->name, "content-length" ) )
 				{
 					// down convert from int64_t
-					pHttpState->content_length = (int)IntCreateFromSeg( field->value );
+				    pHttpState->content_length = (int)IntCreateFromSeg( field->value );
+				    pHttpState->flags.no_content_length = 0;
 					//lprintf( "content length: %d", pHttpState->content_length );
 				}
 				else if( TextLike( field->name, "upgrade" ) )
@@ -18942,6 +19014,7 @@ SegSplit( &pCurrent, start );
 					if( TextLike( field->value, "chunked" ) )
 					{
 						pHttpState->content_length = 0xFFFFFFF;
+						pHttpState->flags.no_content_length = 0;
 						pHttpState->read_chunks = TRUE;
 						pHttpState->read_chunk_state = READ_VALUE;
 						pHttpState->read_chunk_length = 0;
@@ -18967,7 +19040,7 @@ SegSplit( &pCurrent, start );
 		( ( pHttpState->content_length
 			&& ( ( GetTextSize( pHttpState->partial ) >= pHttpState->content_length )
 				||( GetTextSize( pHttpState->content ) >= pHttpState->content_length ) ) )
-			|| ( !pHttpState->content_length )
+			|| ( !pHttpState->content_length && !pHttpState->flags.no_content_length )
 			) )
 	{
 		pHttpState->returned_status = 1;
@@ -19076,6 +19149,7 @@ LOGICAL AddHttpData( struct HttpState *pHttpState, POINTER buffer, size_t size )
 					else
 					{
 						pHttpState->content_length = GetTextSize( VarTextPeek( pHttpState->pvt_collector ) );
+						//lprintf( "This may or may not be the end of content? %d", pHttpState->content_length );
 						if( pHttpState->waiter ) {
 							//lprintf( "Waking waiting to return with result." );
 							WakeThread( pHttpState->waiter );
@@ -19086,7 +19160,7 @@ LOGICAL AddHttpData( struct HttpState *pHttpState, POINTER buffer, size_t size )
 				}
 				else
 				{
-					lprintf( "Chunk Processing Error expected \\n, found %d(%c)", buf[0], buf[0] );
+                                    lprintf( "Chunk Processing Error expected \\n, found %d(%c)", buf[0], buf[0] );
 					TriggerNetworkErrorCallback( pHttpState->request_socket, SACK_NETWORK_ERROR_HTTP_CHUNK );
 					unlockHttp( pHttpState );
 					RemoveClient( pHttpState->request_socket );
@@ -19111,11 +19185,16 @@ LOGICAL AddHttpData( struct HttpState *pHttpState, POINTER buffer, size_t size )
 	}
 	else
 	{
-		//lprintf( "Add HTTP Data:%d", size );
+		//lprintf( "Add HTTP Data:%p %d", pHttpState->pc[0], size );
 		//LogBinary( (uint8_t*)buffer, 256>size?size:256 );
 		if( size )
 			VarTextAddData( pHttpState->pvt_collector, (CTEXTSTR)buffer, size );
 		unlockHttp( pHttpState );
+		if( pHttpState->final ) {
+			// this will cause it to wait until 'endhttp' to process next block.
+			//lprintf( "still handling a previous requet in add data", pHttpState->pc[0] );
+			return FALSE;
+		}
 		return TRUE;
 	}
 }
@@ -19125,6 +19204,7 @@ struct HttpState *CreateHttpState( PCLIENT *pc )
 	pHttpState = New( struct HttpState );
 	MemSet( pHttpState, 0, sizeof( struct HttpState ) );
 	InitializeCriticalSec( &pHttpState->lock );
+	pHttpState->flags.no_content_length = 1;
 	pHttpState->pvt_collector = VarTextCreate();
 	pHttpState->pc = pc;
 	return pHttpState;
@@ -19136,6 +19216,7 @@ void EndHttp( struct HttpState *pHttpState )
 	pHttpState->bLine = 0;
 	pHttpState->final = 0;
 	pHttpState->response_version = 0;
+	pHttpState->flags.no_content_length = 0;
 	pHttpState->content_length = 0;
 	LineRelease( pHttpState->method );
 	pHttpState->method = NULL;
@@ -19226,10 +19307,15 @@ PTEXT GetHttpField( struct HttpState *pHttpState, CTEXTSTR name )
 	unlockHttp( pHttpState );
 	return NULL;
 }
-PTEXT GetHttpResponce( struct HttpState *pHttpState )
+PTEXT GetHttpResponse( struct HttpState *pHttpState )
 {
 	if( pHttpState )
 		return pHttpState->response_status;
+	return NULL;
+}
+const char* GetHttpResponseStatus( HTTPState  pHttpState ) {
+	if( pHttpState )
+		return pHttpState->text_code;
 	return NULL;
 }
 PTEXT GetHttpRequest( struct HttpState *pHttpState )
@@ -19333,6 +19419,7 @@ static void CPROC HttpReader( PCLIENT pc, POINTER buffer, size_t size )
 	if( !buffer )
 	{
 		//lprintf( "Initial read on HTTP requestor" );
+#ifndef NO_SSL
 		if( state && state->ssl )
 		{
 			PTEXT send = VarTextGet( state->pvtOut );
@@ -19341,15 +19428,21 @@ static void CPROC HttpReader( PCLIENT pc, POINTER buffer, size_t size )
 				lprintf( "Sending Request..." );
 				LogBinary( (uint8_t*)GetText( send ), GetTextSize( send ) );
 			}
-#ifndef NO_SSL
 			// had to wait for handshake, so NULL event
 			// on secure has already had time to build the send
 			// but had to wait until now to do that.
 			ssl_Send( pc, GetText( send ), GetTextSize( send ) );
-#endif
+			if( state->options && state->options->content && state->options->contentLen ) {
+				ssl_Send( pc, state->options->content, state->options->contentLen );
+				if( state->options->writeComplete ) {
+					state->options->writeComplete( state->options->userData );
+					state->options->writeComplete = NULL;
+				}
+			}
 			LineRelease( send );
 		}
 		else
+#endif
 		{
 			state->buffer = Allocate( 4096 );
 			ReadTCP( pc, state->buffer, 4096 );
@@ -19377,7 +19470,7 @@ static void CPROC HttpReader( PCLIENT pc, POINTER buffer, size_t size )
 			}
 	}
 	// read is handled by the SSL layer instead of here.  Just trust that someone will give us data later
-	if( buffer && ( !state || !state->ssl ) )
+	if( buffer && ( !state || ( state && !state->ssl ) ) )
 	{
 		ReadTCP( pc, state->buffer, 4096 );
 	}
@@ -19385,8 +19478,19 @@ static void CPROC HttpReader( PCLIENT pc, POINTER buffer, size_t size )
 static void CPROC HttpReaderClose( PCLIENT pc )
 {
 	struct HttpState *data = (struct HttpState *)GetNetworkLong( pc, 0 );
+	if( !data ) return;
 // (PCLIENT*)GetNetworkLong( pc, 0 );
 	PCLIENT *ppc = data->pc;
+ // data is collected into 'partial' until close
+	if( data->flags.no_content_length ) {
+		GatherHttpData( data );
+		data->content_length = GetTextSize( data->partial );
+		//lprintf( "at close what is content length? %d", data->content_length );
+	}
+	if( data->content_length ) {
+		// should do one further gather; will set resulting status better.
+		ProcessHttp( pc, data );
+	}
 	//lprintf( "Closing http: %p ", pc );
 	if( ppc[0] == pc ) {
 		if( ppc )
@@ -19394,6 +19498,7 @@ static void CPROC HttpReaderClose( PCLIENT pc )
 		//lprintf( "So now i's null?" );
 		if( data->waiter ) {
 			//lprintf( "(on close) Waking waiting to return with result." );
+			data->closed = TRUE;
 			WakeThread( data->waiter );
 		}
 	}
@@ -19427,6 +19532,7 @@ HTTPState PostHttpQuery( PTEXT address, PTEXT url, PTEXT content )
 	struct pendingConnect *connect = New( struct pendingConnect );
 	struct HttpState *state = CreateHttpState(&connect->pc);
 	connect->state = state;
+	state->closed = FALSE;
 	AddLink( &l.pendingConnects, connect );
 	pc = OpenTCPClientExx( GetText( address ), 80, HttpReader, NULL, NULL, HttpConnected );
 	connect->pc = pc;
@@ -19472,11 +19578,6 @@ PTEXT PostHttp( PTEXT address, PTEXT url, PTEXT content )
 	return NULL;
 }
 static void httpConnected( PCLIENT pc, int error ) {
-	if( error ) {
-		//struct HttpState *state = (struct HttpState *)GetNetworkLong( pc, 0 );
-		RemoveClient( pc );
-		return;
-	}
 	{
 		INDEX idx;
 		struct pendingConnect *connect;
@@ -19494,6 +19595,9 @@ static void httpConnected( PCLIENT pc, int error ) {
 		SetNetworkLong( pc, 0, (uintptr_t)connect->state );
 		Release( connect );
 	}
+	if( error ) {
+		RemoveClient( pc );
+	}
 }
 HTTPState GetHttpQuery( PTEXT address, PTEXT url )
 {
@@ -19507,6 +19611,7 @@ HTTPState GetHttpQuery( PTEXT address, PTEXT url )
 		struct pendingConnect *connect = New( struct pendingConnect );
 		struct HttpState *state = CreateHttpState( &connect->pc );
 		connect->state = state;
+		state->closed = FALSE;
 		AddLink( &l.pendingConnects, connect );
 		pc = OpenTCPClientAddrExxx( addr, HttpReader, HttpReaderClose, NULL, httpConnected, 0 DBG_SRC );
 		connect->pc = pc;
@@ -19522,9 +19627,10 @@ HTTPState GetHttpQuery( PTEXT address, PTEXT url )
 			{
 				PTEXT send = VarTextGet( pvtOut );
 				state->waiter = MakeThread();
-				state->pc = &connect->pc;
-				SetNetworkLong( connect->pc, 0, (uintptr_t)state );
-				SetNetworkCloseCallback( connect->pc, HttpReaderClose );
+				state->request_socket = connect->pc;
+				state->pc = &state->request_socket;
+				SetNetworkLong( connect->pc, 0, (uintptr_t)connect );
+				//SetNetworkCloseCallback( connect->pc, HttpReaderClose );
 				if( l.flags.bLogReceived )
 				{
 					lprintf( "Sending POST..." );
@@ -19532,7 +19638,7 @@ HTTPState GetHttpQuery( PTEXT address, PTEXT url )
 				}
 				SendTCP( pc, GetText( send ), GetTextSize( send ) );
 				LineRelease( send );
-				while( connect->pc )
+				while( state->request_socket )
 				{
 					WakeableSleep( 100 );
 				}
@@ -19543,8 +19649,23 @@ HTTPState GetHttpQuery( PTEXT address, PTEXT url )
 	}
 	return NULL;
 }
-HTTPState GetHttpsQuery( PTEXT address, PTEXT url, const char *certChain )
+HTTPState GetHttpsQuery( PTEXT address, PTEXT url, const char* certChain )
 {
+	return GetHttpsQueryEx( address, url, certChain, NULL );
+}
+static void writeComplete( PCLIENT pc, CPOINTER buffer, size_t length ) {
+	struct HttpState* data = (struct HttpState*)GetNetworkLong( pc, 0 );
+	if( data && data->options && data->options->writeComplete )
+		data->options->writeComplete( data->options->userData );
+}
+HTTPState GetHttpsQueryEx( PTEXT address, PTEXT url, const char* certChain, struct HTTPRequestOptions* options )
+{
+	static struct HTTPRequestOptions defaultOpts = {
+		"GET",
+		NULL,
+		NULL,
+	};
+	if( !options ) options = &defaultOpts;
 	int retries;
 	if( !address )
 		return NULL;
@@ -19554,57 +19675,87 @@ HTTPState GetHttpsQuery( PTEXT address, PTEXT url, const char *certChain )
 		SOCKADDR *addr = CreateSockAddress( GetText( address ), 443 );
 		struct pendingConnect *connect = New( struct pendingConnect );
 		struct HttpState *state = CreateHttpState( &connect->pc );
+		state->options = options;
+		state->closed = FALSE;
 		connect->state = state;
 		AddLink( &l.pendingConnects, connect );
 		if( retries ) {
-			lprintf( "HTTPS QUery (retry):%s", GetText( url ) );
+			//lprintf( "HTTP(S) Query (retry):%s", GetText( url ) );
 			//lprintf( "PC of connect:%p  %d", pc, retries );
 		}
 		//DumpAddr( "Http Address:", addr );
-		pc = OpenTCPClientAddrExxx( addr, HttpReader, HttpReaderClose, NULL, httpConnected, OPEN_TCP_FLAG_DELAY_CONNECT DBG_SRC );
+		pc = OpenTCPClientAddrExxx( addr, HttpReader, HttpReaderClose
+				, writeComplete, httpConnected, OPEN_TCP_FLAG_DELAY_CONNECT DBG_SRC );
 		connect->pc = pc;
 		ReleaseAddress( addr );
 		if( pc )
 		{
+			char* header;
+			INDEX idx;
 			state->last_read_tick = timeGetTime();
 			state->waiter = MakeThread();
 			state->request_socket = connect->pc;
 			state->pc = &state->request_socket;
-			SetNetworkLong( pc, 0, (uintptr_t)state );
+			SetNetworkLong( pc, 0, (uintptr_t)connect );
 			//SetNetworkConn
-			state->ssl = TRUE;
+			state->ssl = options->ssl;
 			state->pvtOut = VarTextCreate();
-			vtprintf( state->pvtOut, "GET %s HTTP/1.0\r\n", GetText( url ) );
-			vtprintf( state->pvtOut, "Host: %s\r\n", GetText( address ) );
-			vtprintf( state->pvtOut, "User-Agent: SACK(%s)\r\n", "System" );
+			// 1.0 expects close after request - this is a one shot synchronous process so...
+			vtprintf( state->pvtOut, "%s %s HTTP/1.0\r\n", options->method, GetText( url ) );
+			// 1.1 would need this sort of header....
 			//vtprintf( state->pvtOut, "connection: close\r\n" );
+			if( options->content && options->contentLen ) {
+				vtprintf( state->pvtOut, "Content-Length:%d\r\n", options->contentLen);
+			}
+			vtprintf( state->pvtOut, "Host:%s\r\n", GetText( address ) );
+			vtprintf( state->pvtOut, "User-Agent:%s\r\n", options->agent?options->agent:"SACK(System)" );
+			LIST_FORALL( options->headers, idx, char*, header ) {
+				vtprintf( state->pvtOut, "%s\r\n", header );
+			}
+ // send blank header
 			vtprintf( state->pvtOut, "\r\n" );
 #ifndef NO_SSL
-			if( ssl_BeginClientSession( pc, NULL, 0, NULL, 0, certChain, certChain ? strlen( certChain ) : 0 ) )
-			{
-				if( !certChain )
-					ssl_SetIgnoreVerification( pc );
+			if( options->ssl ) {
+				if( ssl_BeginClientSession( pc, NULL, 0, NULL, 0, options->certChain?options->certChain:certChain, certChain
+							? strlen( options->certChain ? options->certChain:certChain ) : 0 ) ) {
+					state->waiter = MakeThread();
+					if( !certChain )
+						ssl_SetIgnoreVerification( pc );
+					if( NetworkConnectTCP( pc ) < 0 ) {
+						DestroyHttpState( state );
+						return NULL;
+					}
+				} else
+					RemoveClient( pc );
+			} else
+#endif
+			if( pc ) {
+				state->waiter = MakeThread();
+				PTEXT send = VarTextPeek( state->pvtOut );
 				if( NetworkConnectTCP( pc ) < 0 ) {
 					DestroyHttpState( state );
 					return NULL;
 				}
-				state->waiter = MakeThread();
-				// wait for response.
-				while( state->request_socket && ( state->last_read_tick > (timeGetTime() - 3000 ) ) )
-				{
-					WakeableSleep( 1000 );
+				if( l.flags.bLogReceived ) {
+					lprintf( "Sending %s...", options->method );
+					LogBinary( (uint8_t*)GetText( send ), GetTextSize( send ) );
 				}
-				//lprintf( "Request has completed.... %p %p", pc, state->content );
-				if( state->request_socket )
- // this shouldn't happen... it should have ben closed already.
-					RemoveClient( state->request_socket );
+				SendTCP( pc, GetText( send ), GetTextSize( send ) );
+				if( options->content && options->contentLen )
+					SendTCPLong( pc, options->content, options->contentLen );
 			}
-			else
- // ssl begin failed to start.
+			// wait for response.
+			while( state->request_socket && !state->closed
+				&& ( state->last_read_tick > ( timeGetTime() - 3000 ) ) ) {
+				WakeableSleep( 1000 );
+			}
+			//lprintf( "Request has completed.... %p %p %d", pc, state->content, state->closed );
+			if( state->request_socket && !state->closed ) {
+ // this shouldn't happen... it should have ben closed already.
 				RemoveClient( state->request_socket );
-#endif
+			}
 			VarTextDestroy( &state->pvtOut );
-			if( !state->request_socket )
+			if( !state->request_socket || state->closed )
 				return state;
 		}
 		else
@@ -20210,7 +20361,7 @@ struct url_data * SACK_URLParse( const char *url )
  // blank cgi names go & to & and stay in the same state
 				&& ( state != PARSE_STATE_COLLECT_CGI_NAME )
 				)
-				lprintf( "Dropping character (%d) '%c' in %s", url - _outbuf, ch, _outbuf );
+				lprintf( "Dropping character (%d) '%c' in %s", (int)(url - _outbuf), ch, _outbuf );
 		}
 		_state = state;
 	}
@@ -22601,9 +22752,9 @@ static void DoCloseSpace( PSPACE ps, int bFinal )
 		CloseHandle( ps->hFile );
 #else
 		munmap( ps->pMem, ps->dwSmallSize );
-		if( ps->flags.bTemporary && (ps->hFile >= 0) )
+		if( (ps->hFile >= 0) )
 		{
-			if( bFinal )
+			if( ps->flags.bTemporary && bFinal )
 			{
 				char file[256];
 				char fdname[64];
@@ -23595,9 +23746,9 @@ POINTER HeapAllocateAlignedEx( PMEM pHeap, size_t dwSize, uint16_t alignment DBG
 						if( (uintptr_t)next - (uintptr_t)pCurMem < (uintptr_t)pCurMem->dwSize )
 							next->pPrior = pNew;
 						pNew->info.dwOwners = 0;
-#ifdef _DEBUG
+//#ifdef _DEBUG
 						pNew->pRoot = pc->pRoot;
-#endif
+//#endif
 						pNew->pPrior = pc;
 						// copy link...
 						if( ( pNew->next = pc->next ) )
@@ -25371,6 +25522,7 @@ using namespace sack::timers;
 #endif
 #define DO_LOGGING
 // display pause/resume support.
+#ifndef __NO_GUI__
 /* <link sack::image::render::PRENDERER, Render> provides a
    method to display images on a screen. It is the interface
    between memory images and the window desktop or frame buffer
@@ -26138,7 +26290,889 @@ Double quote	"""	222
 #    define KEY_Y   AKEYCODE_Y
 #    define KEY_Z   AKEYCODE_Z
 #  elif defined( __LINUX__ ) && !defined( __MAC__ ) && !defined( __ANDROID__ )
-#include <linux/input-event-codes.h>
+/* THis is a literal copy of bba013e1ca5e7150b42a1a1a1e852010d772edad / include/uapi/linux/input-event-codes.h
+  from github.  Other than this leading comment it is the original copy; this is included as a fallback for linux
+  systems (CentOS) which have a linux kernel older than 3.19; otherwise this would have been found in /usr/include/linux
+  This file will not be updated further.
+*/
+/* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
+/*
+ * Input event codes
+ *
+ *    *** IMPORTANT ***
+ * This file is not only included from C-code but also from devicetree source
+ * files. As such this file MUST only contain comments and defines.
+ *
+ * Copyright (c) 1999-2002 Vojtech Pavlik
+ * Copyright (c) 2015 Hans de Goede <hdegoede@redhat.com>
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 as published by
+ * the Free Software Foundation.
+ */
+#ifndef _UAPI_INPUT_EVENT_CODES_H
+#define _UAPI_INPUT_EVENT_CODES_H
+/*
+ * Device properties and quirks
+ */
+#define INPUT_PROP_POINTER		0x00
+#define INPUT_PROP_DIRECT		0x01
+#define INPUT_PROP_BUTTONPAD		0x02
+#define INPUT_PROP_SEMI_MT		0x03
+#define INPUT_PROP_TOPBUTTONPAD		0x04
+#define INPUT_PROP_POINTING_STICK	0x05
+#define INPUT_PROP_ACCELEROMETER	0x06
+#define INPUT_PROP_MAX			0x1f
+#define INPUT_PROP_CNT			(INPUT_PROP_MAX + 1)
+/*
+ * Event types
+ */
+#define EV_SYN			0x00
+#define EV_KEY			0x01
+#define EV_REL			0x02
+#define EV_ABS			0x03
+#define EV_MSC			0x04
+#define EV_SW			0x05
+#define EV_LED			0x11
+#define EV_SND			0x12
+#define EV_REP			0x14
+#define EV_FF			0x15
+#define EV_PWR			0x16
+#define EV_FF_STATUS		0x17
+#define EV_MAX			0x1f
+#define EV_CNT			(EV_MAX+1)
+/*
+ * Synchronization events.
+ */
+#define SYN_REPORT		0
+#define SYN_CONFIG		1
+#define SYN_MT_REPORT		2
+#define SYN_DROPPED		3
+#define SYN_MAX			0xf
+#define SYN_CNT			(SYN_MAX+1)
+/*
+ * Keys and buttons
+ *
+ * Most of the keys/buttons are modeled after USB HUT 1.12
+ * (see http://www.usb.org/developers/hidpage).
+ * Abbreviations in the comments:
+ * AC - Application Control
+ * AL - Application Launch Button
+ * SC - System Control
+ */
+#define KEY_RESERVED		0
+#define KEY_ESC			1
+#define KEY_1			2
+#define KEY_2			3
+#define KEY_3			4
+#define KEY_4			5
+#define KEY_5			6
+#define KEY_6			7
+#define KEY_7			8
+#define KEY_8			9
+#define KEY_9			10
+#define KEY_0			11
+#define KEY_MINUS		12
+#define KEY_EQUAL		13
+#define KEY_BACKSPACE		14
+#define KEY_TAB			15
+#define KEY_Q			16
+#define KEY_W			17
+#define KEY_E			18
+#define KEY_R			19
+#define KEY_T			20
+#define KEY_Y			21
+#define KEY_U			22
+#define KEY_I			23
+#define KEY_O			24
+#define KEY_P			25
+#define KEY_LEFTBRACE		26
+#define KEY_RIGHTBRACE		27
+#define KEY_ENTER		28
+#define KEY_LEFTCTRL		29
+#define KEY_A			30
+#define KEY_S			31
+#define KEY_D			32
+#define KEY_F			33
+#define KEY_G			34
+#define KEY_H			35
+#define KEY_J			36
+#define KEY_K			37
+#define KEY_L			38
+#define KEY_SEMICOLON		39
+#define KEY_APOSTROPHE		40
+#define KEY_GRAVE		41
+#define KEY_LEFTSHIFT		42
+#define KEY_BACKSLASH		43
+#define KEY_Z			44
+#define KEY_X			45
+#define KEY_C			46
+#define KEY_V			47
+#define KEY_B			48
+#define KEY_N			49
+#define KEY_M			50
+#define KEY_COMMA		51
+#define KEY_DOT			52
+#define KEY_SLASH		53
+#define KEY_RIGHTSHIFT		54
+#define KEY_KPASTERISK		55
+#define KEY_LEFTALT		56
+#define KEY_SPACE		57
+#define KEY_CAPSLOCK		58
+#define KEY_F1			59
+#define KEY_F2			60
+#define KEY_F3			61
+#define KEY_F4			62
+#define KEY_F5			63
+#define KEY_F6			64
+#define KEY_F7			65
+#define KEY_F8			66
+#define KEY_F9			67
+#define KEY_F10			68
+#define KEY_NUMLOCK		69
+#define KEY_SCROLLLOCK		70
+#define KEY_KP7			71
+#define KEY_KP8			72
+#define KEY_KP9			73
+#define KEY_KPMINUS		74
+#define KEY_KP4			75
+#define KEY_KP5			76
+#define KEY_KP6			77
+#define KEY_KPPLUS		78
+#define KEY_KP1			79
+#define KEY_KP2			80
+#define KEY_KP3			81
+#define KEY_KP0			82
+#define KEY_KPDOT		83
+#define KEY_ZENKAKUHANKAKU	85
+#define KEY_102ND		86
+#define KEY_F11			87
+#define KEY_F12			88
+#define KEY_RO			89
+#define KEY_KATAKANA		90
+#define KEY_HIRAGANA		91
+#define KEY_HENKAN		92
+#define KEY_KATAKANAHIRAGANA	93
+#define KEY_MUHENKAN		94
+#define KEY_KPJPCOMMA		95
+#define KEY_KPENTER		96
+#define KEY_RIGHTCTRL		97
+#define KEY_KPSLASH		98
+#define KEY_SYSRQ		99
+#define KEY_RIGHTALT		100
+#define KEY_LINEFEED		101
+#define KEY_HOME		102
+#define KEY_UP			103
+#define KEY_PAGEUP		104
+#define KEY_LEFT		105
+#define KEY_RIGHT		106
+#define KEY_END			107
+#define KEY_DOWN		108
+#define KEY_PAGEDOWN		109
+#define KEY_INSERT		110
+#define KEY_DELETE		111
+#define KEY_MACRO		112
+#define KEY_MUTE		113
+#define KEY_VOLUMEDOWN		114
+#define KEY_VOLUMEUP		115
+#define KEY_POWER		116
+#define KEY_KPEQUAL		117
+#define KEY_KPPLUSMINUS		118
+#define KEY_PAUSE		119
+#define KEY_SCALE		120
+#define KEY_KPCOMMA		121
+#define KEY_HANGEUL		122
+#define KEY_HANGUEL		KEY_HANGEUL
+#define KEY_HANJA		123
+#define KEY_YEN			124
+#define KEY_LEFTMETA		125
+#define KEY_RIGHTMETA		126
+#define KEY_COMPOSE		127
+#define KEY_STOP		128
+#define KEY_AGAIN		129
+#define KEY_PROPS		130
+#define KEY_UNDO		131
+#define KEY_FRONT		132
+#define KEY_COPY		133
+#define KEY_OPEN		134
+#define KEY_PASTE		135
+#define KEY_FIND		136
+#define KEY_CUT			137
+#define KEY_HELP		138
+#define KEY_MENU		139
+#define KEY_CALC		140
+#define KEY_SETUP		141
+#define KEY_SLEEP		142
+#define KEY_WAKEUP		143
+#define KEY_FILE		144
+#define KEY_SENDFILE		145
+#define KEY_DELETEFILE		146
+#define KEY_XFER		147
+#define KEY_PROG1		148
+#define KEY_PROG2		149
+#define KEY_WWW			150
+#define KEY_MSDOS		151
+#define KEY_COFFEE		152
+#define KEY_SCREENLOCK		KEY_COFFEE
+#define KEY_ROTATE_DISPLAY	153
+#define KEY_DIRECTION		KEY_ROTATE_DISPLAY
+#define KEY_CYCLEWINDOWS	154
+#define KEY_MAIL		155
+#define KEY_BOOKMARKS		156
+#define KEY_COMPUTER		157
+#define KEY_BACK		158
+#define KEY_FORWARD		159
+#define KEY_CLOSECD		160
+#define KEY_EJECTCD		161
+#define KEY_EJECTCLOSECD	162
+#define KEY_NEXTSONG		163
+#define KEY_PLAYPAUSE		164
+#define KEY_PREVIOUSSONG	165
+#define KEY_STOPCD		166
+#define KEY_RECORD		167
+#define KEY_REWIND		168
+#define KEY_PHONE		169
+#define KEY_ISO			170
+#define KEY_CONFIG		171
+#define KEY_HOMEPAGE		172
+#define KEY_REFRESH		173
+#define KEY_EXIT		174
+#define KEY_MOVE		175
+#define KEY_EDIT		176
+#define KEY_SCROLLUP		177
+#define KEY_SCROLLDOWN		178
+#define KEY_KPLEFTPAREN		179
+#define KEY_KPRIGHTPAREN	180
+#define KEY_NEW			181
+#define KEY_REDO		182
+#define KEY_F13			183
+#define KEY_F14			184
+#define KEY_F15			185
+#define KEY_F16			186
+#define KEY_F17			187
+#define KEY_F18			188
+#define KEY_F19			189
+#define KEY_F20			190
+#define KEY_F21			191
+#define KEY_F22			192
+#define KEY_F23			193
+#define KEY_F24			194
+#define KEY_PLAYCD		200
+#define KEY_PAUSECD		201
+#define KEY_PROG3		202
+#define KEY_PROG4		203
+#define KEY_DASHBOARD		204
+#define KEY_SUSPEND		205
+#define KEY_CLOSE		206
+#define KEY_PLAY		207
+#define KEY_FASTFORWARD		208
+#define KEY_BASSBOOST		209
+#define KEY_PRINT		210
+#define KEY_HP			211
+#define KEY_CAMERA		212
+#define KEY_SOUND		213
+#define KEY_QUESTION		214
+#define KEY_EMAIL		215
+#define KEY_CHAT		216
+#define KEY_SEARCH		217
+#define KEY_CONNECT		218
+#define KEY_FINANCE		219
+#define KEY_SPORT		220
+#define KEY_SHOP		221
+#define KEY_ALTERASE		222
+#define KEY_CANCEL		223
+#define KEY_BRIGHTNESSDOWN	224
+#define KEY_BRIGHTNESSUP	225
+#define KEY_MEDIA		226
+#define KEY_SWITCHVIDEOMODE	227
+	/* Cycle between available video
+					   outputs (Monitor/LCD/TV-out/etc) */
+#define KEY_KBDILLUMTOGGLE	228
+#define KEY_KBDILLUMDOWN	229
+#define KEY_KBDILLUMUP		230
+#define KEY_SEND		231
+#define KEY_REPLY		232
+#define KEY_FORWARDMAIL		233
+#define KEY_SAVE		234
+#define KEY_DOCUMENTS		235
+#define KEY_BATTERY		236
+#define KEY_BLUETOOTH		237
+#define KEY_WLAN		238
+#define KEY_UWB			239
+#define KEY_UNKNOWN		240
+#define KEY_VIDEO_NEXT		241
+#define KEY_VIDEO_PREV		242
+#define KEY_BRIGHTNESS_CYCLE	243
+#define KEY_BRIGHTNESS_AUTO	244
+	/* Set Auto Brightness: manual
+					  brightness control is off,
+					  rely on ambient */
+#define KEY_BRIGHTNESS_ZERO	KEY_BRIGHTNESS_AUTO
+#define KEY_DISPLAY_OFF		245
+#define KEY_WWAN		246
+#define KEY_WIMAX		KEY_WWAN
+#define KEY_RFKILL		247
+#define KEY_MICMUTE		248
+/* Code 255 is reserved for special needs of AT keyboard driver */
+#define BTN_MISC		0x100
+#define BTN_0			0x100
+#define BTN_1			0x101
+#define BTN_2			0x102
+#define BTN_3			0x103
+#define BTN_4			0x104
+#define BTN_5			0x105
+#define BTN_6			0x106
+#define BTN_7			0x107
+#define BTN_8			0x108
+#define BTN_9			0x109
+#define BTN_MOUSE		0x110
+#define BTN_LEFT		0x110
+#define BTN_RIGHT		0x111
+#define BTN_MIDDLE		0x112
+#define BTN_SIDE		0x113
+#define BTN_EXTRA		0x114
+#define BTN_FORWARD		0x115
+#define BTN_BACK		0x116
+#define BTN_TASK		0x117
+#define BTN_JOYSTICK		0x120
+#define BTN_TRIGGER		0x120
+#define BTN_THUMB		0x121
+#define BTN_THUMB2		0x122
+#define BTN_TOP			0x123
+#define BTN_TOP2		0x124
+#define BTN_PINKIE		0x125
+#define BTN_BASE		0x126
+#define BTN_BASE2		0x127
+#define BTN_BASE3		0x128
+#define BTN_BASE4		0x129
+#define BTN_BASE5		0x12a
+#define BTN_BASE6		0x12b
+#define BTN_DEAD		0x12f
+#define BTN_GAMEPAD		0x130
+#define BTN_SOUTH		0x130
+#define BTN_A			BTN_SOUTH
+#define BTN_EAST		0x131
+#define BTN_B			BTN_EAST
+#define BTN_C			0x132
+#define BTN_NORTH		0x133
+#define BTN_X			BTN_NORTH
+#define BTN_WEST		0x134
+#define BTN_Y			BTN_WEST
+#define BTN_Z			0x135
+#define BTN_TL			0x136
+#define BTN_TR			0x137
+#define BTN_TL2			0x138
+#define BTN_TR2			0x139
+#define BTN_SELECT		0x13a
+#define BTN_START		0x13b
+#define BTN_MODE		0x13c
+#define BTN_THUMBL		0x13d
+#define BTN_THUMBR		0x13e
+#define BTN_DIGI		0x140
+#define BTN_TOOL_PEN		0x140
+#define BTN_TOOL_RUBBER		0x141
+#define BTN_TOOL_BRUSH		0x142
+#define BTN_TOOL_PENCIL		0x143
+#define BTN_TOOL_AIRBRUSH	0x144
+#define BTN_TOOL_FINGER		0x145
+#define BTN_TOOL_MOUSE		0x146
+#define BTN_TOOL_LENS		0x147
+#define BTN_TOOL_QUINTTAP	0x148
+#define BTN_STYLUS3		0x149
+#define BTN_TOUCH		0x14a
+#define BTN_STYLUS		0x14b
+#define BTN_STYLUS2		0x14c
+#define BTN_TOOL_DOUBLETAP	0x14d
+#define BTN_TOOL_TRIPLETAP	0x14e
+#define BTN_TOOL_QUADTAP	0x14f
+#define BTN_WHEEL		0x150
+#define BTN_GEAR_DOWN		0x150
+#define BTN_GEAR_UP		0x151
+#define KEY_OK			0x160
+#define KEY_SELECT		0x161
+#define KEY_GOTO		0x162
+#define KEY_CLEAR		0x163
+#define KEY_POWER2		0x164
+#define KEY_OPTION		0x165
+#define KEY_INFO		0x166
+#define KEY_TIME		0x167
+#define KEY_VENDOR		0x168
+#define KEY_ARCHIVE		0x169
+#define KEY_PROGRAM		0x16a
+#define KEY_CHANNEL		0x16b
+#define KEY_FAVORITES		0x16c
+#define KEY_EPG			0x16d
+#define KEY_PVR			0x16e
+#define KEY_MHP			0x16f
+#define KEY_LANGUAGE		0x170
+#define KEY_TITLE		0x171
+#define KEY_SUBTITLE		0x172
+#define KEY_ANGLE		0x173
+#define KEY_FULL_SCREEN		0x174
+#define KEY_ZOOM		KEY_FULL_SCREEN
+#define KEY_MODE		0x175
+#define KEY_KEYBOARD		0x176
+#define KEY_ASPECT_RATIO	0x177
+#define KEY_SCREEN		KEY_ASPECT_RATIO
+#define KEY_PC			0x178
+#define KEY_TV			0x179
+#define KEY_TV2			0x17a
+#define KEY_VCR			0x17b
+#define KEY_VCR2		0x17c
+#define KEY_SAT			0x17d
+#define KEY_SAT2		0x17e
+#define KEY_CD			0x17f
+#define KEY_TAPE		0x180
+#define KEY_RADIO		0x181
+#define KEY_TUNER		0x182
+#define KEY_PLAYER		0x183
+#define KEY_TEXT		0x184
+#define KEY_DVD			0x185
+#define KEY_AUX			0x186
+#define KEY_MP3			0x187
+#define KEY_AUDIO		0x188
+#define KEY_VIDEO		0x189
+#define KEY_DIRECTORY		0x18a
+#define KEY_LIST		0x18b
+#define KEY_MEMO		0x18c
+#define KEY_CALENDAR		0x18d
+#define KEY_RED			0x18e
+#define KEY_GREEN		0x18f
+#define KEY_YELLOW		0x190
+#define KEY_BLUE		0x191
+#define KEY_CHANNELUP		0x192
+#define KEY_CHANNELDOWN		0x193
+#define KEY_FIRST		0x194
+#define KEY_LAST		0x195
+#define KEY_AB			0x196
+#define KEY_NEXT		0x197
+#define KEY_RESTART		0x198
+#define KEY_SLOW		0x199
+#define KEY_SHUFFLE		0x19a
+#define KEY_BREAK		0x19b
+#define KEY_PREVIOUS		0x19c
+#define KEY_DIGITS		0x19d
+#define KEY_TEEN		0x19e
+#define KEY_TWEN		0x19f
+#define KEY_VIDEOPHONE		0x1a0
+#define KEY_GAMES		0x1a1
+#define KEY_ZOOMIN		0x1a2
+#define KEY_ZOOMOUT		0x1a3
+#define KEY_ZOOMRESET		0x1a4
+#define KEY_WORDPROCESSOR	0x1a5
+#define KEY_EDITOR		0x1a6
+#define KEY_SPREADSHEET		0x1a7
+#define KEY_GRAPHICSEDITOR	0x1a8
+#define KEY_PRESENTATION	0x1a9
+#define KEY_DATABASE		0x1aa
+#define KEY_NEWS		0x1ab
+#define KEY_VOICEMAIL		0x1ac
+#define KEY_ADDRESSBOOK		0x1ad
+#define KEY_MESSENGER		0x1ae
+#define KEY_DISPLAYTOGGLE	0x1af
+#define KEY_BRIGHTNESS_TOGGLE	KEY_DISPLAYTOGGLE
+#define KEY_SPELLCHECK		0x1b0
+#define KEY_LOGOFF		0x1b1
+#define KEY_DOLLAR		0x1b2
+#define KEY_EURO		0x1b3
+#define KEY_FRAMEBACK		0x1b4
+#define KEY_FRAMEFORWARD	0x1b5
+#define KEY_CONTEXT_MENU	0x1b6
+#define KEY_MEDIA_REPEAT	0x1b7
+#define KEY_10CHANNELSUP	0x1b8
+#define KEY_10CHANNELSDOWN	0x1b9
+#define KEY_IMAGES		0x1ba
+#define KEY_NOTIFICATION_CENTER	0x1bc
+#define KEY_PICKUP_PHONE	0x1bd
+#define KEY_HANGUP_PHONE	0x1be
+#define KEY_DEL_EOL		0x1c0
+#define KEY_DEL_EOS		0x1c1
+#define KEY_INS_LINE		0x1c2
+#define KEY_DEL_LINE		0x1c3
+#define KEY_FN			0x1d0
+#define KEY_FN_ESC		0x1d1
+#define KEY_FN_F1		0x1d2
+#define KEY_FN_F2		0x1d3
+#define KEY_FN_F3		0x1d4
+#define KEY_FN_F4		0x1d5
+#define KEY_FN_F5		0x1d6
+#define KEY_FN_F6		0x1d7
+#define KEY_FN_F7		0x1d8
+#define KEY_FN_F8		0x1d9
+#define KEY_FN_F9		0x1da
+#define KEY_FN_F10		0x1db
+#define KEY_FN_F11		0x1dc
+#define KEY_FN_F12		0x1dd
+#define KEY_FN_1		0x1de
+#define KEY_FN_2		0x1df
+#define KEY_FN_D		0x1e0
+#define KEY_FN_E		0x1e1
+#define KEY_FN_F		0x1e2
+#define KEY_FN_S		0x1e3
+#define KEY_FN_B		0x1e4
+#define KEY_FN_RIGHT_SHIFT	0x1e5
+#define KEY_BRL_DOT1		0x1f1
+#define KEY_BRL_DOT2		0x1f2
+#define KEY_BRL_DOT3		0x1f3
+#define KEY_BRL_DOT4		0x1f4
+#define KEY_BRL_DOT5		0x1f5
+#define KEY_BRL_DOT6		0x1f6
+#define KEY_BRL_DOT7		0x1f7
+#define KEY_BRL_DOT8		0x1f8
+#define KEY_BRL_DOT9		0x1f9
+#define KEY_BRL_DOT10		0x1fa
+#define KEY_NUMERIC_0		0x200
+#define KEY_NUMERIC_1		0x201
+#define KEY_NUMERIC_2		0x202
+#define KEY_NUMERIC_3		0x203
+#define KEY_NUMERIC_4		0x204
+#define KEY_NUMERIC_5		0x205
+#define KEY_NUMERIC_6		0x206
+#define KEY_NUMERIC_7		0x207
+#define KEY_NUMERIC_8		0x208
+#define KEY_NUMERIC_9		0x209
+#define KEY_NUMERIC_STAR	0x20a
+#define KEY_NUMERIC_POUND	0x20b
+#define KEY_NUMERIC_A		0x20c
+#define KEY_NUMERIC_B		0x20d
+#define KEY_NUMERIC_C		0x20e
+#define KEY_NUMERIC_D		0x20f
+#define KEY_CAMERA_FOCUS	0x210
+#define KEY_WPS_BUTTON		0x211
+#define KEY_TOUCHPAD_TOGGLE	0x212
+#define KEY_TOUCHPAD_ON		0x213
+#define KEY_TOUCHPAD_OFF	0x214
+#define KEY_CAMERA_ZOOMIN	0x215
+#define KEY_CAMERA_ZOOMOUT	0x216
+#define KEY_CAMERA_UP		0x217
+#define KEY_CAMERA_DOWN		0x218
+#define KEY_CAMERA_LEFT		0x219
+#define KEY_CAMERA_RIGHT	0x21a
+#define KEY_ATTENDANT_ON	0x21b
+#define KEY_ATTENDANT_OFF	0x21c
+#define KEY_ATTENDANT_TOGGLE	0x21d
+#define KEY_LIGHTS_TOGGLE	0x21e
+#define BTN_DPAD_UP		0x220
+#define BTN_DPAD_DOWN		0x221
+#define BTN_DPAD_LEFT		0x222
+#define BTN_DPAD_RIGHT		0x223
+#define KEY_ALS_TOGGLE		0x230
+#define KEY_ROTATE_LOCK_TOGGLE	0x231
+#define KEY_BUTTONCONFIG		0x240
+#define KEY_TASKMANAGER		0x241
+#define KEY_JOURNAL		0x242
+#define KEY_CONTROLPANEL		0x243
+#define KEY_APPSELECT		0x244
+#define KEY_SCREENSAVER		0x245
+#define KEY_VOICECOMMAND		0x246
+#define KEY_ASSISTANT		0x247
+#define KEY_KBD_LAYOUT_NEXT	0x248
+#define KEY_BRIGHTNESS_MIN		0x250
+#define KEY_BRIGHTNESS_MAX		0x251
+#define KEY_KBDINPUTASSIST_PREV		0x260
+#define KEY_KBDINPUTASSIST_NEXT		0x261
+#define KEY_KBDINPUTASSIST_PREVGROUP		0x262
+#define KEY_KBDINPUTASSIST_NEXTGROUP		0x263
+#define KEY_KBDINPUTASSIST_ACCEPT		0x264
+#define KEY_KBDINPUTASSIST_CANCEL		0x265
+/* Diagonal movement keys */
+#define KEY_RIGHT_UP			0x266
+#define KEY_RIGHT_DOWN			0x267
+#define KEY_LEFT_UP			0x268
+#define KEY_LEFT_DOWN			0x269
+#define KEY_ROOT_MENU			0x26a
+/* Show Top Menu of the Media (e.g. DVD) */
+#define KEY_MEDIA_TOP_MENU		0x26b
+#define KEY_NUMERIC_11			0x26c
+#define KEY_NUMERIC_12			0x26d
+/*
+ * Toggle Audio Description: refers to an audio service that helps blind and
+ * visually impaired consumers understand the action in a program. Note: in
+ * some countries this is referred to as "Video Description".
+ */
+#define KEY_AUDIO_DESC			0x26e
+#define KEY_3D_MODE			0x26f
+#define KEY_NEXT_FAVORITE		0x270
+#define KEY_STOP_RECORD			0x271
+#define KEY_PAUSE_RECORD		0x272
+#define KEY_VOD				0x273
+#define KEY_UNMUTE			0x274
+#define KEY_FASTREVERSE			0x275
+#define KEY_SLOWREVERSE			0x276
+/*
+ * Control a data application associated with the currently viewed channel,
+ * e.g. teletext or data broadcast application (MHEG, MHP, HbbTV, etc.)
+ */
+#define KEY_DATA			0x277
+#define KEY_ONSCREEN_KEYBOARD		0x278
+/* Electronic privacy screen control */
+#define KEY_PRIVACY_SCREEN_TOGGLE	0x279
+/* Select an area of screen to be copied */
+#define KEY_SELECTIVE_SCREENSHOT	0x27a
+/*
+ * Some keyboards have keys which do not have a defined meaning, these keys
+ * are intended to be programmed / bound to macros by the user. For most
+ * keyboards with these macro-keys the key-sequence to inject, or action to
+ * take, is all handled by software on the host side. So from the kernel's
+ * point of view these are just normal keys.
+ *
+ * The KEY_MACRO# codes below are intended for such keys, which may be labeled
+ * e.g. G1-G18, or S1 - S30. The KEY_MACRO# codes MUST NOT be used for keys
+ * where the marking on the key does indicate a defined meaning / purpose.
+ *
+ * The KEY_MACRO# codes MUST also NOT be used as fallback for when no existing
+ * KEY_FOO define matches the marking / purpose. In this case a new KEY_FOO
+ * define MUST be added.
+ */
+#define KEY_MACRO1			0x290
+#define KEY_MACRO2			0x291
+#define KEY_MACRO3			0x292
+#define KEY_MACRO4			0x293
+#define KEY_MACRO5			0x294
+#define KEY_MACRO6			0x295
+#define KEY_MACRO7			0x296
+#define KEY_MACRO8			0x297
+#define KEY_MACRO9			0x298
+#define KEY_MACRO10			0x299
+#define KEY_MACRO11			0x29a
+#define KEY_MACRO12			0x29b
+#define KEY_MACRO13			0x29c
+#define KEY_MACRO14			0x29d
+#define KEY_MACRO15			0x29e
+#define KEY_MACRO16			0x29f
+#define KEY_MACRO17			0x2a0
+#define KEY_MACRO18			0x2a1
+#define KEY_MACRO19			0x2a2
+#define KEY_MACRO20			0x2a3
+#define KEY_MACRO21			0x2a4
+#define KEY_MACRO22			0x2a5
+#define KEY_MACRO23			0x2a6
+#define KEY_MACRO24			0x2a7
+#define KEY_MACRO25			0x2a8
+#define KEY_MACRO26			0x2a9
+#define KEY_MACRO27			0x2aa
+#define KEY_MACRO28			0x2ab
+#define KEY_MACRO29			0x2ac
+#define KEY_MACRO30			0x2ad
+/*
+ * Some keyboards with the macro-keys described above have some extra keys
+ * for controlling the host-side software responsible for the macro handling:
+ * -A macro recording start/stop key. Note that not all keyboards which emit
+ *  KEY_MACRO_RECORD_START will also emit KEY_MACRO_RECORD_STOP if
+ *  KEY_MACRO_RECORD_STOP is not advertised, then KEY_MACRO_RECORD_START
+ *  should be interpreted as a recording start/stop toggle;
+ * -Keys for switching between different macro (pre)sets, either a key for
+ *  cycling through the configured presets or keys to directly select a preset.
+ */
+#define KEY_MACRO_RECORD_START		0x2b0
+#define KEY_MACRO_RECORD_STOP		0x2b1
+#define KEY_MACRO_PRESET_CYCLE		0x2b2
+#define KEY_MACRO_PRESET1		0x2b3
+#define KEY_MACRO_PRESET2		0x2b4
+#define KEY_MACRO_PRESET3		0x2b5
+/*
+ * Some keyboards have a buildin LCD panel where the contents are controlled
+ * by the host. Often these have a number of keys directly below the LCD
+ * intended for controlling a menu shown on the LCD. These keys often don't
+ * have any labeling so we just name them KEY_KBD_LCD_MENU#
+ */
+#define KEY_KBD_LCD_MENU1		0x2b8
+#define KEY_KBD_LCD_MENU2		0x2b9
+#define KEY_KBD_LCD_MENU3		0x2ba
+#define KEY_KBD_LCD_MENU4		0x2bb
+#define KEY_KBD_LCD_MENU5		0x2bc
+#define BTN_TRIGGER_HAPPY		0x2c0
+#define BTN_TRIGGER_HAPPY1		0x2c0
+#define BTN_TRIGGER_HAPPY2		0x2c1
+#define BTN_TRIGGER_HAPPY3		0x2c2
+#define BTN_TRIGGER_HAPPY4		0x2c3
+#define BTN_TRIGGER_HAPPY5		0x2c4
+#define BTN_TRIGGER_HAPPY6		0x2c5
+#define BTN_TRIGGER_HAPPY7		0x2c6
+#define BTN_TRIGGER_HAPPY8		0x2c7
+#define BTN_TRIGGER_HAPPY9		0x2c8
+#define BTN_TRIGGER_HAPPY10		0x2c9
+#define BTN_TRIGGER_HAPPY11		0x2ca
+#define BTN_TRIGGER_HAPPY12		0x2cb
+#define BTN_TRIGGER_HAPPY13		0x2cc
+#define BTN_TRIGGER_HAPPY14		0x2cd
+#define BTN_TRIGGER_HAPPY15		0x2ce
+#define BTN_TRIGGER_HAPPY16		0x2cf
+#define BTN_TRIGGER_HAPPY17		0x2d0
+#define BTN_TRIGGER_HAPPY18		0x2d1
+#define BTN_TRIGGER_HAPPY19		0x2d2
+#define BTN_TRIGGER_HAPPY20		0x2d3
+#define BTN_TRIGGER_HAPPY21		0x2d4
+#define BTN_TRIGGER_HAPPY22		0x2d5
+#define BTN_TRIGGER_HAPPY23		0x2d6
+#define BTN_TRIGGER_HAPPY24		0x2d7
+#define BTN_TRIGGER_HAPPY25		0x2d8
+#define BTN_TRIGGER_HAPPY26		0x2d9
+#define BTN_TRIGGER_HAPPY27		0x2da
+#define BTN_TRIGGER_HAPPY28		0x2db
+#define BTN_TRIGGER_HAPPY29		0x2dc
+#define BTN_TRIGGER_HAPPY30		0x2dd
+#define BTN_TRIGGER_HAPPY31		0x2de
+#define BTN_TRIGGER_HAPPY32		0x2df
+#define BTN_TRIGGER_HAPPY33		0x2e0
+#define BTN_TRIGGER_HAPPY34		0x2e1
+#define BTN_TRIGGER_HAPPY35		0x2e2
+#define BTN_TRIGGER_HAPPY36		0x2e3
+#define BTN_TRIGGER_HAPPY37		0x2e4
+#define BTN_TRIGGER_HAPPY38		0x2e5
+#define BTN_TRIGGER_HAPPY39		0x2e6
+#define BTN_TRIGGER_HAPPY40		0x2e7
+/* We avoid low common keys in module aliases so they don't get huge. */
+#define KEY_MIN_INTERESTING	KEY_MUTE
+#define KEY_MAX			0x2ff
+#define KEY_CNT			(KEY_MAX+1)
+/*
+ * Relative axes
+ */
+#define REL_X			0x00
+#define REL_Y			0x01
+#define REL_Z			0x02
+#define REL_RX			0x03
+#define REL_RY			0x04
+#define REL_RZ			0x05
+#define REL_HWHEEL		0x06
+#define REL_DIAL		0x07
+#define REL_WHEEL		0x08
+#define REL_MISC		0x09
+/*
+ * 0x0a is reserved and should not be used in input drivers.
+ * It was used by HID as REL_MISC+1 and userspace needs to detect if
+ * the next REL_* event is correct or is just REL_MISC + n.
+ * We define here REL_RESERVED so userspace can rely on it and detect
+ * the situation described above.
+ */
+#define REL_RESERVED		0x0a
+#define REL_WHEEL_HI_RES	0x0b
+#define REL_HWHEEL_HI_RES	0x0c
+#define REL_MAX			0x0f
+#define REL_CNT			(REL_MAX+1)
+/*
+ * Absolute axes
+ */
+#define ABS_X			0x00
+#define ABS_Y			0x01
+#define ABS_Z			0x02
+#define ABS_RX			0x03
+#define ABS_RY			0x04
+#define ABS_RZ			0x05
+#define ABS_THROTTLE		0x06
+#define ABS_RUDDER		0x07
+#define ABS_WHEEL		0x08
+#define ABS_GAS			0x09
+#define ABS_BRAKE		0x0a
+#define ABS_HAT0X		0x10
+#define ABS_HAT0Y		0x11
+#define ABS_HAT1X		0x12
+#define ABS_HAT1Y		0x13
+#define ABS_HAT2X		0x14
+#define ABS_HAT2Y		0x15
+#define ABS_HAT3X		0x16
+#define ABS_HAT3Y		0x17
+#define ABS_PRESSURE		0x18
+#define ABS_DISTANCE		0x19
+#define ABS_TILT_X		0x1a
+#define ABS_TILT_Y		0x1b
+#define ABS_TOOL_WIDTH		0x1c
+#define ABS_VOLUME		0x20
+#define ABS_MISC		0x28
+/*
+ * 0x2e is reserved and should not be used in input drivers.
+ * It was used by HID as ABS_MISC+6 and userspace needs to detect if
+ * the next ABS_* event is correct or is just ABS_MISC + n.
+ * We define here ABS_RESERVED so userspace can rely on it and detect
+ * the situation described above.
+ */
+#define ABS_RESERVED		0x2e
+#define ABS_MT_SLOT		0x2f
+#define ABS_MT_TOUCH_MAJOR	0x30
+#define ABS_MT_TOUCH_MINOR	0x31
+#define ABS_MT_WIDTH_MAJOR	0x32
+#define ABS_MT_WIDTH_MINOR	0x33
+#define ABS_MT_ORIENTATION	0x34
+#define ABS_MT_POSITION_X	0x35
+#define ABS_MT_POSITION_Y	0x36
+#define ABS_MT_TOOL_TYPE	0x37
+#define ABS_MT_BLOB_ID		0x38
+#define ABS_MT_TRACKING_ID	0x39
+#define ABS_MT_PRESSURE		0x3a
+#define ABS_MT_DISTANCE		0x3b
+#define ABS_MT_TOOL_X		0x3c
+#define ABS_MT_TOOL_Y		0x3d
+#define ABS_MAX			0x3f
+#define ABS_CNT			(ABS_MAX+1)
+/*
+ * Switch events
+ */
+#define SW_LID			0x00
+#define SW_TABLET_MODE		0x01
+#define SW_HEADPHONE_INSERT	0x02
+#define SW_RFKILL_ALL		0x03
+  /* rfkill master switch, type "any"
+					 set = radio enabled */
+#define SW_RADIO		SW_RFKILL_ALL
+#define SW_MICROPHONE_INSERT	0x04
+#define SW_DOCK			0x05
+#define SW_LINEOUT_INSERT	0x06
+#define SW_JACK_PHYSICAL_INSERT 0x07
+#define SW_VIDEOOUT_INSERT	0x08
+#define SW_CAMERA_LENS_COVER	0x09
+#define SW_KEYPAD_SLIDE		0x0a
+#define SW_FRONT_PROXIMITY	0x0b
+#define SW_ROTATE_LOCK		0x0c
+#define SW_LINEIN_INSERT	0x0d
+#define SW_MUTE_DEVICE		0x0e
+#define SW_PEN_INSERTED		0x0f
+#define SW_MACHINE_COVER	0x10
+#define SW_MAX			0x10
+#define SW_CNT			(SW_MAX+1)
+/*
+ * Misc events
+ */
+#define MSC_SERIAL		0x00
+#define MSC_PULSELED		0x01
+#define MSC_GESTURE		0x02
+#define MSC_RAW			0x03
+#define MSC_SCAN		0x04
+#define MSC_TIMESTAMP		0x05
+#define MSC_MAX			0x07
+#define MSC_CNT			(MSC_MAX+1)
+/*
+ * LEDs
+ */
+#define LED_NUML		0x00
+#define LED_CAPSL		0x01
+#define LED_SCROLLL		0x02
+#define LED_COMPOSE		0x03
+#define LED_KANA		0x04
+#define LED_SLEEP		0x05
+#define LED_SUSPEND		0x06
+#define LED_MUTE		0x07
+#define LED_MISC		0x08
+#define LED_MAIL		0x09
+#define LED_CHARGING		0x0a
+#define LED_MAX			0x0f
+#define LED_CNT			(LED_MAX+1)
+/*
+ * Autorepeat values
+ */
+#define REP_DELAY		0x00
+#define REP_PERIOD		0x01
+#define REP_MAX			0x01
+#define REP_CNT			(REP_MAX+1)
+/*
+ * Sounds
+ */
+#define SND_CLICK		0x00
+#define SND_BELL		0x01
+#define SND_TONE		0x02
+#define SND_MAX			0x07
+#define SND_CNT			(SND_MAX+1)
+#endif
 #undef BTN_START
 #define KEY_ESCAPE KEY_ESC
 #define KEY_PGDN KEY_PAGEDOWN
@@ -32315,6 +33349,7 @@ RENDER_NAMESPACE_END
 // Revision 1.10  2003/03/25 08:38:11  panther
 // Add logging
 //
+#endif
 #ifndef _SHARED_MEMORY_LIBRARY
 #if !defined( MEMORY_STRUCT_DEFINED ) || defined( DEFINE_MEMORY_STRUCT )
 //#define ENABLE_NATIVE_MALLOC_PROTECTOR
@@ -34559,10 +35594,11 @@ void  RescheduleTimer( uint32_t ID )
 	LeaveCriticalSec( &globalTimerData.csGrab );
 }
 //--------------------------------------------------------------------------
-#ifndef __NO_INTERFACE_SUPPORT__
-#  ifndef TARGETNAME
-#    define TARGETNAME ""
-#  endif
+#if !defined( __NO_GUI__ )
+#  ifndef __NO_INTERFACE_SUPPORT__
+#    ifndef TARGETNAME
+#      define TARGETNAME ""
+#    endif
 static void OnDisplayPause( "@Internal Timers" TARGETNAME )( void )
 {
 	globalTimerData.flags.bHaltTimers = 1;
@@ -34574,6 +35610,7 @@ static void OnDisplayResume( "@Internal Timers" TARGETNAME)( void )
 	if( globalTimerData.pTimerThread )
 		WakeThread( globalTimerData.pTimerThread );
 }
+#  endif
 #endif
 //--------------------------------------------------------------------------
 void  ChangeTimerEx( uint32_t ID, uint32_t initial, uint32_t frequency )
@@ -35141,7 +36178,7 @@ enum NetworkConnectionFlags {
   // wants to close at the next opportunity.
 	, CF_TOCLOSE         = 0x00000100
   // this flag is unused at this time
-	, UNUSED_CF_WRITEISPENDED   = 0x00000200
+	, CF_WANTCLOSE       = 0x00000200
 	, CF_CLOSING         = 0x00000400
 	, CF_DRAINING        = 0x00000800
 	// closed, handled everything except releasing the socket.
@@ -35274,8 +36311,8 @@ struct NetworkClient
 	}read;
 	uintptr_t psvRead;
 	union {
-		void (CPROC*WriteComplete)( struct NetworkClient * );
-		void (CPROC*CPPWriteComplete)( uintptr_t psv );
+		void (CPROC*WriteComplete)( struct NetworkClient *, CPOINTER buffer, size_t len );
+		void (CPROC*CPPWriteComplete)( uintptr_t psv, CPOINTER buffer, size_t len );
 	}write;
 	uintptr_t psvWrite;
 	cErrorCallback errorCallback;
@@ -35314,7 +36351,11 @@ struct NetworkClient
 		BIT_FIELD bWaiting : 1;
  // write event failed to get lock, so if the locked holder would please write...
 		BIT_FIELD bWriteOnUnlock : 1;
+ // has work outstanding; wait for close until release
+		BIT_FIELD bInUse : 1;
 	} flags;
+ // we have the ability to save outstatnding UID locks...
+	PLIST psvInUse;
 	// this is set to what the thread that's waiting for this event is.
 	struct peer_thread_info * volatile this_thread;
 	int tcp_delay_count;
@@ -35451,6 +36492,10 @@ void CPROC NetworkPauseTimer( uintptr_t psv );
 int CPROC ProcessNetworkMessages( struct peer_thread_info* thread, uintptr_t unused );
 uintptr_t CPROC NetworkThreadProc( PTHREAD thread );
 int CPROC IdleProcessNetworkMessages( uintptr_t quick_check );
+//----------------------------
+// ssl_close - redirected removeClient from network..
+void ssl_CloseSession( PCLIENT pc );
+LOGICAL ssl_IsClosed( PCLIENT pc );
 //---------------------------
 // some utility macros
 #define IsValid(S)   ((S)!=INVALID_SOCKET)
@@ -35647,7 +36692,7 @@ PCLIENT GrabClientEx( PCLIENT pClient DBG_PASS )
 		pClient->dwFlags &= ~CF_STATEFLAGS;
 		if( pClient->dwFlags & CF_AVAILABLE )
 			lprintf( "Grabbed. %p  %08x", pClient, pClient->dwFlags );
-		pClient->LastEvent = GetTickCount();
+		pClient->LastEvent = timeGetTime();
 		if( ( (*pClient->me) = pClient->next ) )
 			pClient->next->me = pClient->me;
 	}
@@ -35663,7 +36708,7 @@ static PCLIENT AddAvailable( PCLIENT pClient )
 		DumpLists();
 #endif
 		pClient->dwFlags |= CF_AVAILABLE;
-		pClient->LastEvent = GetTickCount();
+		pClient->LastEvent = timeGetTime();
 		pClient->me = &globalNetworkData.AvailableClients;
 		if( ( pClient->next = globalNetworkData.AvailableClients ) )
 			globalNetworkData.AvailableClients->me = &pClient->next;
@@ -35682,7 +36727,7 @@ PCLIENT AddActive( PCLIENT pClient )
 		DumpLists();
 #endif
 		pClient->dwFlags |= CF_ACTIVE;
-		pClient->LastEvent = GetTickCount();
+		pClient->LastEvent = timeGetTime();
 		pClient->me = &globalNetworkData.ActiveClients;
 		if( ( pClient->next = globalNetworkData.ActiveClients ) )
 			globalNetworkData.ActiveClients->me = &pClient->next;
@@ -35704,7 +36749,7 @@ static PCLIENT AddClosed( PCLIENT pClient )
 		DumpLists();
 #endif
 		pClient->dwFlags |= CF_CLOSED;
-		pClient->LastEvent = GetTickCount();
+		pClient->LastEvent = timeGetTime();
 		pClient->me = &globalNetworkData.ClosedClients;
 		if( ( pClient->next = globalNetworkData.ClosedClients ) )
 			globalNetworkData.ClosedClients->me = &pClient->next;
@@ -36578,7 +37623,8 @@ void InternalRemoveClientExx(PCLIENT lpClient, LOGICAL bBlockNotify, LOGICAL bLi
 				if (setsockopt(lpClient->Socket, SOL_SOCKET, SO_LINGER,
 									(char*)&lingerSet, sizeof(lingerSet)) <0 )
 				{
-					lprintf( "error setting no linger in close." );
+					// this happens(in windows) when a client didn't connect, and resulted with a error
+					//lprintf( "error setting no linger in close." );
 					//cerr << "NFMSim:setHost:ERROR: could not set socket to linger." << endl;
 				}
 			}
@@ -36732,12 +37778,22 @@ void RemoveClientExx(PCLIENT lpClient, LOGICAL bBlockNotify, LOGICAL bLinger DBG
 		&& ( lpClient->dwFlags & ( CF_CONNECTED ) ) ) {
 		// not linger
 		// OR  nothing to write allow shutdown.
+#ifndef NO_SSL
+		if( ssl_IsClientSecure( lpClient ) ) {
+			if( !ssl_IsClosed( lpClient ) ) {
+				// let client notify_close actually close this...
+				ssl_CloseSession( lpClient );
+				return;
+			}
+		}
+#endif
 		if( !bLinger || !(lpClient->lpFirstPending || ( lpClient->dwFlags & CF_WRITEPENDING ) ) )
 			shutdown( lpClient->Socket, SHUT_WR );
 		else {
 			lprintf( "linger and still pending write data..." );
 			lpClient->dwFlags |= CF_TOCLOSE;
 		}
+		lpClient->dwFlags |= CF_WANTCLOSE;
 	} else {
 		int n = 0;
 		// UDP still needs to be done this way...
@@ -36755,6 +37811,25 @@ void RemoveClientExx(PCLIENT lpClient, LOGICAL bBlockNotify, LOGICAL bLinger DBG
 			lpClient->dwFlags |= CF_TOCLOSE;
 		}
 		LeaveCriticalSec( &globalNetworkData.csNetwork );
+	}
+}
+void AddNetWork( PCLIENT lpClient, uintptr_t psv ) {
+	AddLink( &lpClient->psvInUse, (POINTER)psv );
+	if( lpClient->flags.bInUse ) {
+		return;
+	}
+	lpClient->flags.bInUse = 1;
+}
+void ClearNetWork( PCLIENT lpClient, uintptr_t psv ) {
+	INDEX id = FindLink( &lpClient->psvInUse, (POINTER)psv );
+	if( id != INVALID_INDEX ) {
+		SetLink( &lpClient->psvInUse, id, NULL );
+	}
+	if( GetLinkCount( lpClient->psvInUse ) )
+		return;
+	lpClient->flags.bInUse = 0;
+	if( lpClient->dwFlags & CF_TOCLOSE && (!lpClient->lpFirstPending || !lpClient->lpFirstPending->dwAvail) ) {
+		RemoveClient( lpClient );
 	}
 }
 SACK_NETWORK_NAMESPACE_END
@@ -37292,7 +38367,7 @@ int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t unu
 										event_data->pc->read.ReadComplete( event_data->pc, NULL, 0 );
 									}
 									if( event_data->pc->lpFirstPending ) {
-										lprintf( "Data was pending on a connecting socket, try sending it now" );
+										//lprintf( "Data was pending on a connecting socket, try sending it now" );
 										TCPWrite( event_data->pc );
 									}
 								} else {
@@ -37710,17 +38785,17 @@ static void HandleEvent( PCLIENT pClient )
 					if( globalNetworkData.flags.bLogNotices )
 						lprintf("FD_CLOSE... %p  %08x", pClient, pClient->dwFlags );
 #endif
-					if( pClient->dwFlags & CF_ACTIVE )
+					if( pClient->dwFlags & CF_ACTIVE && !pClient->flags.bInUse )
 					{
 						// might already be cleared and gone..
 						EnterCriticalSec( &globalNetworkData.csNetwork );
 						InternalRemoveClientEx( pClient, FALSE, TRUE );
 						TerminateClosedClient( pClient );
 						LeaveCriticalSec( &globalNetworkData.csNetwork );
+ // it's no longer closing.  (was set during the course of closure)
+						pClient->dwFlags &= ~CF_CLOSING;
 					}
 					// section will be blank after termination...(correction, we keep the section state now)
- // it's no longer closing.  (was set during the course of closure)
-					pClient->dwFlags &= ~CF_CLOSING;
 				}
 				if( networkEvents.lNetworkEvents & FD_ACCEPT )
 				{
@@ -38325,6 +39400,7 @@ int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t unu
 				{
 					int locked;
 					locked = 1;
+					// ------- Large complicated lock ---------------
 					while( !NetworkLock( event_data->pc, 1 ) ) {
 						if( !( event_data->pc->dwFlags & CF_ACTIVE ) ) {
 #  ifdef LOG_NETWORK_EVENT_THREAD
@@ -38339,6 +39415,7 @@ int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t unu
 						}
 						Relinquish();
 					}
+					// ------- End Large complicated lock ---------------
 					if( !( event_data->pc->dwFlags & ( CF_ACTIVE | CF_CLOSED ) ) ) {
 #  ifdef LOG_NETWORK_EVENT_THREAD
 						lprintf( "not active but locked? dwFlags : %8x", event_data->pc->dwFlags );
@@ -38362,8 +39439,11 @@ int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t unu
 #  ifdef LOG_NOTICES
 						lprintf("FD_CLOSE... %p  %08x", pClient, pClient->dwFlags );
 #  endif
+						EnterCriticalSec( &globalNetworkData.csNetwork );
+						InternalRemoveClientEx( pClient, FALSE, TRUE );
 						TerminateClosedClient( pClient );
 						closed = 1;
+						LeaveCriticalSec( &globalNetworkData.csNetwork );
 						// section will be blank after termination...(correction, we keep the section state now)
  // it's no longer closing.  (was set during the course of closure)
 						pClient->dwFlags &= ~CF_CLOSING;
@@ -38408,7 +39488,7 @@ int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t unu
 						// partial messages at a time...
 						read = FinishPendingRead( event_data->pc DBG_SRC );
 						//lprintf( "Read %d", read );
-						if( ( read == -1 ) && ( event_data->pc->dwFlags & CF_TOCLOSE ) )
+						if( ( read == -1 ) && ( event_data->pc->dwFlags & CF_TOCLOSE ) && !event_data->pc->flags.bInUse )
 						{
 							int locked;
 							locked = 1;
@@ -38416,7 +39496,7 @@ int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t unu
 							//if( globalNetworkData.flags.bLogNotices )
 							lprintf( "Pending read failed - reset connection." );
 #endif
-							// lock other read channel.
+							// lock other both channels.
 							while( !NetworkLock( event_data->pc, 0 ) ) {
 								if( !(event_data->pc->dwFlags & CF_ACTIVE) ) {
 #  ifdef LOG_NETWORK_EVENT_THREAD
@@ -38611,7 +39691,7 @@ int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t unu
 										event_data->pc->read.ReadComplete( event_data->pc, NULL, 0 );
 									}
 									if( event_data->pc->lpFirstPending ) {
-										lprintf( "Data was pending on a connecting socket, try sending it now" );
+										//lprintf( "Data was pending on a connecting socket, try sending it now" );
 										TCPWrite( event_data->pc );
 									}
 									if( !event_data->pc->lpFirstPending ) {
@@ -39217,7 +40297,7 @@ SOCKADDR *CreateRemote( CTEXTSTR lpName,uint16_t nHisPort)
 #if !defined( __EMSCRIPTEN__ )
 					else
 					{
-						lprintf( "Strange, gethostbyname failed, but AF_INET worked... %s", tmp );
+						//lprintf( "Strange, gethostbyname failed, but AF_INET worked... %s", tmp );
 						SET_SOCKADDR_LENGTH( lpsaAddr, IN_SOCKADDR_LENGTH );
 						lpsaAddr->sin_family = AF_INET;
            // save IP address from host entry.
@@ -40133,16 +41213,19 @@ void AcceptClient(PCLIENT pListen)
   // process read to get data already pending...
 					pNewClient->read.ReadComplete( pNewClient, NULL, 0 );
 			}
+			/*
+			* really don't need a write complete on initial open... the initial read should suffice.
 			if( pNewClient->write.WriteComplete  &&
 				!pNewClient->bWriteComplete )
 			{
 				pNewClient->bWriteComplete = TRUE;
 				if( pNewClient->dwFlags & CF_CPPWRITE )
-					pNewClient->write.CPPWriteComplete( pNewClient->psvWrite );
+					pNewClient->write.CPPWriteComplete( pNewClient->psvWrite, NULL, 0 );
 				else
-					pNewClient->write.WriteComplete( pNewClient );
+					pNewClient->write.WriteComplete( pNewClient, NULL, 0 );
 				pNewClient->bWriteComplete = FALSE;
 			}
+			*/
 			//lprintf( "Is it already closed HERE?""?""?");
 			if( pNewClient->Socket ) {
 #ifdef USE_WSA_EVENTS
@@ -40830,6 +41913,12 @@ int FinishPendingRead(PCLIENT lpClient DBG_PASS )
 		if( !( lpClient->dwFlags & CF_READPENDING ) )
 		{
 			//lpClient->dwFlags |= CF_READREADY; // read ready is set if FinishPendingRead returns 0; and it's from the core read...
+			if( lpClient->dwFlags & CF_WANTCLOSE ) {
+				// the application didn't queue a buffer to read into, have to force accepting a close.
+				lpClient->dwFlags |= CF_TOCLOSE;
+   // return pending finished...
+				return -1;
+			}
 #ifdef DEBUG_SOCK_IO
 			lprintf( "Finish pending - return, no pending read. %08x", lpClient->dwFlags );
 #endif
@@ -41290,9 +42379,14 @@ int TCPWriteEx(PCLIENT pc DBG_PASS)
   // no more to send...
 				if (!pc->lpFirstPending->dwAvail)
 				{
+					CPOINTER p = pc->lpFirstPending->buffer.p;
+					size_t len = pc->lpFirstPending->dwUsed;
 					lpNext = pc->lpFirstPending -> lpNext;
-					if( pc->lpFirstPending->s.bDynBuffer )
-						Release(pc->lpFirstPending->buffer.p );
+					if( pc->lpFirstPending->s.bDynBuffer ) {
+						Release( pc->lpFirstPending->buffer.p );
+ // already released the buffer.
+						p = NULL;
+					}
 					// there is one pending holder in the client
 					// structure that was NOT allocated...
 					if( pc->lpFirstPending != &pc->FirstWritePending )
@@ -41315,16 +42409,16 @@ int TCPWriteEx(PCLIENT pc DBG_PASS)
 					if (!lpNext)
 						pc->lpLastPending = NULL;
 					pc->lpFirstPending = lpNext;
-					if( pc->write.WriteComplete &&
+					if( p && pc->write.WriteComplete &&
 						!pc->bWriteComplete )
 					{
 						pc->bWriteComplete = TRUE;
 						if( pc->dwFlags & CF_CPPWRITE )
   // SOME WRITE!!!
-							pc->write.CPPWriteComplete( pc->psvWrite );
+							pc->write.CPPWriteComplete( pc->psvWrite, p, len );
 						else
   // SOME WRITE!!!
-							pc->write.WriteComplete( pc );
+							pc->write.WriteComplete( pc, p, len );
 						pc->bWriteComplete = FALSE;
 					}
 					if( !pc->lpFirstPending )
@@ -42963,15 +44057,28 @@ LOGICAL ssl_IsClientSecure( PCLIENT pc ) {
 CTEXTSTR ssl_GetRequestedHostName( PCLIENT pc ) {
 	return NULL;
 }
+void ssl_CloseSession( PCLIENT pc ) {
+   return;
+}
 SACK_NETWORK_NAMESPACE_END
 #else
+#ifndef OPENSSL_API_COMPAT
+#  define OPENSSL_API_COMPAT 10101
+#endif
 #define _LIB
+#  if NODE_MAJOR_VERSION >= 17
+// this can't work?
+#    include <openssl/configuration.h>
+#  endif
 #include <openssl/ssl.h>
 #include <openssl/tls1.h>
 #include <openssl/err.h>
 #include <openssl/rsa.h>
 #include <openssl/pem.h>
 #include <openssl/pkcs12.h>
+#if OPENSSL_VERSION_MAJOR >= 3
+#include <openssl/core_names.h>
+#endif
 SACK_NETWORK_NAMESPACE
 //#define RSA_KEY_SIZE (1024)
 const int serverKBits = 4096;
@@ -42984,7 +44091,7 @@ struct internalCert {
 	EVP_PKEY *pkey;
 	STACK_OF( X509 ) *chain;
 };
-void loadSystemCerts(X509_STORE *store );
+void loadSystemCerts(SSL_CTX* ctx,X509_STORE *store );
 //static void gencp
 struct internalCert * MakeRequest( void );
 EVP_PKEY *genKey() {
@@ -42993,9 +44100,10 @@ EVP_PKEY *genKey() {
 	//char *pem_key;
 	//BN_GENCB cb = { }
 	BIGNUM          *bne = BN_new();
-	RSA *rsa = RSA_new();
 	int ret;
 	ret = BN_set_word( bne, kExp );
+#if OPENSSL_VERSION_MAJOR < 3 || OPENSSL_API_COMPAT==10101
+	RSA *rsa = RSA_new();
 	if( ret != 1 ) {
 		BN_free( bne );
 		RSA_free( rsa );
@@ -43004,8 +44112,28 @@ EVP_PKEY *genKey() {
 	}
 	RSA_generate_key_ex( rsa, kBits, bne, NULL );
 	EVP_PKEY_set1_RSA( keypair, rsa );
-	BN_free( bne );
 	RSA_free( rsa );
+#else
+	EVP_PKEY_CTX* ctx;
+	ctx = EVP_PKEY_CTX_new_from_name( NULL, "rsa", NULL );
+	if( !ctx )
+		return NULL;
+	EVP_KEYMGMT* keymgmt;  keymgmt = EVP_KEYMGMT_fetch( NULL, "rsa", NULL );
+	if( !keymgmt )
+		return NULL;
+	if( EVP_PKEY_set_type_by_keymgmt( keypair, keymgmt ) != 1 )
+		return NULL;
+	{
+		OSSL_PARAM params[2] = {
+			OSSL_PARAM_BN( OSSL_PKEY_PARAM_RSA_E, bne, (size_t)BN_num_bytes( bne ) ),
+			OSSL_PARAM_END
+		};
+		if( EVP_PKEY_fromdata_init( ctx ) != 1 ||
+			EVP_PKEY_fromdata( ctx, &keypair, EVP_PKEY_KEY_PARAMETERS, params ) != 1 )
+			exit( 7 );
+	}
+#endif
+	BN_free( bne );
 	return keypair;
 }
 #define ALLOW_ANON_CONNECTIONS	1
@@ -43021,6 +44149,7 @@ struct ssl_session {
 	struct internalCert* cert;
 	LOGICAL ignoreVerification;
 	LOGICAL firstPacket;
+	LOGICAL closed;
 	BIO *rbio;
 	BIO *wbio;
 	//EVP_PKEY *privkey;
@@ -43065,27 +44194,67 @@ ATEXIT( CloseSSL )
 	if( ssl_global.flags.bInited ) {
 	}
 }
-void CloseSession( PCLIENT pc )
+static int logerr( const char *str, size_t len, void *userdata ) {
+	lprintf( "%d: %s", *((int*)&userdata), str );
+	return 0;
+}
+static void ssl_handlePendingControlwrites( PCLIENT pc ) {
+	// the read generated write data, output that data
+	size_t pending = BIO_ctrl_pending( pc->ssl_session->wbio );
+	if( !pc->ssl_session ) {
+		lprintf( "SSL SESSION SELF DESTRUCTED!" );
+	}
+	if( pending > 0 ) {
+		int read;
+#ifdef DEBUG_SSL_IO_VERBOSE
+		lprintf( "pending to send is %zd into %zd %p " , pending, pc->ssl_session->obuflen, pc->ssl_session->obuffer );
+#endif
+		if( pending > pc->ssl_session->obuflen ) {
+			if( pc->ssl_session->obuffer )
+				Deallocate( uint8_t *, pc->ssl_session->obuffer );
+			pc->ssl_session->obuffer = NewArray( uint8_t, pc->ssl_session->obuflen = pending * 2 );
+			//lprintf( "making obuffer bigger %d %d", pending, pending * 2 );
+		}
+		read  = BIO_read( pc->ssl_session->wbio, pc->ssl_session->obuffer, (int)pending );
+		if( read < 0 ) {
+			ERR_print_errors_cb( logerr, (void*)__LINE__ );
+			lprintf( "failed to read pending control data...SSL will fail without it." );
+		} else {
+#ifdef DEBUG_SSL_IO
+			lprintf( "Send pending control %p %d", pc->ssl_session->obuffer, read );
+#endif
+			SendTCP( pc, pc->ssl_session->obuffer, read );
+		}
+	}
+}
+LOGICAL ssl_IsClosed( PCLIENT pc ) {
+	if( pc->ssl_session ) {
+		return pc->ssl_session->closed;
+	}
+	return TRUE;
+}
+void ssl_CloseSession( PCLIENT pc )
 {
 	if( pc->ssl_session )
 	{
 		INDEX idx;
 		PTEXT seg;
+		SSL_shutdown( pc->ssl_session->ssl );
+		ssl_handlePendingControlwrites( pc );
 		LIST_FORALL( pc->ssl_session->protocols, idx, PTEXT, seg ) {
 			LineRelease( seg );
 		}
 		DeleteList( &pc->ssl_session->protocols );
-		if( pc->ssl_session->hostname )
+		if( pc->ssl_session->hostname ) {
 			Release( pc->ssl_session->hostname );
-		Release( pc->ssl_session );
-		pc->ssl_session = NULL;
+			pc->ssl_session->hostname = NULL;
+		}
+		pc->ssl_session->closed = TRUE;
+		//Release( pc->ssl_session );
+		//pc->ssl_session = NULL;
 	}
 	if( !( pc->dwFlags & ( CF_CLOSED|CF_CLOSING ) ) )
 		RemoveClient( pc );
-}
-static int logerr( const char *str, size_t len, void *userdata ) {
-	lprintf( "%d: %s", *((int*)&userdata), str );
-	return 0;
 }
 static int handshake( PCLIENT pc ) {
 	struct ssl_session *ses = pc->ssl_session;
@@ -43287,38 +44456,10 @@ static void ssl_ReadComplete( PCLIENT pc, POINTER buffer, size_t length )
 			}
 			else
 				len = 0;
-			{
-				// the read generated write data, output that data
-				size_t pending = BIO_ctrl_pending( pc->ssl_session->wbio );
-				if( !pc->ssl_session ) {
-					lprintf( "SSL SESSION SELF DESTRUCTED!" );
-				}
-				if( pending > 0 ) {
-					int read;
-#ifdef DEBUG_SSL_IO_VERBOSE
-					lprintf( "pending to send is %zd into %zd %p " , pending, pc->ssl_session->obuflen, pc->ssl_session->obuffer );
-#endif
-					if( pending > pc->ssl_session->obuflen ) {
-						if( pc->ssl_session->obuffer )
-							Deallocate( uint8_t *, pc->ssl_session->obuffer );
-						pc->ssl_session->obuffer = NewArray( uint8_t, pc->ssl_session->obuflen = pending * 2 );
-						//lprintf( "making obuffer bigger %d %d", pending, pending * 2 );
-					}
-					read  = BIO_read( pc->ssl_session->wbio, pc->ssl_session->obuffer, (int)pending );
-					if( read < 0 ) {
-						ERR_print_errors_cb( logerr, (void*)__LINE__ );
-						lprintf( "failed to read pending control data...SSL will fail without it." );
-					} else {
-#ifdef DEBUG_SSL_IO
-						lprintf( "Send pending control %p %d", pc->ssl_session->obuffer, read );
-#endif
-						SendTCP( pc, pc->ssl_session->obuffer, read );
-						if( !pc->ssl_session ) {
-							LeaveCriticalSec( &pc->ssl_session->csReadWrite );
-							return;
-						}
-					}
-				}
+			ssl_handlePendingControlwrites( pc );
+			if( !pc->ssl_session ) {
+				LeaveCriticalSec( &pc->ssl_session->csReadWrite );
+				return;
 			}
 			LeaveCriticalSec( &pc->ssl_session->csReadWrite );
 			// do was have any decrypted data to give to the application?
@@ -43382,12 +44523,14 @@ static void ssl_ReadComplete( PCLIENT pc, POINTER buffer, size_t length )
 			LeaveCriticalSec( &pc->ssl_session->csReadWrite );
 		}
 		//lprintf( "Read more data..." );
-		if( !buffer )
-			pc->ssl_session->firstPacket = 1;
-		else
-			pc->ssl_session->firstPacket = 0;
 		if( pc->ssl_session ) {
-			ReadTCP( pc, pc->ssl_session->ibuffer, pc->ssl_session->ibuflen );
+			if( !buffer )
+				pc->ssl_session->firstPacket = 1;
+			else
+				pc->ssl_session->firstPacket = 0;
+			if( pc->ssl_session ) {
+				ReadTCP( pc, pc->ssl_session->ibuffer, pc->ssl_session->ibuflen );
+			}
 		}
 	}
 }
@@ -43472,7 +44615,7 @@ static LOGICAL ssl_InitLibrary( void ){
 		//tls_init();
 		//ssl_global.tls_config = tls_config_new();
 		SSL_load_error_strings();
-		ERR_load_BIO_strings();
+//		ERR_load_BIO_strings();
 		OpenSSL_add_all_algorithms();
 		ssl_global.flags.bInited = 1;
 	}
@@ -43572,7 +44715,7 @@ static int handleServerName( SSL* ssl, int* al, void* param ) {
 		return 0;
 	}
 	if( SSL_client_hello_isv2(ssl) ) {
-		lprintf( "Unsupported version?" );
+		lprintf( "Unsupported version? V2" );
 		// wrong version?
 		al[0] = 0;
 		return 0;
@@ -43586,6 +44729,12 @@ static int handleServerName( SSL* ssl, int* al, void* param ) {
 			unsigned char const* buf;
 			size_t buflen;
 			switch( type[n] ) {
+			case TLSEXT_TYPE_max_fragment_length:
+				SSL_client_hello_get0_ext( ssl, type[n], &buf, &buflen );
+				{
+					// there's some sort of length to this... and should limit sending? receiving?
+				}
+				break;
 			case TLSEXT_TYPE_ec_point_formats:
 			case TLSEXT_TYPE_supported_groups:
  // empty value?
@@ -43700,16 +44849,23 @@ static int handleServerName( SSL* ssl, int* al, void* param ) {
 	if( !ctxList[0] ) return SSL_TLSEXT_ERR_OK;
 	int t;
 	if( TLSEXT_NAMETYPE_host_name != (t =SSL_get_servername_type( ssl ) ) ) {
-		lprintf( "Handshake sent bad hostname type... %d", t );
-		return 0;
+		//lprintf( "Handshake sent bad hostname type... %d", t );
+		//return 0;
 	}
-	const char* host = SSL_get_servername( ssl, t );
-	int strlen = (int)StrLen( host );
-	//lprintf( "ServerName;%s", host );
+	const char* host = NULL;
+	int strlen = 0;
+	if( t ) {
+		host = SSL_get_servername( ssl, t );
+		strlen = (int)StrLen( host );
+		//lprintf( "ServerName;%s", host );
+		//lprintf( "Have hostchange: %.*s", strlen, host );
+		pcAccept->ssl_session->hostname = DupCStrLen( host, strlen );
+	} else {
+		// allow connection, but without a hostanme set, the application may reject later?
+		// default to what? the client IP as a hostname?
+	}
 	struct ssl_hostContext* hostctx;
 	struct ssl_hostContext* defaultHostctx;
-	//lprintf( "Have hostchange: %.*s", strlen, host );
-	pcAccept->ssl_session->hostname = DupCStrLen( host, strlen );
 	LIST_FORALL( ctxList[0], idx, struct ssl_hostContext*, hostctx ) {
 		char const* checkName;
 		char const* nextName;
@@ -43724,7 +44880,7 @@ static int handleServerName( SSL* ssl, int* al, void* param ) {
 				continue;
 			}
 			//lprintf( "Check:%.*s", )
-			if( StrCaseCmpEx( checkName, (CTEXTSTR)host, strlen ) == 0 ) {
+			if( !host || ( StrCaseCmpEx( checkName, (CTEXTSTR)host, strlen ) == 0 ) ) {
 				SSL_set_SSL_CTX( ssl, hostctx->ctx );
 				return SSL_TLSEXT_ERR_OK;
 			}
@@ -43961,7 +45117,7 @@ LOGICAL ssl_BeginClientSession( PCLIENT pc, CPOINTER client_keypair, size_t clie
 		X509_STORE_add_cert( store, cert );
 	} else {
 		X509_STORE *store = SSL_CTX_get_cert_store( ses->ctx );
-		loadSystemCerts( store );
+		loadSystemCerts( ses->ctx, store );
 	}
 	ssl_InitSession( ses );
 	//SSL_set_default_read_buffer_len( ses->ssl, 16384 );
@@ -44109,6 +45265,7 @@ struct internalCert * MakeRequest( void )
 		 Deallocate( void *, key );
 		 PEM_read_bio_PrivateKey( keybuf, &cert->pkey, NULL, NULL );
 	} else {
+#if 0
 		RSA *rsa = RSA_new();
 		BIGNUM *bne = BN_new();
 		int ret;
@@ -44142,6 +45299,7 @@ struct internalCert * MakeRequest( void )
 			SACK_WriteProfileString( "TLS", "Key", (TEXTCHAR*)ca );
 			Release( ca );
 		}
+#endif
 	}
     // seed openssl's prng
     //
@@ -44203,15 +45361,21 @@ struct internalCert * MakeRequest( void )
 	return cert;
 }
 #ifdef __LINUX__
-void loadSystemCerts( X509_STORE *store )
+void loadSystemCerts( SSL_CTX* ctx,X509_STORE *store )
 {
-   return;
+	// "/etc/ssl/certs"
+ // unused;
+	(void)store;
+	SSL_CTX_set_default_verify_paths( ctx );
+	return;
 }
 #endif
 #ifdef _WIN32
 #define MY_ENCODING_TYPE  (PKCS_7_ASN_ENCODING | X509_ASN_ENCODING)
-void loadSystemCerts( X509_STORE *store )
+void loadSystemCerts( SSL_CTX* ctx,X509_STORE *store )
 {
+// unused;
+	(void)ctx;
 	HCERTSTORE hStore;
 	PCCERT_CONTEXT pContext = NULL;
 	X509 *x509;
@@ -44413,7 +45577,7 @@ WEBSOCKET_EXPORT PCLIENT WebSocketOpen( CTEXTSTR address
                                       , const char *protocols );
 // if WS_DELAY_OPEN is used, WebSocketOpen does not do immediate connect.
 // calling this begins the connection sequence.
-WEBSOCKET_EXPORT void WebSocketConnect( PCLIENT );
+WEBSOCKET_EXPORT int WebSocketConnect( PCLIENT );
 // end a websocket connection nicely.
 // code must be 1000, or 3000-4999, and reason must be less than 123 characters (125 bytes with code)
 WEBSOCKET_EXPORT void WebSocketClose( PCLIENT, int code, const char *reason );
@@ -45738,6 +46902,244 @@ static void CPROC closed( PCLIENT pc_client ) {
 	HTML5WebSocket socket = (HTML5WebSocket)GetNetworkLong( pc_client, 0 );
 	destroyHttpState( socket, pc_client );
 }
+static void CPROC read_complete_process_data( PCLIENT pc ) {
+	HTML5WebSocket socket = (HTML5WebSocket)GetNetworkLong( pc, 0 );
+	int result;
+	while( ( result = ProcessHttp( pc, socket->http_state ) ) ) {
+		switch( result ) {
+		default:
+			lprintf( "unexpected result is %d", result );
+			break;
+		case HTTP_STATE_RESULT_CONTENT:
+		{
+			PVARTEXT pvt_output = VarTextCreate();
+			PTEXT value, value2;
+			PTEXT key1, key2;
+			value = GetHTTPField( socket->http_state, "Connection" );
+			value2 = GetHTTPField( socket->http_state, "Upgrade" );
+			if( !value || !value2
+				|| !StrCaseStr( GetText( value ), "upgrade" )
+				|| !TextLike( value2, "websocket" ) ) {
+				//lprintf( "request is not an upgrade for websocket." );
+				socket->flags.initial_handshake_done = 1;
+				socket->flags.http_request_only = 1;
+				socket->flags.in_open_event = 1;
+				if( socket->input_state.on_request ) {
+					socket->input_state.on_request( pc, socket->input_state.psv_on );
+				} else {
+					socket->flags.in_open_event = 0;
+					RemoveClient( pc );
+					return;
+				}
+				socket->flags.in_open_event = 0;
+				if( socket->flags.closed ) {
+					destroyHttpState( socket, NULL );
+					return;
+				}
+				break;
+			}
+			value = GetHTTPField( socket->http_state, "Sec-WebSocket-Extensions" );
+			if( value ) {
+				PTEXT options = TextParse( value, "=", "; ", 0, 0 DBG_SRC );
+				PTEXT opt = options;
+				while( opt ) {
+					// "server_no_context_takeover"
+					// "client_no_context_takeover"
+					// "server_max_window_bits"
+					// "client_max_window_bits"
+#ifndef __NO_WEBSOCK_COMPRESSION__
+					if( TextLike( opt, "permessage-deflate" ) ) {
+						socket->input_state.flags.deflate = socket->input_state.flags.deflate & 1;
+						if( socket->input_state.flags.deflate ) {
+							socket->input_state.server_max_bits = 15;
+							socket->input_state.client_max_bits = 15;
+						}
+					} else
+						if( TextLike( opt, "client_max_window_bits" ) ) {
+							opt = NEXTLINE( opt );
+							if( opt ) {
+								if( GetText( opt )[0] == '=' ) {
+									opt = NEXTLINE( opt );
+									socket->input_state.client_max_bits = (int)IntCreateFromSeg( opt );
+								} else
+									opt = PRIORLINE( opt );
+							}
+							//socket->flags.max_window_bits = 1;
+						} else if( TextLike( opt, "server_max_window_bits" ) ) {
+							opt = NEXTLINE( opt );
+							if( opt ) {
+								if( GetText( opt )[0] == '=' ) {
+									opt = NEXTLINE( opt );
+									socket->input_state.server_max_bits = (int)IntCreateFromSeg( opt );
+								}
+							} else {
+								lprintf( "required server_max_window_bits value is missing" );
+							}
+							//socket->flags.max_window_bits = 1;
+						} else if( TextLike( opt, "client_no_context_takeover" ) ) {
+							//socket->flags.max_window_bits = 1;
+						} else if( TextLike( opt, "server_no_context_takeover" ) ) {
+							//socket->flags.max_window_bits = 1;
+						}
+#endif
+						opt = NEXTLINE( opt );
+				}
+				LineRelease( options );
+#ifndef __NO_WEBSOCK_COMPRESSION__
+				if( socket->input_state.flags.deflate && !socket->input_state.flags.do_not_deflate ) {
+					if( deflateInit2( &socket->input_state.deflater
+						, Z_BEST_SPEED, Z_DEFLATED
+						, -socket->input_state.server_max_bits
+						, 8
+						, Z_DEFAULT_STRATEGY ) != Z_OK )
+						socket->input_state.flags.deflate = 0;
+				}
+				if( socket->input_state.flags.deflate ) {
+					//socket->inflateWindow = NewArray( uint8_t, (size_t)(1 << (socket->client_max_bits&0x1f)) );
+					if( inflateInit2( &socket->input_state.inflater, -socket->input_state.client_max_bits ) != Z_OK ) {
+						//if( inflateBackInit( &socket->input_state.inflater, socket->client_max_bits, socket->inflateWindow ) != Z_OK ) {
+						deflateEnd( &socket->input_state.deflater );
+						socket->input_state.flags.deflate = 0;
+					} else {
+						socket->input_state.inflateBuf = NewArray( uint8_t, 4096 );
+						socket->input_state.inflateBufLen = 4096;
+						socket->input_state.deflateBuf = NewArray( uint8_t, 4096 );
+						socket->input_state.deflateBufLen = 4096;
+					}
+				}
+#endif
+			} else {
+				socket->input_state.flags.deflate = 0;
+			}
+			value = GetHTTPField( socket->http_state, "Sec-WebSocket-Protocol" );
+			if( value ) {
+				socket->protocols = GetText( value );
+			} else socket->protocols = NULL;
+			{
+				PTEXT protocols = GetHTTPField( socket->http_state, "Sec-WebSocket-Protocol" );
+				PTEXT resource = GetHttpResource( socket->http_state );
+				if( socket->input_state.on_accept ) {
+					socket->flags.accepted = socket->input_state.on_accept( pc, socket->input_state.psv_on, GetText( protocols ), GetText( resource ), &socket->protocols );
+				} else
+					socket->flags.accepted = 1;
+			}
+			key1 = GetHTTPField( socket->http_state, "Sec-WebSocket-Key1" );
+			key2 = GetHTTPField( socket->http_state, "Sec-WebSocket-Key2" );
+			if( key1 && key2 )
+				socket->flags.rfc6455 = 0;
+			else
+				socket->flags.rfc6455 = 1;
+			if( !socket->flags.accepted ) {
+				vtprintf( pvt_output, "HTTP/1.1 403 Connection refused\r\n" );
+			} else {
+				if( key1 && key2 )
+					vtprintf( pvt_output, "HTTP/1.1 101 WebSocket Protocol Handshake\r\n" );
+				else
+					vtprintf( pvt_output, "HTTP/1.1 101 Switching Protocols\r\n" );
+				vtprintf( pvt_output, "Upgrade: WebSocket\r\n" );
+				vtprintf( pvt_output, "content-length: 0\r\n" );
+				vtprintf( pvt_output, "Connection: Upgrade\r\n" );
+			}
+			value = GetHTTPField( socket->http_state, "Origin" );
+			if( value ) {
+				if( key1 && key2 )
+					vtprintf( pvt_output, "Sec-WebSocket-Origin: %s\r\n", GetText( value ) );
+				else
+					vtprintf( pvt_output, "WebSocket-Origin: %s\r\n", GetText( value ) );
+			}
+			if( key1 && key2 ) {
+				vtprintf( pvt_output, "Sec-WebSocket-Location: ws://%s%s\r\n"
+					, GetText( GetHTTPField( socket->http_state, "Host" ) )
+					, GetText( GetHttpRequest( socket->http_state ) )
+				);
+			}
+			if( socket->flags.accepted ) {
+				value = GetHTTPField( socket->http_state, "Sec-webSocket-Key" );
+				if( value ) {
+					{
+						const char guid[] = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+						size_t len;
+						char* resultval = NewArray( char, len = ( GetTextSize( value ) + sizeof( guid ) ) );
+						snprintf( resultval, len, "%s%s"
+							, GetText( value )
+							, guid );
+						{
+							TEXTCHAR output[32];
+							SHA1Context context;
+							int n;
+							uint8_t Message_Digest[SHA1HashSize + 2];
+							SHA1Reset( &context );
+							SHA1Input( &context, (uint8_t*)resultval, len - 1 );
+							SHA1Result( &context, Message_Digest );
+							Message_Digest[SHA1HashSize] = 0;
+							Message_Digest[SHA1HashSize + 1] = 0;
+							for( n = 0; n < ( SHA1HashSize + 2 ) / 3; n++ ) {
+								int blocklen;
+								blocklen = SHA1HashSize - n * 3;
+								if( blocklen > 3 )
+									blocklen = 3;
+								wssencodeblock( Message_Digest + n * 3, output + n * 4, blocklen );
+							}
+							output[n * 4 + 0] = 0;
+							// s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
+							vtprintf( pvt_output, "Sec-WebSocket-Accept: %s\r\n", output );
+						}
+						Deallocate( char*, resultval );
+					}
+				}
+#ifndef __NO_WEBSOCK_COMPRESSION__
+				if( socket->input_state.flags.deflate ) {
+					vtprintf( pvt_output, "Sec-WebSocket-Extensions: permessage-deflate; client_no_context_takeover; server_max_window_bits=%d\r\n", socket->input_state.server_max_bits );
+				}
+#endif
+				if( socket->protocols )
+					vtprintf( pvt_output, "Sec-WebSocket-Protocol: %s\r\n", socket->protocols );
+				vtprintf( pvt_output, "WebSocket-Server: sack\r\n" );
+				vtprintf( pvt_output, "\r\n" );
+				if( key1 && key2 ) {
+					ComputeReplyKey2( pvt_output, socket, key1, key2 );
+				}
+				value = VarTextPeek( pvt_output );
+#ifdef _UNICODE
+				{
+					char* output;
+					output = DupTextToChar( GetText( value ) );
+					//LogBinary( output, GetTextSize( value ) );
+					if( socket->input_state.flags.use_ssl )
+						ssl_Send( pc, output, GetTextSize( value ) );
+					else
+						SendTCP( pc, output, GetTextSize( value ) );
+				}
+#else
+				if( socket->input_state.flags.use_ssl )
+					ssl_Send( pc, GetText( value ), GetTextSize( value ) );
+				else
+					SendTCP( pc, GetText( value ), GetTextSize( value ) );
+#endif
+				//lprintf( "Sent http reply." );
+				VarTextDestroy( &pvt_output );
+				socket->flags.in_open_event = 1;
+				if( socket->input_state.on_open )
+					socket->input_state.psv_open = socket->input_state.on_open( pc, socket->input_state.psv_on );
+				socket->flags.in_open_event = 0;
+				if( socket->flags.closed ) {
+					destroyHttpState( socket, NULL );
+					return;
+				}
+			} else {
+				WebSocketClose( pc, 0, NULL );
+				return;
+			}
+			// keep this until close, application might want resource and/or headers from this.
+			//EndHttp( socket->http_state );
+			socket->flags.initial_handshake_done = 1;
+			break;
+		}
+		case HTTP_STATE_RESULT_CONTINUE:
+			break;
+		}
+	}
+}
 static void CPROC read_complete( PCLIENT pc, POINTER buffer, size_t length )
 {
 	HTML5WebSocket socket = (HTML5WebSocket)GetNetworkLong( pc, 0 );
@@ -45745,7 +47147,6 @@ static void CPROC read_complete( PCLIENT pc, POINTER buffer, size_t length )
 	if( !socket ) return;
 	if( buffer )
 	{
-		int result;
 #ifdef _UNICODE
 		TEXTSTR tmp = CharWConvertExx( (const char*)buffer, length DBG_SRC );
 #else
@@ -45756,261 +47157,8 @@ static void CPROC read_complete( PCLIENT pc, POINTER buffer, size_t length )
 		if( !socket->flags.initial_handshake_done || socket->flags.http_request_only )
 		{
 			//lprintf( "Initial handshake is not done..." );
-			AddHttpData( socket->http_state, tmp, length );
-			while( ( result = ProcessHttp( pc, socket->http_state ) ) )
-			{
-				switch( result )
-				{
-				default:
-					lprintf( "unexpected result is %d", result );
-					break;
-				case HTTP_STATE_RESULT_CONTENT:
-				{
-					PVARTEXT pvt_output = VarTextCreate();
-					PTEXT value, value2;
-					PTEXT key1, key2;
-					value = GetHTTPField( socket->http_state, "Connection" );
-					value2 = GetHTTPField( socket->http_state, "Upgrade" );
-					if( !value || !value2
-						|| !StrCaseStr( GetText(value), "upgrade" )
-						|| !TextLike( value2, "websocket" ) ) {
-						//lprintf( "request is not an upgrade for websocket." );
-						socket->flags.initial_handshake_done = 1;
-						socket->flags.http_request_only = 1;
-						socket->flags.in_open_event = 1;
-						if( socket->input_state.on_request ) {
-							socket->input_state.on_request( pc, socket->input_state.psv_on );
-						} else {
-							socket->flags.in_open_event = 0;
-							RemoveClient( pc );
-							return;
-						}
-						socket->flags.in_open_event = 0;
-						if( socket->flags.closed ) {
-							destroyHttpState( socket, NULL );
-							return;
-						}
-						break;
-					}
-					value = GetHTTPField( socket->http_state, "Sec-WebSocket-Extensions" );
-					if( value )
-					{
-						PTEXT options = TextParse( value, "=", "; ", 0, 0 DBG_SRC );
-						PTEXT opt = options;
-						while( opt ) {
-							// "server_no_context_takeover"
-							// "client_no_context_takeover"
-							// "server_max_window_bits"
-							// "client_max_window_bits"
-#ifndef __NO_WEBSOCK_COMPRESSION__
-							if( TextLike( opt, "permessage-deflate" ) ) {
-								socket->input_state.flags.deflate = socket->input_state.flags.deflate & 1;
-								if( socket->input_state.flags.deflate ) {
-									socket->input_state.server_max_bits = 15;
-									socket->input_state.client_max_bits = 15;
-								}
-							}
-							else
-							if( TextLike( opt, "client_max_window_bits" ) ) {
-								opt = NEXTLINE( opt );
-								if( opt ) {
-									if( GetText( opt )[0] == '=' ) {
-										opt = NEXTLINE( opt );
-										socket->input_state.client_max_bits = (int)IntCreateFromSeg( opt );
-									}
-									else
-										opt = PRIORLINE( opt );
-								}
-								//socket->flags.max_window_bits = 1;
-							}
-							else if( TextLike( opt, "server_max_window_bits" ) ) {
-								opt = NEXTLINE( opt );
-								if( opt ) {
-									if( GetText( opt )[0] == '=' ) {
-										opt = NEXTLINE( opt );
-										socket->input_state.server_max_bits = (int)IntCreateFromSeg( opt );
-									}
-								}
-								else {
-									lprintf( "required server_max_window_bits value is missing" );
-								}
-								//socket->flags.max_window_bits = 1;
-							}
-							else if( TextLike( opt, "client_no_context_takeover" ) ) {
-								//socket->flags.max_window_bits = 1;
-							}
-							else if( TextLike( opt, "server_no_context_takeover" ) ) {
-								//socket->flags.max_window_bits = 1;
-							}
-#endif
-							opt = NEXTLINE( opt );
-						}
-						LineRelease( options );
-#ifndef __NO_WEBSOCK_COMPRESSION__
-						if( socket->input_state.flags.deflate && !socket->input_state.flags.do_not_deflate ) {
-							if( deflateInit2( &socket->input_state.deflater
-								, Z_BEST_SPEED, Z_DEFLATED
-								, -socket->input_state.server_max_bits
-								, 8
-								, Z_DEFAULT_STRATEGY ) != Z_OK )
-								socket->input_state.flags.deflate = 0;
-						}
-						if( socket->input_state.flags.deflate ) {
-							//socket->inflateWindow = NewArray( uint8_t, (size_t)(1 << (socket->client_max_bits&0x1f)) );
-							if( inflateInit2( &socket->input_state.inflater, -socket->input_state.client_max_bits ) != Z_OK ) {
-							//if( inflateBackInit( &socket->input_state.inflater, socket->client_max_bits, socket->inflateWindow ) != Z_OK ) {
-								deflateEnd( &socket->input_state.deflater );
-								socket->input_state.flags.deflate = 0;
-							}
-							else {
-								socket->input_state.inflateBuf = NewArray( uint8_t, 4096 );
-								socket->input_state.inflateBufLen = 4096;
-								socket->input_state.deflateBuf = NewArray( uint8_t, 4096 );
-								socket->input_state.deflateBufLen = 4096;
-							}
-						}
-#endif
-					}
-					else {
-						socket->input_state.flags.deflate = 0;
-					}
-					value = GetHTTPField( socket->http_state, "Sec-WebSocket-Protocol" );
-					if( value ) {
-						socket->protocols = GetText( value );
-					}
-					else socket->protocols = NULL;
-					{
-						PTEXT protocols = GetHTTPField( socket->http_state, "Sec-WebSocket-Protocol" );
-						PTEXT resource = GetHttpResource( socket->http_state );
-						if( socket->input_state.on_accept ) {
-							socket->flags.accepted = socket->input_state.on_accept( pc, socket->input_state.psv_on, GetText( protocols ), GetText( resource ), &socket->protocols );
-						}
-						else
-							socket->flags.accepted = 1;
-					}
-					key1 = GetHTTPField( socket->http_state, "Sec-WebSocket-Key1" );
-					key2 = GetHTTPField( socket->http_state, "Sec-WebSocket-Key2" );
-					if( key1 && key2 )
-						socket->flags.rfc6455 = 0;
-					else
-						socket->flags.rfc6455 = 1;
-					if( !socket->flags.accepted ) {
-						vtprintf( pvt_output, "HTTP/1.1 403 Connection refused\r\n" );
-					}
-					else
-					{
-						if( key1 && key2 )
-							vtprintf( pvt_output, "HTTP/1.1 101 WebSocket Protocol Handshake\r\n" );
-						else
-							vtprintf( pvt_output, "HTTP/1.1 101 Switching Protocols\r\n" );
-						vtprintf( pvt_output, "Upgrade: WebSocket\r\n" );
-						vtprintf( pvt_output, "Connection: Upgrade\r\n" );
-					}
-					value = GetHTTPField( socket->http_state, "Origin" );
-					if( value )
-					{
-						if( key1 && key2 )
-							vtprintf( pvt_output, "Sec-WebSocket-Origin: %s\r\n", GetText( value ) );
-						else
-							vtprintf( pvt_output, "WebSocket-Origin: %s\r\n", GetText( value ) );
-					}
-					if( key1 && key2 )
-					{
-						vtprintf( pvt_output, "Sec-WebSocket-Location: ws://%s%s\r\n"
-							, GetText( GetHTTPField( socket->http_state, "Host" ) )
-							, GetText( GetHttpRequest( socket->http_state ) )
-						);
-					}
-					if( socket->flags.accepted ) {
-						value = GetHTTPField( socket->http_state, "Sec-webSocket-Key" );
-						if( value )
-						{
-							{
-								const char guid[] = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-								size_t len;
-								char *resultval = NewArray( char, len = (GetTextSize( value ) + sizeof( guid ) ) );
-								snprintf( resultval, len, "%s%s"
-									, GetText( value )
-									, guid );
-								{
-									TEXTCHAR output[32];
-									SHA1Context context;
-									int n;
-									uint8_t Message_Digest[SHA1HashSize + 2];
-									SHA1Reset( &context );
-									SHA1Input( &context, (uint8_t*)resultval, len - 1 );
-									SHA1Result( &context, Message_Digest );
-									Message_Digest[SHA1HashSize] = 0;
-									Message_Digest[SHA1HashSize + 1] = 0;
-									for( n = 0; n < (SHA1HashSize + 2) / 3; n++ )
-									{
-										int blocklen;
-										blocklen = SHA1HashSize - n * 3;
-										if( blocklen > 3 )
-											blocklen = 3;
-										wssencodeblock( Message_Digest + n * 3, output + n * 4, blocklen );
-									}
-									output[n * 4 + 0] = 0;
-									// s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
-									vtprintf( pvt_output, "Sec-WebSocket-Accept: %s\r\n", output );
-								}
-								Deallocate( char *, resultval );
-							}
-						}
-#ifndef __NO_WEBSOCK_COMPRESSION__
-						if( socket->input_state.flags.deflate ) {
-							vtprintf( pvt_output, "Sec-WebSocket-Extensions: permessage-deflate; client_no_context_takeover; server_max_window_bits=%d\r\n", socket->input_state.server_max_bits );
-						}
-#endif
-						if( socket->protocols )
-							vtprintf( pvt_output, "Sec-WebSocket-Protocol: %s\r\n", socket->protocols );
-						vtprintf( pvt_output, "WebSocket-Server: sack\r\n" );
-						vtprintf( pvt_output, "\r\n" );
-						if( key1 && key2 )
-						{
-							ComputeReplyKey2( pvt_output, socket, key1, key2 );
-						}
-						value = VarTextPeek( pvt_output );
-#ifdef _UNICODE
-						{
-							char *output;
-							output = DupTextToChar( GetText( value ) );
-							//LogBinary( output, GetTextSize( value ) );
-							if( socket->input_state.flags.use_ssl )
-								ssl_Send( pc, output, GetTextSize( value ) );
-							else
-								SendTCP( pc, output, GetTextSize( value ) );
-						}
-#else
-						if( socket->input_state.flags.use_ssl )
-							ssl_Send( pc, GetText( value ), GetTextSize( value ) );
-						else
-							SendTCP( pc, GetText( value ), GetTextSize( value ) );
-#endif
-						//lprintf( "Sent http reply." );
-						VarTextDestroy( &pvt_output );
-						socket->flags.in_open_event = 1;
-						if( socket->input_state.on_open )
-							socket->input_state.psv_open = socket->input_state.on_open( pc, socket->input_state.psv_on );
-						socket->flags.in_open_event = 0;
-						if( socket->flags.closed ) {
-							destroyHttpState( socket, NULL );
-							return;
-						}
-					}
-					else {
-						WebSocketClose( pc, 0, NULL );
-						return;
-					}
-					// keep this until close, application might want resource and/or headers from this.
-					//EndHttp( socket->http_state );
-					socket->flags.initial_handshake_done = 1;
-					break;
-				}
-				case HTTP_STATE_RESULT_CONTINUE:
-					break;
-				}
-			}
+			if( AddHttpData( socket->http_state, tmp, length ) )
+				read_complete_process_data( pc );
 		}
 		else
 		{
@@ -46631,8 +47779,8 @@ PCLIENT WebSocketOpen( CTEXTSTR url_address
 	LeaveCriticalSec( &wsc_local.cs_opening );
 	return  websock->pc;
 }
-void WebSocketConnect( PCLIENT pc ) {
-	NetworkConnectTCP( pc );
+int WebSocketConnect( PCLIENT pc ) {
+	return NetworkConnectTCP( pc );
 }
 // end a websocket connection nicely.
 void WebSocketClose( PCLIENT pc, int code, const char *reason )
@@ -50473,10 +51621,11 @@ void json_parse_clear_state( struct json_parse_state *state ) {
 		DeleteFromSet( PLINKSTACK, jpsd.linkStacks, state->outBuffers );
 		//DeleteLinkStack( &state->outBuffers );
 		{
-			char *buf;
+			PPARSE_BUFFER buf;
 			INDEX idx;
-			LIST_FORALL( state->outValBuffers[0], idx, char*, buf ) {
-				Deallocate( char*, buf );
+			LIST_FORALL( state->outValBuffers[0], idx, PPARSE_BUFFER, buf ) {
+				Deallocate( const char *, buf->buf );
+				DeleteFromSet( PARSE_BUFFER, jpsd.parseBuffers, buf );
 				SetLink( state->outValBuffers, idx, NULL );
 			}
 			DeleteFromSet( PLIST, jpsd.listSet, state->outValBuffers );
@@ -50545,7 +51694,7 @@ void json_parse_dispose_state( struct json_parse_state **ppState ) {
 		LIST_FORALL( state->outValBuffers[0], idx, PPARSE_BUFFER, buf ) {
 			Deallocate( const char *, buf->buf );
 			DeleteFromSet( PARSE_BUFFER, jpsd.parseBuffers, buf );
-			Deallocate( PPARSE_BUFFER, buf );
+			//Deallocate( PPARSE_BUFFER, buf );
 			SetLink( state->outValBuffers, idx, NULL );
 		}
 		DeleteFromSet( PLIST, jpsd.listSet, state->outValBuffers );
@@ -52898,7 +54047,7 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 						if( state->word == JSOX_WORD_POS_RESET && ( (c >= '0' && c <= '9') || (c == '+') || (c == '.') ) ) {
 							goto beginNumber;
 						}
-						if( state->word == JSOX_WORD_POS_AFTER_FIELD ) {
+						if( state->word == JSOX_WORD_POS_AFTER_FIELD && state->val.value_type != JSOX_VALUE_UNSET) {
 							state->status = FALSE;
 							if( !state->pvtError ) state->pvtError = VarTextCreate();
 							//lprintf( "Val is:%s", state->val.string );
@@ -54110,19 +55259,22 @@ int  MakePath ( CTEXTSTR path )
  // make directory with full umask permissions
 	if( ( status = mkdir( path, -1 ) ) < 0 )
 	{
-		TEXTSTR tmppath = StrDup( path );
-		TEXTSTR last = (TEXTSTR)pathrchr( tmppath );
-		if( last )
-		{
-			last[0] = 0;
-			if( MakePath( tmppath ) ) {
-				status = mkdir( path, -1 );
-				if( status < 0 )
-					if( EEXIST == errno )
-						status = 0;
+		if( errno == EEXIST ) status = 0;
+		else {
+			TEXTSTR tmppath = StrDup( path );
+			TEXTSTR last = (TEXTSTR)pathrchr( tmppath );
+			if( last )
+			{
+				last[0] = 0;
+				if( tmppath[0] && MakePath( tmppath ) ) {
+					status = mkdir( path, -1 );
+					if( status < 0 )
+						if( EEXIST == errno )
+							status = 0;
+				}
 			}
+			Release( tmppath );
 		}
-		Release( tmppath );
 	}
 	if( status < 0 )
 		if( EEXIST == errno )
@@ -54378,7 +55530,7 @@ static void threadInit( void ) {
 }
 static void LocalInit( void )
 {
-#ifndef __STATIC_GLOBAL__
+#ifndef __STATIC_GLOBALS__
 	if( !winfile_local )
 		SimpleRegisterAndCreateGlobal( winfile_local );
 #endif
@@ -54579,11 +55731,11 @@ TEXTSTR ExpandPathVariable( CTEXTSTR path )
 TEXTSTR ExpandPathEx( CTEXTSTR path, struct file_system_interface* fsi )
 {
 	TEXTSTR tmp_path = NULL;
+	LocalInit();
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
 	if( ( *winfile_local ).flags.bLogOpenClose )
 		lprintf( "input path is [%s]", path );
 #endif
-	LocalInit();
 	if( path ) {
 		if( !fsi && !IsAbsolutePath( path ) ) {
 			if( ( path[0] == '.' ) && ( ( path[1] == 0 ) || ( path[1] == '/' ) || ( path[1] == '\\' ) ) ) {
@@ -56106,7 +57258,7 @@ size_t GetSizeofFile( TEXTCHAR * name, uint32_t * unused )
 		return size;
 	}
 	else
-		return (size_t)-1;
+		return 0;
 #endif
 }
 //-------------------------------------------------------------------------
@@ -56138,7 +57290,7 @@ uint32_t GetFileTimeAndSize( CTEXTSTR name
 		return size;
 	}
 	else
-		return (uint32_t)-1;
+		return 0;
 #else
 	HANDLE hFile = CreateFile( name, 0, 0, NULL, OPEN_EXISTING, 0, NULL );
 	uint32_t extra_size;
@@ -56156,7 +57308,7 @@ uint32_t GetFileTimeAndSize( CTEXTSTR name
 		return size;
 	}
 	else
-		return (uint32_t)-1;
+		return 0;
 #endif
 }
 struct file_system_interface* sack_get_filesystem_interface( CTEXTSTR name )
@@ -56352,7 +57504,8 @@ static int CPROC sack_filesys_unlink( uintptr_t psv, const char* filename ) {
 	okay = !unlink( filename );
 #endif
 	if( !okay ) {
-		file->delete_on_close = 1;
+		if( file )
+			file->delete_on_close = 1;
 	}
 	return okay;
 }
@@ -56518,7 +57671,7 @@ static	size_t CPROC sack_filesys_find_get_size( struct find_cursor* _cursor ) {
 		}
 		if( S_ISREG( s.st_mode ) )
 			return s.st_size;
-		return -1;
+		return 0;
 	}
 #endif
 	return 0;
@@ -57168,7 +58321,7 @@ struct find_cursor *GetScanFileCursor( void *pInfo ) {
 	//lprintf( "Search in %s for %s   %d %d", base?base:"(NULL)", mask?mask:"(*)", (*pInfo)?((PMFD)*pInfo)->scanning_mount:0, (*pInfo)?((PMFD)*pInfo)->single_mount:0 );
 	if( !*pInfo || begin_sub_path || ((PMFD)*pInfo)->new_mount )
 	{
-		TEXTCHAR findmask[256];
+		TEXTCHAR findmask[4096+32];
 		wchar_t findmaskw[256];
 		pData = (PMFD)(*pInfo);
 		if( !pData )
@@ -57540,7 +58693,7 @@ getnext:
 		if( flags & SFF_SUBCURSE )
 		{
 			//int ofs = 0;
-			TEXTCHAR tmpbuf[MAX_PATH_NAME];
+			TEXTCHAR tmpbuf[MAX_PATH_NAME + 512];
 			if( flags & SFF_NAMEONLY )
 			{
 				// even in name only - need to have this full buffer for subcurse.
@@ -59170,7 +60323,8 @@ void  SetSystemLog ( enum syslog_types type, const void *data )
 		FILE *close_file = (*syslog_local).file;
   // reset this first, in case logging closing.
 		(*syslog_local).file = NULL;
-		sack_fclose( close_file );
+      if( !( close_file == stderr || close_file == stdout ) )
+			sack_fclose( close_file );
 	}
 	if( type == SYSLOG_FILE )
 	{
@@ -62936,6 +64090,10 @@ typedef struct handle_info_tag
    int       handle;
 #endif
 } HANDLEINFO, *PHANDLEINFO;
+struct taskOutputStruct {
+	PTASK_INFO task;
+   LOGICAL stdErr;
+};
 //typedef void (CPROC*TaskEnd)(uintptr_t, struct task_info_tag *task_ended);
 struct task_info_tag {
 	struct {
@@ -62947,21 +64105,25 @@ struct task_info_tag {
 	} flags;
 	TaskEnd EndNotice;
 	TaskOutput OutputEvent;
+	TaskOutput OutputEvent2;
 	uintptr_t psvEnd;
 	HANDLEINFO hStdIn;
 	HANDLEINFO hStdOut;
+	HANDLEINFO hStdErr;
 	volatile PTHREAD pOutputThread;
-	//HANDLEINFO hStdErr;
+	volatile PTHREAD pOutputThread2;
+	struct taskOutputStruct args1;
+   struct taskOutputStruct args2;
 #if defined(WIN32)
 	HANDLE hReadOut, hWriteOut;
-	//HANDLE hReadErr, hWriteErr;
+	HANDLE hReadErr, hWriteErr;
 	HANDLE hReadIn, hWriteIn;
 	STARTUPINFO si;
 	PROCESS_INFORMATION pi;
    DWORD exitcode;
 #elif defined( __LINUX__ )
    int hReadOut, hWriteOut;
-   //HANDLE hReadErr, hWriteErr;
+   int hReadErr, hWriteErr;
 	int hReadIn, hWriteIn;
    pid_t pid;
    uint32_t exitcode;
@@ -63700,6 +64862,8 @@ LOGICAL CPROC StopProgram( PTASK_INFO task )
 	task->flags.process_ended = 1;
 	if( task->pOutputThread )
 		WakeThread( task->pOutputThread );
+	if( task->pOutputThread2 )
+		WakeThread( task->pOutputThread2 );
 #ifdef WIN32
 #ifndef UNDER_CE
 	int error;
@@ -63877,33 +65041,46 @@ uintptr_t CPROC WaitForTaskEnd( PTHREAD pThread )
 					// maybe the read wasn't queued yet....
 					//lprintf( "Failed to cancel IO on thread %d %d", GetThreadHandle( task->hStdOut.hThread ), GetLastError() );
 				}
+				if( !MyCancelSynchronousIo( GetThreadHandle( task->hStdErr.hThread ) ) )
+				{
+					// maybe the read wasn't queued yet....
+					//lprintf( "Failed to cancel IO on thread %d %d", GetThreadHandle( task->hStdOut.hThread ), GetLastError() );
+				}
 			}
 			else
 			{
 				static BOOL (WINAPI *MyCancelIoEx)( HANDLE hFile,LPOVERLAPPED ) = (BOOL(WINAPI*)(HANDLE,LPOVERLAPPED))-1;
 				if( (uintptr_t)MyCancelIoEx == (uintptr_t)-1 )
 					MyCancelIoEx = (BOOL(WINAPI*)(HANDLE,LPOVERLAPPED))LoadFunction( "kernel32.dll", "CancelIoEx" );
-				if( MyCancelIoEx )
+				if( MyCancelIoEx ) {
 					MyCancelIoEx( task->hStdOut.handle, NULL );
-				else
-				{
+						MyCancelIoEx( task->hStdErr.handle, NULL );
+				} else {
 					DWORD written;
-					//lprintf( "really? You're still using xp or less?" );
+					// if I can't cancel, send something oob to wake up the thread.
 					task->flags.bSentIoTerminator = 1;
 					if( !WriteFile( task->hWriteOut, "\x04", 1, &written, NULL ) )
-					lprintf( "write pipe failed! %d", GetLastError() );
-					//lprintf( "Pipe write was %d", written );
+						lprintf( "write stdout pipe failed! %d", GetLastError() );
+					if( !WriteFile( task->hWriteErr, "\x04", 1, &written, NULL ) )
+						lprintf( "write stderr pip failed! %d", GetLastError() );
 				}
 			}
 #endif
 		}
 		// wait for task last output before notification of end of task.
-		while( task->pOutputThread )
+		while( task->pOutputThread || task->pOutputThread2 )
 			Relinquish();
 		if( task->EndNotice )
 			task->EndNotice( task->psvEnd, task );
 #if defined( WIN32 )
 		//lprintf( "Closing process and thread handles." );
+		CloseHandle( task->hReadIn );
+		CloseHandle( task->hReadOut );
+		CloseHandle( task->hReadErr );
+		CloseHandle( task->hWriteIn );
+		CloseHandle( task->hWriteOut );
+		CloseHandle( task->hWriteErr );
+		//lprintf( "Closing process handle %p", task->pi.hProcess );
 		if( task->pi.hProcess )
 		{
 			CloseHandle( task->pi.hProcess );
@@ -65168,12 +66345,18 @@ static int DumpErrorEx( DBG_VOIDPASS )
 extern uintptr_t CPROC WaitForTaskEnd( PTHREAD pThread );
 static uintptr_t CPROC HandleTaskOutput(PTHREAD thread )
 {
-	PTASK_INFO task = (PTASK_INFO)GetThreadParam( thread );
+	struct taskOutputStruct* taskParams = (struct taskOutputStruct*)GetThreadParam( thread );
+  // (PTASK_INFO)GetThreadParam( thread );
+	PTASK_INFO task = taskParams->task;
+	if( task )
 	{
-		task->pOutputThread = thread;
+		if( taskParams->stdErr )
+			task->pOutputThread2 = thread;
+		else
+			task->pOutputThread = thread;
 		// read input from task, montiro close and dispatch TaskEnd Notification also.
 		{
-			PHANDLEINFO phi = &task->hStdOut;
+			PHANDLEINFO phi = taskParams->stdErr?&task->hStdErr:&task->hStdOut;
 			PTEXT pInput = SegCreate( 4096 );
 			int done, lastloop;
 			Hold( task );
@@ -65226,14 +66409,21 @@ static uintptr_t CPROC HandleTaskOutput(PTHREAD thread )
 								}
 							}
 							//lprintf( "result %d", dwRead );
-							GetText( pInput )[dwRead] = 0;
-							pInput->data.size = dwRead;
-							//LogBinary( GetText( pInput ), GetTextSize( pInput ) );
-							if( task->OutputEvent )
-							{
-								task->OutputEvent( task->psvEnd, task, GetText( pInput ), GetTextSize( pInput ) );
+							if( dwRead < 4096 ) {
+								GetText( pInput )[dwRead] = 0;
+								pInput->data.size = dwRead;
+								//LogBinary( GetText( pInput ), GetTextSize( pInput ) );
+								if( taskParams->stdErr ) {
+									if( task->OutputEvent2 )
+										task->OutputEvent2( task->psvEnd, task, GetText( pInput ), GetTextSize( pInput ) );
+									else if( task->OutputEvent )
+										task->OutputEvent( task->psvEnd, task, GetText( pInput ), GetTextSize( pInput ) );
+								} else {
+									if( task->OutputEvent )
+										task->OutputEvent( task->psvEnd, task, GetText( pInput ), GetTextSize( pInput ) );
+								}
+								pInput->data.size = 4096;
 							}
-							pInput->data.size = 4096;
 #ifdef _WIN32
 						}
 						else
@@ -65267,43 +66457,38 @@ static uintptr_t CPROC HandleTaskOutput(PTHREAD thread )
 				}
 			}
 			while( !lastloop );
-			//lprintf( "Exited read loop" );
-#ifdef _DEBUG
-			if( lastloop )
-			{
-				//DECLTEXT( msg, "Ending system thread because of process exit!" );
-				//EnqueLink( phi->pdp->&ps->Command->Output, &msg );
-			}
-			else
-			{
-				//DECLTEXT( msg, "Guess we exited from broken pipe" );
-				//EnqueLink( phi->pdp->&ps->Command->Output, &msg );
-			}
-#endif
 			LineRelease( pInput );
 #ifdef _WIN32
+			/*
 			CloseHandle( task->hReadIn );
 			CloseHandle( task->hReadOut );
+			CloseHandle( task->hReadErr );
 			CloseHandle( task->hWriteIn );
 			CloseHandle( task->hWriteOut );
+			CloseHandle( task->hWriteErr );
+			*/
 			//lprintf( "Closing process handle %p", task->pi.hProcess );
 			phi->hThread = 0;
 #else
 			//close( phi->handle );
 			close( task->hStdIn.pair[1] );
 			close( task->hStdOut.pair[0] );
-			//close( task->hStdErr.pair[0] );
+			close( task->hStdErr.pair[0] );
 #define INVALID_HANDLE_VALUE -1
 #endif
 			if( phi->handle == task->hStdIn.handle )
 				task->hStdIn.handle = INVALID_HANDLE_VALUE;
 			phi->handle = INVALID_HANDLE_VALUE;
-			task->pOutputThread = NULL;
+			if( taskParams->stdErr )
+				task->pOutputThread2 = NULL;
+			else
+				task->pOutputThread = NULL;
 			Release( task );
 			//WakeAThread( phi->pdp->common.Owner );
 			return 0xdead;
 		}
 	}
+	return 0;
 }
 //--------------------------------------------------------------------------
 static int FixHandles( PTASK_INFO task )
@@ -65423,14 +66608,25 @@ void LoadReadExe( PTASK_INFO task, uintptr_t base )
 #ifdef WIN32
 extern HANDLE GetImpersonationToken( void );
 #endif
-// Run a program completely detached from the current process
-// it runs independantly.  Program does not suspend until it completes.
-// No way at all to know if the program works or fails.
 SYSTEM_PROC( PTASK_INFO, LaunchPeerProgramExx )( CTEXTSTR program, CTEXTSTR path, PCTEXTSTR args
 															  , int flags
 															  , TaskOutput OutputHandler
 															  , TaskEnd EndNotice
 															  , uintptr_t psv
+																DBG_PASS
+															  ){
+   return LaunchPeerProgram_v2( program, path, args, flags, OutputHandler, NULL, EndNotice, psv, NULL DBG_RELAY );
+}
+// Run a program completely detached from the current process
+// it runs independantly.  Program does not suspend until it completes.
+// No way at all to know if the program works or fails.
+SYSTEM_PROC( PTASK_INFO, LaunchPeerProgram_v2 )( CTEXTSTR program, CTEXTSTR path, PCTEXTSTR args
+															  , int flags
+															  , TaskOutput OutputHandler
+															  , TaskOutput OutputHandler2
+															  , TaskEnd EndNotice
+															  , uintptr_t psv
+															  , PLIST list
 																DBG_PASS
 															  )
 {
@@ -65439,6 +66635,13 @@ SYSTEM_PROC( PTASK_INFO, LaunchPeerProgramExx )( CTEXTSTR program, CTEXTSTR path
 // = ExpandPath( program );
 	TEXTSTR expanded_path;
 	TEXTSTR expanded_working_path = path ? ExpandPath( path ) : NULL;
+	{
+		INDEX idx;
+      struct environmentValue* val;
+		LIST_FORALL( list, idx, struct environmentValue*, val ) {
+         OSALOT_SetEnvironmentVariable( val->field, val->value );
+		}
+	}
 	if( path ) {
 		path = ExpandPath( path );
 		if( IsAbsolutePath( program ) ) {
@@ -65545,6 +66748,7 @@ SYSTEM_PROC( PTASK_INFO, LaunchPeerProgramExx )( CTEXTSTR program, CTEXTSTR path
 		}
 		*/
 		task->OutputEvent = OutputHandler;
+		task->OutputEvent2 = OutputHandler2;
 		if( OutputHandler )
 		{
 			SECURITY_ATTRIBUTES sa;
@@ -65552,10 +66756,10 @@ SYSTEM_PROC( PTASK_INFO, LaunchPeerProgramExx )( CTEXTSTR program, CTEXTSTR path
 			sa.lpSecurityDescriptor = NULL;
 			sa.nLength = sizeof( sa );
 			CreatePipe( &task->hReadOut, &task->hWriteOut, &sa, 0 );
-			//CreatePipe( &hReadErr, &hWriteErr, &sa, 0 );
+			CreatePipe( &task->hReadErr, &task->hWriteErr, &sa, 0 );
 			CreatePipe( &task->hReadIn, &task->hWriteIn, &sa, 0 );
 			task->si.hStdInput = task->hReadIn;
-			task->si.hStdError = task->hWriteOut;
+			task->si.hStdError = task->hWriteErr;
 			task->si.hStdOutput = task->hWriteOut;
 			task->si.dwFlags |= STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
 			if( !( flags & LPP_OPTION_DO_NOT_HIDE ) )
@@ -65574,7 +66778,6 @@ SYSTEM_PROC( PTASK_INFO, LaunchPeerProgramExx )( CTEXTSTR program, CTEXTSTR path
 		{
 			HINSTANCE hShellProcess = 0;
 			int success = 0;
-#ifdef WIN32
 			if( flags & LPP_OPTION_IMPERSONATE_EXPLORER )
 			{
 				HANDLE hExplorer = GetImpersonationToken();
@@ -65619,7 +66822,6 @@ SYSTEM_PROC( PTASK_INFO, LaunchPeerProgramExx )( CTEXTSTR program, CTEXTSTR path
 				CloseHandle( hExplorer );
 			}
 			else
-#endif
 			{
 				if( ( (!task->flags.runas_root) && ( CreateProcess( program
 										, GetText( cmdline )
@@ -65676,16 +66878,27 @@ SYSTEM_PROC( PTASK_INFO, LaunchPeerProgramExx )( CTEXTSTR program, CTEXTSTR path
 #endif
 				if( OutputHandler )
 				{
-					task->hStdIn.handle	 = task->hWriteIn;
-					task->hStdIn.pLine	 = NULL;
+					task->hStdIn.handle	  = task->hWriteIn;
+					task->hStdIn.pLine	  = NULL;
 					//task->hStdIn.pdp		 = pdp;
 					task->hStdIn.hThread  = 0;
 					task->hStdIn.bNextNew = TRUE;
-					task->hStdOut.handle	  = task->hReadOut;
-					task->hStdOut.pLine	  = NULL;
+					task->hStdOut.handle   = task->hReadOut;
+					task->hStdOut.pLine	   = NULL;
 					//task->hStdOut.pdp		  = pdp;
 					task->hStdOut.bNextNew = TRUE;
-					task->hStdOut.hThread  = ThreadTo( HandleTaskOutput, (uintptr_t)task );
+					task->args1.task       = task;
+					task->args1.stdErr     = FALSE;
+					task->hStdOut.hThread  = ThreadTo( HandleTaskOutput, (uintptr_t)&task->args1 );
+					{
+						task->hStdErr.handle   = task->hReadErr;
+						task->hStdErr.pLine	   = NULL;
+						//task->hStdOut.pdp		  = pdp;
+						task->hStdErr.bNextNew = TRUE;
+						task->args2.task       = task;
+						task->args2.stdErr     = TRUE;
+						task->hStdErr.hThread  = ThreadTo( HandleTaskOutput, (uintptr_t)&task->args2 );
+					}
 					ThreadTo( WaitForTaskEnd, (uintptr_t)task );
 				}
 				else
@@ -65723,9 +66936,15 @@ SYSTEM_PROC( PTASK_INFO, LaunchPeerProgramExx )( CTEXTSTR program, CTEXTSTR path
 			TEXTCHAR saved_path[256];
 			task = (PTASK_INFO)Allocate( sizeof( TASK_INFO ) );
 			MemSet( task, 0, sizeof( TASK_INFO ) );
+			//task->flags.log_input = TRUE;
 			task->psvEnd = psv;
 			task->EndNotice = EndNotice;
 			task->OutputEvent = OutputHandler;
+			task->OutputEvent2 = OutputHandler2;
+			task->args1.task       = task;
+			task->args1.stdErr     = FALSE;
+			task->args2.task       = task;
+			task->args2.stdErr     = TRUE;
 			if( OutputHandler )
 			{
 				if( pipe(task->hStdIn.pair) < 0 ) {
@@ -65742,6 +66961,16 @@ SYSTEM_PROC( PTASK_INFO, LaunchPeerProgramExx )( CTEXTSTR program, CTEXTSTR path
 					return NULL;
 				}
 				task->hStdOut.handle = task->hStdOut.pair[0];
+				if( OutputHandler2 ) {
+					if( pipe(task->hStdErr.pair) < 0 ) {
+						if (expanded_working_path)
+							Release( expanded_working_path );
+						Release( expanded_path );
+						return NULL;
+					}
+					task->hStdErr.handle = task->hStdErr.pair[0];
+				} else
+					task->hStdErr.handle =task->hStdOut.pair[0];
 			}
 			// always have to thread to taskend so waitpid can clean zombies.
 			ThreadTo( WaitForTaskEnd, (uintptr_t)task );
@@ -65773,7 +67002,7 @@ SYSTEM_PROC( PTASK_INFO, LaunchPeerProgramExx )( CTEXTSTR program, CTEXTSTR path
 				if( OutputHandler ) {
 					dup2( task->hStdIn.pair[0], 0 );
 					dup2( task->hStdOut.pair[1], 1 );
-					dup2( task->hStdOut.pair[1], 2 );
+					dup2( task->hStdErr.pair[1], 2 );
 				}
 				DispelDeadstart();
 				execve( _program, (char *const*)args, environ );
@@ -65795,6 +67024,8 @@ SYSTEM_PROC( PTASK_INFO, LaunchPeerProgramExx )( CTEXTSTR program, CTEXTSTR path
 				if( OutputHandler ) {
 					close( task->hStdIn.pair[0] );
 					close( task->hStdOut.pair[1] );
+					if( OutputHandler2 )
+						close( task->hStdErr.pair[1] );
 				}
 				//close( task->hWriteErr );
 				close( 0 );
@@ -65813,10 +67044,16 @@ SYSTEM_PROC( PTASK_INFO, LaunchPeerProgramExx )( CTEXTSTR program, CTEXTSTR path
 				if( OutputHandler ) {
 					close( task->hStdIn.pair[0] );
 					close( task->hStdOut.pair[1] );
+					if( OutputHandler2 )
+						close( task->hStdErr.pair[1] );
 				}
 			}
 			if( OutputHandler )
-				ThreadTo( HandleTaskOutput, (uintptr_t)task );
+				ThreadTo( HandleTaskOutput, (uintptr_t)&task->args1 );
+ // only if it was opened as a separate handle...
+			if( OutputHandler2 ) {
+				ThreadTo( HandleTaskOutput, (uintptr_t)&task->args2 );
+			}
 			task->pid = newpid;
 			// how can I know if the command failed?
 			// well I can't - but the user's callback will be invoked
@@ -67027,7 +68264,7 @@ PROCREG_PROC( LOGICAL, RegisterFunctionExx )( PCLASSROOT root
 #ifdef _DEBUG
 					CTEXTSTR file = GetRegisteredValue( (CTEXTSTR)&oldname->tree, "Source File" );
 					int line = (int)(uintptr_t)GetRegisteredValueEx( (CTEXTSTR)&oldname->tree, "Source Line", TRUE );
-					lprintf( "Duplicate function registration, it's the same address as before... %s(%d) %s(%d) %s %s", file, line, pFile, nLine, name_class, public_name );
+					lprintf( "Duplicate function registration, it's the same address as before... %s(%d) %s(%d) %s %s", file, line, pFile, nLine, (char*)name_class, public_name );
 #endif
 				}else
 				{
@@ -73693,7 +74930,7 @@ void NeedBits( struct random_context *ctx )
 {
 	if( ctx->use_versionK12 ) {
 #if USE_K12_LONG_SQUEEZE
-		if( ctx->f.K12i.phase == ABSORBING || ctx->total_bits_used > K12_SQUEEZE_LENGTH ) {
+		if( ctx->f.K12i.phase == ABSORBING || ctx->total_bits_used >= K12_SQUEEZE_LENGTH ) {
 			if( ctx->f.K12i.phase == SQUEEZING ) {
 				KangarooTwelve_Initialize( &ctx->f.K12i, 0 );
 				KangarooTwelve_Update( &ctx->f.K12i, ctx->s.entropy4, K12_DIGEST_SIZE );
@@ -73767,6 +75004,10 @@ void NeedBits( struct random_context *ctx )
 	ctx->bits_used = 0;
 }
 void SRG_StepEntropy( struct random_context* ctx ) {
+#if USE_K12_LONG_SQUEEZE
+	if( ctx->use_versionK12 )
+		ctx->total_bits_used = K12_SQUEEZE_LENGTH;
+#endif
 	NeedBits( ctx );
 }
 struct random_context *SRG_CreateEntropyInternal( void (*getsalt)( uintptr_t, POINTER *salt, size_t *salt_size ), uintptr_t psv_user

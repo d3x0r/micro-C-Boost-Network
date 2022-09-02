@@ -5055,11 +5055,24 @@ typedef void (CPROC*TaskOutput)(uintptr_t, PTASK_INFO task, CTEXTSTR buffer, siz
 #define LPP_OPTION_NEW_CONSOLE          16
 #define LPP_OPTION_SUSPEND              32
 #define LPP_OPTION_ELEVATE              64
+struct environmentValue {
+	char* field;
+	char* value;
+};
 SYSTEM_PROC( PTASK_INFO, LaunchPeerProgramExx )( CTEXTSTR program, CTEXTSTR path, PCTEXTSTR args
                                                , int flags
                                                , TaskOutput OutputHandler
                                                , TaskEnd EndNotice
                                                , uintptr_t psv
+                                                DBG_PASS
+                                               );
+SYSTEM_PROC( PTASK_INFO, LaunchPeerProgram_v2 )( CTEXTSTR program, CTEXTSTR path, PCTEXTSTR args
+                                               , int flags
+                                               , TaskOutput OutputHandler
+                                               , TaskOutput OutputHandler2
+                                               , TaskEnd EndNotice
+                                               , uintptr_t psv
+                                               , PLIST envStrings
                                                 DBG_PASS
                                                );
 SYSTEM_PROC( PTASK_INFO, LaunchProgramEx )( CTEXTSTR program, CTEXTSTR path, PCTEXTSTR args, TaskEnd EndNotice, uintptr_t psv );
@@ -5500,10 +5513,20 @@ namespace sack {
 /* Memory namespace contains functions for allocating and
    releasing memory. Also contains methods for accessing shared
    memory (if available on the target platform).
-   Allocate
-   Release
-   Hold
-   OpenSpace                                                    */
+   Allocate / New - get new memory
+   Release / Deallocate - allow others to use this memory
+   Hold - keep the memory; requires an additional Release.
+   Reallocate - given an existing block, allocate a new block, and copy the minimum of what's already in the block, and the new block size.  It is possible this is the same address, which is just extended into a free block.
+   OpenSpace - Low level system memory; requested by filename and region name and provides sharing;  NULL, NULL is just new memory.
+   GetHeapMemStats - Run diagnostics on the heap blocks.
+   SetAllocateLogging - enable allocate/deallocate loggging for debugging; returns the previous logging state.
+   SetAllocateDebug -  disables additional runtime checks compiled in for debug builds/
+   SetManualAllocateCheck - GetHeapMemStats is run every Allocate/Deallocate in debug mode; this disables that behavior, and expects the libary's user to check as required.
+   SetCriticalLogging - Enable/disable critical section logging; does of course influence timing when enabled.
+   SetMinAllocate - defines a minimum size that will be tracked internally; if every block is at least 100 bytes (for example), there is less chance at fragmentation when allocating 32-96 byte blocks.
+   SetHeapUnit - How much to expand the heap when more space is required.   Very large allocations will end up with their own memory mapped; but the sum of all small allocations will fill up a block of memory, and this controls the expansion rate.
+   AlignOfMemBlock - Get the alignment of a memory block; allows reallocate
+                                                */
 namespace memory {
 #endif
 typedef struct memory_block_tag* PMEM;
@@ -7120,13 +7143,13 @@ NETWORK_PROC( void, NetworkUnlockEx )( PCLIENT pc, int readWrite DBG_PASS );
 typedef void (CPROC*cReadComplete)(PCLIENT, POINTER, size_t );
 typedef void (CPROC*cReadCompleteEx)(PCLIENT, POINTER, size_t, SOCKADDR * );
 typedef void (CPROC*cCloseCallback)(PCLIENT);
-typedef void (CPROC*cWriteComplete)(PCLIENT );
+typedef void (CPROC*cWriteComplete)(PCLIENT, CPOINTER buffer, size_t len );
 typedef void (CPROC*cNotifyCallback)(PCLIENT server, PCLIENT newClient);
 typedef void (CPROC*cConnectCallback)(PCLIENT, int);
 typedef void (CPROC*cppReadComplete)(uintptr_t, POINTER, size_t );
 typedef void (CPROC*cppReadCompleteEx)(uintptr_t,POINTER, size_t, SOCKADDR * );
 typedef void (CPROC*cppCloseCallback)(uintptr_t);
-typedef void (CPROC*cppWriteComplete)(uintptr_t );
+typedef void (CPROC*cppWriteComplete)(uintptr_t, CPOINTER buffer, size_t len );
 typedef void (CPROC*cppNotifyCallback)(uintptr_t, PCLIENT newClient);
 typedef void (CPROC*cppConnectCallback)(uintptr_t, int);
 enum SackNetworkErrorIdentifier {
@@ -7669,6 +7692,13 @@ NETWORK_PROC( int, GetMacAddress)(PCLIENT pc, uint8_t* buf, size_t *buflen );
 //int get_mac_addr (char *device, unsigned char *buffer)
 NETWORK_PROC( PLIST, GetMacAddresses)( void );
 NETWORK_PROC( LOGICAL, sack_network_is_active )( PCLIENT pc );
+// mark that a socket has outstanding work.  If a close is handled while in network read
+// prevent the automatic close until work is cleared.
+NETWORK_PROC( void, AddNetWork )( PCLIENT lpClient, uintptr_t psv );
+// clear outstanding work on a socket.  Once all work is cleared, and the socket is flagged
+// to close, then a oustanding close operation will be performed when the last work is cleared.
+//
+NETWORK_PROC( void, ClearNetWork )( PCLIENT lpClient, uintptr_t psv );
 NETWORK_PROC( void, RemoveClientExx )(PCLIENT lpClient, LOGICAL bBlockNofity, LOGICAL bLinger DBG_PASS );
 /* <combine sack::network::RemoveClientExx@PCLIENT@LOGICAL@LOGICAL bLinger>
    \ \                                                                      */
@@ -9471,6 +9501,33 @@ struct HttpField {
 	PTEXT name;
 	PTEXT value;
 };
+struct HTTPRequestHeader {
+	char* field;
+	char* value;
+};
+struct HTTPRequestOptions {
+  // deafult GET
+	const char* method;
+     // path part of the request
+	PTEXT url;
+ // address part of request (ip:port)
+	PTEXT address;
+ // list of TEXTCAHR*
+	PLIST headers;
+  // content to send with request, if any
+	CPOINTER content;
+// lengt of content to send with request
+	size_t contentLen;
+ // set to true to request over SSL;
+	LOGICAL ssl;
+ //optionally this can be used to specify the certain, if not set, uses parameter, which will otherwise be NULL.
+	const char* certChain;
+	// specify the agent field, default to SACK(System)
+	const char* agent;
+	// if set, will be called when content buffer has been sent.
+	void ( *writeComplete )( uintptr_t userData );
+	uintptr_t userData;
+};
 typedef struct HttpState *HTTPState;
 enum ProcessHttpResult{
 	HTTP_STATE_RESULT_NOTHING = 0,
@@ -9516,7 +9573,7 @@ HTTP_EXPORT int HTTPAPI ProcessHttp( PCLIENT pc, HTTPState pHttpState );
 HTTP_EXPORT
  /* Gets the specific result code at the header of the packet -
    http 2.0 OK sort of thing.                                  */
-PTEXT HTTPAPI GetHttpResponce( HTTPState pHttpState );
+PTEXT HTTPAPI GetHttpResponse( HTTPState pHttpState );
 /* Get the method of the request in ht e http state.
 */
 HTTP_EXPORT PTEXT HTTPAPI GetHttpMethod( struct HttpState *pHttpState );
@@ -9598,6 +9655,8 @@ HTTP_EXPORT PTEXT HTTPAPI GetHttp( PTEXT site, PTEXT resource, LOGICAL secure );
 /* results with just the content of the message; no access to other information avaialble */
 HTTP_EXPORT PTEXT HTTPAPI GetHttps( PTEXT address, PTEXT url, const char *certChain );
 /* results with the http state of the message response; Allows getting other detailed information about the result */
+HTTP_EXPORT HTTPState HTTPAPI GetHttpsQueryEx( PTEXT address, PTEXT url, const char* certChain, struct HTTPRequestOptions* options );
+/* results with the http state of the message response; Allows getting other detailed information about the result */
 HTTP_EXPORT HTTPState  HTTPAPI PostHttpQuery( PTEXT site, PTEXT resource, PTEXT content );
 /* results with the http state of the message response; Allows getting other detailed information about the result */
 HTTP_EXPORT HTTPState  HTTPAPI GetHttpQuery( PTEXT site, PTEXT resource );
@@ -9605,6 +9664,8 @@ HTTP_EXPORT HTTPState  HTTPAPI GetHttpQuery( PTEXT site, PTEXT resource );
 HTTP_EXPORT HTTPState HTTPAPI GetHttpsQuery( PTEXT site, PTEXT resource, const char *certChain );
 /* return the numeric response code of a http reply. */
 HTTP_EXPORT int HTTPAPI GetHttpResponseCode( HTTPState pHttpState );
+/* return the text response code of an http reply */
+HTTP_EXPORT const char* HTTPAPI GetHttpResponseStatus( HTTPState pHttpState );
 #define CreateHttpServer(interface_address,site,psv) CreateHttpServerEx( interface_address,NULL,site,NULL,psv )
 #define CreateHttpServer2(interface_address,site,default_handler,psv) CreateHttpServerEx( interface_address,NULL,site,default_handler,psv )
 // receives events for either GET if aspecific OnHttpRequest has not been defined for the specific resource
@@ -9692,7 +9753,7 @@ WEBSOCKET_EXPORT PCLIENT WebSocketOpen( CTEXTSTR address
                                       , const char *protocols );
 // if WS_DELAY_OPEN is used, WebSocketOpen does not do immediate connect.
 // calling this begins the connection sequence.
-WEBSOCKET_EXPORT void WebSocketConnect( PCLIENT );
+WEBSOCKET_EXPORT int WebSocketConnect( PCLIENT );
 // end a websocket connection nicely.
 // code must be 1000, or 3000-4999, and reason must be less than 123 characters (125 bytes with code)
 WEBSOCKET_EXPORT void WebSocketClose( PCLIENT, int code, const char *reason );
