@@ -85,6 +85,7 @@ namespace sack {
 #  define _POSIX_C_SOURCE 200112L
 #endif
 #include <stdlib.h>
+#include <stdio.h>
 #include <stdint.h>
 #if _MSC_VER
 #  ifdef EXCLUDE_SAFEINT_H
@@ -306,8 +307,6 @@ extern __sighandler_t bsd_signal(int, __sighandler_t);
 #    define max(a,b) (((a)>(b))?(a):(b))
 #  endif
 #endif
-#ifndef SACK_PRIMITIVE_TYPES_INCLUDED
-#define SACK_PRIMITIVE_TYPES_INCLUDED
 /* Define most of the sack core types on which everything else is
    based. Also defines some of the primitive container
    structures. We also handle a lot of platform/compiler
@@ -317,6 +316,8 @@ extern __sighandler_t bsd_signal(int, __sighandler_t);
 But WHO doesn't have stdint?  BTW is sizeof( size_t ) == sizeof( void* )
    This is automatically included with stdhdrs.h; however, when
    including sack_types.h, the minimal headers are pulled. */
+#ifndef SACK_PRIMITIVE_TYPES_INCLUDED
+#define SACK_PRIMITIVE_TYPES_INCLUDED
 #define HAS_STDINT
 //#define USE_SACK_CUSTOM_MEMORY_ALLOCATION
 	// this has to be a compile option (option from cmake)
@@ -387,52 +388,53 @@ But WHO doesn't have stdint?  BTW is sizeof( size_t ) == sizeof( void* )
 //#  define TARGETNAME "sack_bag.dll"  //$(TargetFileName)
 //#endif
 #    define MD5_SOURCE
+#    define SHA2_SOURCE
 #    define USE_SACK_FILE_IO
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
 #    define MEM_LIBRARY_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define SYSLOG_SOURCE
+#    define SYSLOG_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define _TYPELIBRARY_SOURCE
+#    define _TYPELIBRARY_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define HTTP_SOURCE
+#    define HTTP_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define TIMER_SOURCE
+#    define TIMER_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define IDLE_SOURCE
+#    define IDLE_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define CLIENTMSG_SOURCE
+#    define CLIENTMSG_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define FRACTION_SOURCE
+#    define FRACTION_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define NETWORK_SOURCE
+#    define NETWORK_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define CONFIGURATION_LIBRARY_SOURCE
+#    define CONFIGURATION_LIBRARY_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define FILESYSTEM_LIBRARY_SOURCE
+#    define FILESYSTEM_LIBRARY_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define SYSTEM_SOURCE
+#    define SYSTEM_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define FILEMONITOR_SOURCE
+#    define FILEMONITOR_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define VECTOR_LIBRARY_SOURCE
+#    define VECTOR_LIBRARY_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
-#define SHA1_SOURCE
+#    define SHA1_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
 #    define CONSTRUCT_SOURCE
@@ -448,6 +450,11 @@ But WHO doesn't have stdint?  BTW is sizeof( size_t ) == sizeof( void* )
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
 #      define JSON_EMITTER_SOURCE
+/* Defined when SACK_BAG_EXPORTS is defined. This was an
+	individual library module once upon a time.           */
+#      define JSOX_PARSER_SOURCE
+#      define HTML5_WEBSOCKET_SOURCE
+#      define SACK_WEBSOCKET_CLIENT_SOURCE
 /* Defined when SACK_BAG_EXPORTS is defined. This was an
    individual library module once upon a time.           */
 #    define SERVICE_SOURCE
@@ -515,6 +522,7 @@ But WHO doesn't have stdint?  BTW is sizeof( size_t ) == sizeof( void* )
  // CHAR_BIT
 #  include <limits.h>
  // typelib requires this
+#  include <stdarg.h>
 #  ifdef _MSC_VER
 #    ifndef UNDER_CE
  // memlib requires this, and it MUST be included befoer string.h if it is used.
@@ -631,6 +639,13 @@ But WHO doesn't have stdint?  BTW is sizeof( size_t ) == sizeof( void* )
 // the C Procedure standard - using a stack, and resulting
 // in EDX:EAX etc...
 #  define CPROC
+#if !defined( _WIN32 )
+#  define PUBLIC_METHOD
+#  define REFERENCE_METHOD extern
+#else
+#  define PUBLIC_METHOD __declspec(dllexport)
+#  define REFERENCE_METHOD __declspec(dllimport)
+#endif
 #  ifdef SACK_BAG_EXPORTS
 #    ifdef BUILD_GLUE
 // this is used as the export method appropriate for C#?
@@ -710,7 +725,9 @@ But WHO doesn't have stdint?  BTW is sizeof( size_t ) == sizeof( void* )
 #define PREFIX_PACKED
 // private thing left as a note, and forgotten.  some compilers did not define offsetof
 #define my_offsetof( ppstruc, member ) ((uintptr_t)&((*ppstruc)->member)) - ((uintptr_t)(*ppstruc))
-SACK_NAMESPACE
+#ifdef __cplusplus
+namespace sack {
+#endif
 #ifdef BCC16
 #define __inline__
 #define MAINPROC(type,name)     type _pascal name
@@ -918,60 +935,49 @@ SACK_NAMESPACE
 // drop out these debug relay paramters for managed code...
 // we're going to have the full call frame managed and known...
 #if !defined( _DEBUG ) && !defined( _DEBUG_INFO )
-#  if defined( __LINUX__ ) && !defined( __PPCCPP__ )
-//#warning "Setting DBG_PASS and DBG_FORWARD to be ignored."
-#  else
-//#pragma pragnoteonly("Setting DBG_PASS and DBG_FORWARD to be ignored"  )
-#  endif
-#define DBG_AVAILABLE   0
+#  define DBG_AVAILABLE   0
 /* in NDEBUG mode, pass nothing */
-#define DBG_SRC
+#  define DBG_SRC
 /* <combine sack::DBG_PASS>
    in NDEBUG mode, pass nothing */
-#define DBG_VOIDSRC
+#  define DBG_VOIDSRC
 /* <combine sack::DBG_PASS>
    \#define DBG_LEADSRC in NDEBUG mode, declare (void) */
 /* <combine sack::DBG_PASS>
    \ \                      */
-#define DBG_VOIDPASS    void
+#  define DBG_VOIDPASS    void
 /* <combine sack::DBG_PASS>
    in NDEBUG mode, pass nothing */
-#define DBG_PASS
+#  define DBG_PASS
 /* <combine sack::DBG_PASS>
    in NDEBUG mode, pass nothing */
-#define DBG_RELAY
+#  define DBG_RELAY
 /* <combine sack::DBG_PASS>
    in _DEBUG mode, pass FILELINE_NULL */
-#define DBG_NULL
+#  define DBG_NULL
 /* <combine sack::DBG_PASS>
    in NDEBUG mode, pass nothing */
-#define DBG_VOIDRELAY
+#  define DBG_VOIDRELAY
 /* <combine sack::DBG_PASS>
    in NDEBUG mode, pass nothing */
-#define DBG_FILELINEFMT
+#  define DBG_FILELINEFMT
 /* <combine sack::DBG_PASS>
    in NDEBUG mode, pass nothing */
-#define DBG_FILELINEFMT_MIN
+#  define DBG_FILELINEFMT_MIN
 /* <combine sack::DBG_PASS>
    in NDEBUG mode, pass nothing
    Example
    printf( DBG_FILELINEFMT ": extra message" DBG_PASS ); */
-#define DBG_VARSRC
+#  define DBG_VARSRC
 #else
-	// these DBG_ formats are commented out from duplication in sharemem.h
-#  if defined( __LINUX__ ) && !defined( __PPCCPP__ )
-//#warning "Setting DBG_PASS and DBG_FORWARD to work."
-#  else
-//#pragma pragnoteonly("Setting DBG_PASS and DBG_FORWARD to work"  )
-#  endif
 // used to specify whether debug information is being passed - can be referenced in compiled code
-#define DBG_AVAILABLE   1
+#  define DBG_AVAILABLE   1
 /* <combine sack::DBG_PASS>
    in _DEBUG mode, pass FILELINE_SRC */
-#define DBG_SRC         FILELINE_SRC
+#  define DBG_SRC         FILELINE_SRC
 /* <combine sack::DBG_PASS>
    in _DEBUG mode, pass FILELINE_VOIDSRC */
-#define DBG_VOIDSRC     FILELINE_VOIDSRC
+#  define DBG_VOIDSRC     FILELINE_VOIDSRC
 /* <combine sack::DBG_PASS>
    in _DEBUG mode, pass FILELINE_VOIDPASS */
 #define DBG_VOIDPASS    FILELINE_VOIDPASS
@@ -1123,31 +1129,32 @@ SACK_NAMESPACE
    paramter f( DBG_RELAY ) would fail; on expansion this would
    be f( , pFile, nLine ); (note the extra comma, with no
    parameter would be a syntax error.                            */
-#define DBG_PASS        FILELINE_PASS
+#  define DBG_PASS        FILELINE_PASS
 /* <combine sack::DBG_PASS>
    in _DEBUG mode, pass FILELINE_RELAY */
-#define DBG_RELAY       FILELINE_RELAY
+#  define DBG_RELAY       FILELINE_RELAY
 /* <combine sack::DBG_PASS>
 	  in _DEBUG mode, pass FILELINE_NULL */
-#define DBG_NULL        FILELINE_NULL
+#  define DBG_NULL        FILELINE_NULL
 /* <combine sack::DBG_PASS>
    in _DEBUG mode, pass FILELINE_VOIDRELAY */
-#define DBG_VOIDRELAY   FILELINE_VOIDRELAY
+#  define DBG_VOIDRELAY   FILELINE_VOIDRELAY
 /* <combine sack::DBG_PASS>
    in _DEBUG mode, pass FILELINE_FILELINEFMT */
-#define DBG_FILELINEFMT FILELINE_FILELINEFMT
+#  define DBG_FILELINEFMT FILELINE_FILELINEFMT
 /* <combine sack::DBG_PASS>
    in _DEBUG mode, pass FILELINE_FILELINEFMT_MIN */
-#define DBG_FILELINEFMT_MIN FILELINE_FILELINEFMT_MIN
+#  define DBG_FILELINEFMT_MIN FILELINE_FILELINEFMT_MIN
 /* <combine sack::DBG_PASS>
    in _DEBUG mode, pass FILELINE_VARSRC */
-#define DBG_VARSRC      FILELINE_VARSRC
+#  define DBG_VARSRC      FILELINE_VARSRC
 #endif
-// cannot declare _0 since that overloads the
-// vector library definition for origin (0,0,0,0,...)
+/* cannot declare _0 since that overloads the
+   vector library definition for origin (0,0,0,0,...) */
 //typedef void             _0; // totally unusable to declare 0 size things.
 /* the only type other than when used in a function declaration that void is valid is as a pointer to void. no _0 type exists
-	 (it does, but it's in vectlib, and is an origin vector)*/
+ *  (it does, but it's in vectlib, and is an origin vector)
+*/
 typedef void             *P_0;
 /*
  * several compilers are rather picky about the types of data
@@ -1217,7 +1224,10 @@ typedef P_0 POINTER;
 /* This is a pointer to constant data. void const *. Compatible
    with things like char const *.                               */
 typedef const void *CPOINTER;
-SACK_NAMESPACE_END
+#ifdef __cplusplus
+ //SACK_NAMESPACE_END // namespace sack {
+}
+#endif
 //------------------------------------------------------
 // formatting macro defintions for [vsf]printf output of the above types
 #if !defined( _MSC_VER ) || ( _MSC_VER >= 1900 )
@@ -1226,7 +1236,14 @@ SACK_NAMESPACE_END
 #endif
 #include <inttypes.h>
 #endif
-SACK_NAMESPACE
+/*
+   Top level namespace.  SACK Is the System Abstraction Componnet Kit.
+   With a little work subsets of this namesapce can be used.  Typrically
+   this is built as just one large c/c++ shared library.
+*/
+#ifdef __cplusplus
+namespace sack {
+#endif
 /* 16 bit unsigned decimal output printf format specifier. This would
    otherwise be defined in \<inttypes.h\>                */
 #define _16f   "u"
@@ -1242,7 +1259,7 @@ SACK_NAMESPACE
 /* 8 bit unsigned decimal output printf format specifier. This would
    otherwise be defined in \<inttypes.h\>                */
 #define _8f   "u"
-/* 8 bit hex output printf format specifier. This would
+/* 8 bit hex output printf format sppecifier. This would
    otherwise be defined in \<inttypes.h\>                */
 #define _8fx   "x"
 /* 8 bit HEX output printf format specifier. This would
@@ -1256,10 +1273,6 @@ SACK_NAMESPACE
 #  define _32fx    PRIx32
 #  define _32fX    PRIX32
 #  define _32fs    PRId32
-#  define _64f    PRIu64
-#  define _64fx   PRIx64
-#  define _64fX   PRIX64
-#  define _64fs   PRId64
 #  define _64f    PRIu64
 #  define _64fx   PRIx64
 #  define _64fX   PRIX64
@@ -1640,23 +1653,24 @@ typedef uint64_t THREAD_ID;
    bytes of the data stored.  Length is in characters       */
 _CONTAINER_NAMESPACE
 /* LIST is a slab array of pointers, each pointer may be
-   assigned to point to any user data.
-   Remarks
-   When the list is filled to the capacity of Cnt elements, the
-   list is reallocated to be larger.
-   Cannot add NULL pointer to list, empty elements in the list
-   are represented with NULL, and may be filled by any non-NULL
-   value.                                                       */
-_LINKLIST_NAMESPACE
-/* <combine sack::containers::list::LinkBlock>
-   \ \                                         */
-typedef struct LinkBlock
+	assigned to point to any user data.
+	Remarks
+	When the list is filled to the capacity of Cnt elements, the
+	list is reallocated to be larger.
+	Cannot add NULL pointer to list, empty elements in the list
+	are represented with NULL, and may be filled by any non-NULL
+	value.                                                       */
+	_LINKLIST_NAMESPACE
+	/* <combine sack::containers::list::LinkBlock>
+		\ \                                         */
+	typedef struct LinkBlock
 {
 	/* How many pointers the list can contain now. */
 	INDEX     Cnt;
 	/* \ \  */
 	POINTER pNode[1];
-} LIST, *PLIST;
+} LIST;
+typedef struct LinkBlock volatile* volatile PLIST;
 _LINKLIST_NAMESPACE_END
 #ifdef __cplusplus
 using namespace sack::containers::list;
@@ -1665,11 +1679,11 @@ _DATALIST_NAMESPACE
 /* a list of data structures... a slab array of N members of X size */
 typedef struct DataBlock  DATALIST;
 /* A typedef of a pointer to a DATALIST struct DataList. */
-typedef struct DataBlock *PDATALIST;
+typedef struct DataBlock volatile * volatile PDATALIST;
 /* Data Blocks are like LinkBlocks, and store blocks of data in
    slab format. If the count of elements exceeds available, the
    structure is grown, to always contain a continuous array of
-   structures of Size size.
+   structures of Size size. No locking is provided.
    Remarks
    When blocks are deleted, all subsequent blocks are shifted
    down in the array. So the free blocks are always at the end. */
@@ -1689,26 +1703,27 @@ struct DataBlock
 };
 _DATALIST_NAMESPACE_END
 /* This is a stack that contains pointers to user objects.
-   Remarks
-   This is a stack 'by reference'. When extended, the stack will
-   occupy different memory, care must be taken to not duplicate
-   pointers to this stack.                                       */
-typedef struct LinkStack
+	Remarks
+	This is a stack 'by reference'. When extended, the stack will
+	occupy different memory, care must be taken to not duplicate
+	pointers to this stack.                                       */
+	typedef struct LinkStack
 {
 	/* This is the index of the next pointer to be pushed or popped.
-	   If top == 0, the stack is empty, until a pointer is added and
-	   top is incremented.                                           */
+		If top == 0, the stack is empty, until a pointer is added and
+		top is incremented.                                           */
 	INDEX     Top;
 	/* How many pointers the stack can contain. */
 	INDEX     Cnt;
 	/* thread interlock using InterlockedExchange semaphore. For
-	                  thread safety.                                            */
-	//volatile uint32_t     Lock;
-	/*  a defined maximum capacity of stacked values... values beyond this are lost from the bottom  */
+							thread safety.                                            */
+							//volatile uint32_t     Lock;
+							/*  a defined maximum capacity of stacked values... values beyond this are lost from the bottom  */
 	uint32_t     Max;
 	/* Reserved data portion that stores the pointers. */
 	POINTER pNode[1];
-} LINKSTACK, *PLINKSTACK;
+} LINKSTACK;
+typedef struct LinkStack volatile* volatile PLINKSTACK;
 /* A Stack that stores information in an array of structures of
    known size.
    Remarks
@@ -1721,8 +1736,8 @@ typedef struct DataListStack
 {
 	volatile INDEX     Top;
  /* enable logging the program executable (probably the same for
-	                all messages, unless they are network)
-	                                                                             */
+						 all messages, unless they are network)
+																										  */
  // How many elements are on the stack.
 	INDEX     Cnt;
 	//volatile uint32_t     Lock;  /* thread interlock using InterlockedExchange semaphore. For
@@ -1730,29 +1745,31 @@ typedef struct DataListStack
 	INDEX     Size;
 	INDEX     Max;
 	uint8_t      data[1];
-} DATASTACK, *PDATASTACK;
+} DATASTACK;
+typedef struct DataListStack volatile* volatile PDATASTACK;
 /* A queue which contains pointers to user objects. If the queue
    is filled to capacity and new queue is allocated, and all
    existing pointers are transferred.                            */
 typedef struct LinkQueue
 {
 	/* This is the index of the next pointer to be added to the
-	   queue. If Top==Bottom, then the queue is empty, until a
-	   pointer is added to the queue, and Top is incremented.   */
+		queue. If Top==Bottom, then the queue is empty, until a
+		pointer is added to the queue, and Top is incremented.   */
 	volatile INDEX     Top;
 	/* This is the index of the next element to leave the queue. */
 	volatile INDEX     Bottom;
 	/* This is the current count of pointers that can be stored in
-	   the queue.                                                  */
+		the queue.                                                  */
 	INDEX     Cnt;
 	/* thread interlock using InterlockedExchange semaphore. For
-	   thread safety.                                            */
+		thread safety.                                            */
 #if USE_CUSTOM_ALLOCER
 	volatile uint32_t     Lock;
 #endif
  // need two to have distinct empty/full conditions
 	POINTER pNode[2];
-} LINKQUEUE, *PLINKQUEUE;
+} LINKQUEUE;
+typedef struct LinkQueue volatile* volatile PLINKQUEUE;
 /* A queue of structure elements.
    Remarks
    The size of each element must be known at stack creation
@@ -1763,39 +1780,41 @@ typedef struct LinkQueue
 typedef struct DataQueue
 {
 	/* This is the next index to be added to. If Top==Bottom, the
-	   queue is empty, until an entry is added at Top, and Top
-	   increments.                                                */
+		queue is empty, until an entry is added at Top, and Top
+		increments.                                                */
 	volatile INDEX     Top;
 	/* The current bottom index. This is the next one to be
-	   returned.                                            */
+		returned.                                            */
 	volatile INDEX     Bottom;
 	/* How many elements the queue can hold. If a queue has more
-	   elements added to it than it has count, it will be expanded,
-	   and a new queue returned.                                    */
+		elements added to it than it has count, it will be expanded,
+		and a new queue returned.                                    */
 	INDEX     Cnt;
 	/* thread interlock using InterlockedExchange semaphore */
 	//volatile uint32_t     Lock;
 	/* How big each element in the queue is. */
 	INDEX     Size;
 	/* How many elements to expand the queue by, when its capacity
-	   is reached.                                                 */
+		is reached.                                                 */
 	INDEX     ExpandBy;
 	/* The data area of the queue. */
 	uint8_t      data[1];
-} DATAQUEUE, *PDATAQUEUE;
+} DATAQUEUE;
+typedef struct DataQueue volatile* volatile PDATAQUEUE;
 /* A mostly obsolete function, but can return the status of
    whether all initially scheduled startups are completed. (Or
    maybe whether we are not complete, and are processing
    startups)                                                   */
 _CONTAINER_NAMESPACE_END
-SACK_NAMESPACE_END
+#ifdef __cplusplus
+ //SACK_NAMESPACE_END // namespace sack {
+}
+#endif
 /* This contains the methods to use the base container types
    defined in sack_types.h.                                  */
 #ifndef LINKSTUFF
 #define LINKSTUFF
-	SACK_NAMESPACE
-	_CONTAINER_NAMESPACE
-#    define TYPELIB_CALLTYPE
+#  define TYPELIB_CALLTYPE
 #  if defined( _TYPELIBRARY_SOURCE_STEAL )
 #    define TYPELIB_PROC extern
 #  elif defined( NO_EXPORTS )
@@ -1809,21 +1828,31 @@ SACK_NAMESPACE_END
 #  else
 #    define TYPELIB_PROC IMPORT_METHOD
 #  endif
-_LINKLIST_NAMESPACE
+#  ifdef __cplusplus
+	namespace sack {
+   /* Containers is a bunch of common types like lists, queues,
+      stacks.                                                   */
+	   namespace containers {
+#  endif
+#  ifdef __cplusplus
+/* virtual file system using file system IO instead of memory mapped IO */
+namespace list {
+#  endif
 //--------------------------------------------------------
 TYPELIB_PROC  PLIST TYPELIB_CALLTYPE        CreateListEx   ( DBG_VOIDPASS );
+TYPELIB_PROC  void TYPELIB_CALLTYPE        MakeListEx   ( PLIST *pList DBG_PASS );
 /* Destroy a PLIST. */
-TYPELIB_PROC  PLIST TYPELIB_CALLTYPE        DeleteListEx   ( PLIST *plist DBG_PASS );
+TYPELIB_PROC  void TYPELIB_CALLTYPE        DeleteListEx   ( PLIST *plist DBG_PASS );
 /* See <link AddLink>.
    See <link DBG_PASS>. */
-TYPELIB_PROC  PLIST TYPELIB_CALLTYPE        AddLinkEx      ( PLIST *pList, POINTER p DBG_PASS );
+TYPELIB_PROC  void TYPELIB_CALLTYPE        AddLinkEx      ( PLIST *pList, POINTER p DBG_PASS );
 /* Sets the value of a link at the specified index.
    Parameters
    pList :     address of a PLIST
    idx :       index of the element to set
    p :         new link value to be set at the specified index
    DBG_PASS :  debug file and line information                 */
-TYPELIB_PROC  PLIST TYPELIB_CALLTYPE        SetLinkEx      ( PLIST *pList, INDEX idx, POINTER p DBG_PASS );
+TYPELIB_PROC  void TYPELIB_CALLTYPE        SetLinkEx      ( PLIST *pList, INDEX idx, POINTER p DBG_PASS );
 /* Gets the link at the specified index.
    Parameters
    pList :  address of a PLIST pointer.
@@ -1860,6 +1889,8 @@ TYPELIB_PROC  INDEX TYPELIB_CALLTYPE        FindLink       ( PLIST *pList, POINT
 	   number of things in the list.
 */
 TYPELIB_PROC  INDEX TYPELIB_CALLTYPE        GetLinkCount   ( PLIST pList );
+#define GetLinkCount(l) GetLinksUsed(&(l))
+TYPELIB_PROC  INDEX TYPELIB_CALLTYPE        GetLinksUsed( PLIST *pList );
 /* Uses FindLink on the list for the value to delete, and then
    sets the index of the found link to NULL.
    Parameters
@@ -1886,7 +1917,7 @@ TYPELIB_PROC  void TYPELIB_CALLTYPE         EmptyList      ( PLIST *pList );
 typedef class iList
 {
 public:
-	PLIST list;
+	volatile PLIST list;
 	INDEX idx;
 	inline iList() { list = CreateListEx( DBG_VOIDSRC ); }
 	inline ~iList() { DeleteListEx( &list DBG_SRC ); }
@@ -1951,7 +1982,7 @@ TYPELIB_PROC  uintptr_t TYPELIB_CALLTYPE     ForAllLinks    ( PLIST *pList, ForP
    the list for something, then p will be non-null at the end of
    the loop.
                                                                                          */
-#define LIST_FORALL( l, i, t, v )  if(((v)=(t)NULL),(l))                                                        for( ((i)=0); ((i) < ((l)->Cnt))?                                         (((v)=(t)(uintptr_t)((l)->pNode[i])),1):(((v)=(t)NULL),0); (i)++ )  if( v )
+#define LIST_FORALL( l, i, t, v )  if(((i)=0),((v)=(t)(uintptr_t)NULL),(l))                                                        for( ; ((i) < ((l)->Cnt))?                                         (((v)=(t)(uintptr_t)((l)->pNode[i])),1):(((v)=(t)(uintptr_t)NULL),0); (i)++ )  if( v )
 /* This can be used to continue iterating through a list after a
    LIST_FORALL has been interrupted.
    Parameters
@@ -2024,7 +2055,10 @@ TYPELIB_PROC  uintptr_t TYPELIB_CALLTYPE     ForAllLinks    ( PLIST *pList, ForP
 	}
 #endif
 //--------------------------------------------------------
-_DATALIST_NAMESPACE
+#ifdef __cplusplus
+/* A type of dynamic array that contains the data of the elements and not just pointers like PLIST. Has no locks builtin. */
+namespace data_list {
+#endif
 /* Creates a data list which hold data elements of the specified
    size.
                                                                  */
@@ -2094,7 +2128,7 @@ TYPELIB_PROC  void TYPELIB_CALLTYPE       EmptyDataList ( PDATALIST *ppdl );
       }
    }
    </code>                                               */
-#define DATA_FORALL( l, i, t, v )  if(((v)=(t)NULL),(l)&&((l)->Cnt != INVALID_INDEX))	   for( ((i)=0);	                         (((i) < (l)->Cnt)                                             ?(((v)=(t)((l)->data + (uintptr_t)(((l)->Size) * (i)))),1)	         :(((v)=(t)NULL),0))&&(v); (i)++ )
+#define DATA_FORALL( l, i, t, v )  if(((i)=0),((v)=(t)NULL),(l)&&((l)->Cnt != INVALID_INDEX))	   for( ;	                                               (((i) < (l)->Cnt)                                             ?(((v)=(t)((l)->data + (uintptr_t)(((l)->Size) * (i)))),1)	         :(((v)=(t)NULL),0))&&(v); (i)++ )
 /* <code>
    PDATALIST pdl;
    pdl = CreateDataList( sizeof( int ) );
@@ -2110,7 +2144,7 @@ TYPELIB_PROC  void TYPELIB_CALLTYPE       EmptyDataList ( PDATALIST *ppdl );
       }
    }
    </code>                                   */
-#define DATA_NEXTALL( l, i, t, v )  if(((v)=(t)NULL),(l))	   for( ((i)++);	                         ((i) < (l)->Cnt)                                             ?((v)=(t)((l)->data + (((l)->Size) * (i))))	         :(((v)=(t)NULL),0); (i)++ )
+#define DATA_NEXTALL( l, i, t, v )  if(((v)=(t)NULL),(l))	   for( ((i)++);	                         ((i) < (l)->Cnt)                                             ?(((v)=(t)((l)->data + (((l)->Size) * (i)))),1)	         :(((v)=(t)NULL),0); (i)++ )
 /* <combine sack::containers::data_list::CreateDataListEx@uintptr_t nSize>
    Creates a DataList specifying just the size. Uses the current
    source and line for debugging parameter.                               */
@@ -2168,7 +2202,7 @@ TYPELIB_PROC  void TYPELIB_CALLTYPE         DeleteLinkStackEx( PLINKSTACK *pls D
    more space. Since the address of the pointer is passed, the
    pointer is already updated, and the return value is
    unimportant.                                                */
-TYPELIB_PROC  PLINKSTACK TYPELIB_CALLTYPE   PushLinkEx       ( PLINKSTACK *pls, POINTER p DBG_PASS);
+TYPELIB_PROC  void TYPELIB_CALLTYPE   PushLinkEx       ( PLINKSTACK *pls, POINTER p DBG_PASS);
 /* Reads the top value of the stack and returns it, removes top
    link on the stack.
    Parameters
@@ -2216,13 +2250,24 @@ TYPELIB_PROC  POINTER TYPELIB_CALLTYPE      PeekLinkEx         ( PLINKSTACK *pls
    Parameters
    size :       size of elements in the stack
    DBG_PASS :  debug file and line information.                 */
+TYPELIB_PROC  void TYPELIB_CALLTYPE   MakeDataStackEx( PDATASTACK *pds, size_t size DBG_PASS );
+/* Creates a data stack for data element of the specified size.
+   Parameters
+   size :       size of elements in the stack
+   DBG_PASS :  debug file and line information.                 */
 TYPELIB_PROC  PDATASTACK TYPELIB_CALLTYPE   CreateDataStackEx( size_t size DBG_PASS );
 /* Creates a data stack for data element of the specified size.
    Parameters
    size :       size of items in the stack
    count :      max items in stack (oldest gets deleted)
    DBG_PASS :  debug file and line information.                 */
-TYPELIB_PROC  PDATASTACK TYPELIB_CALLTYPE   CreateDataStackLimitedEx( size_t size, INDEX count DBG_PASS );
+TYPELIB_PROC  void TYPELIB_CALLTYPE   MakeDataStackLimitedEx( PDATASTACK *pds, size_t size, INDEX count DBG_PASS );
+/* Creates a data stack for data element of the specified size.
+   Parameters
+   size :       size of items in the stack
+   count :      max items in stack (oldest gets deleted)
+   DBG_PASS :  debug file and line information.                 */
+TYPELIB_PROC PDATASTACK TYPELIB_CALLTYPE CreateDataStackLimitedEx( size_t size, INDEX count DBG_PASS );
 /* Destroys a data stack.
    Parameters
    pds :       address of a data stack pointer. The pointer will
@@ -2235,7 +2280,7 @@ TYPELIB_PROC  void TYPELIB_CALLTYPE         DeleteDataStackEx( PDATASTACK *pds D
    pds :       address of a data stack pointer
    p :         pointer to data to push on stack
    DBG_PASS :  debug file and line information                 */
-TYPELIB_PROC  PDATASTACK TYPELIB_CALLTYPE   PushDataEx     ( PDATASTACK *pds, POINTER pdata DBG_PASS );
+TYPELIB_PROC void TYPELIB_CALLTYPE PushDataEx( PDATASTACK *pds, POINTER pdata DBG_PASS );
 /* \Returns an allocated buffer containing the data on the
    stack. Removes item from the stack.
    Parameters
@@ -2282,18 +2327,22 @@ TYPELIB_PROC  POINTER TYPELIB_CALLTYPE      PeekDataEx     ( PDATASTACK *pds, IN
 /* Creates a <link sack::containers::PLINKQUEUE, LinkQueue>. In
    debug mode, gets passed the current source and file so it can
    blame the user for the allocation.                            */
+TYPELIB_PROC  void TYPELIB_CALLTYPE   MakeLinkQueueEx( PLINKQUEUE *into DBG_PASS );
+/* Creates a <link sack::containers::PLINKQUEUE, LinkQueue>. In
+   debug mode, gets passed the current source and file so it can
+   blame the user for the allocation.                            */
 TYPELIB_PROC  PLINKQUEUE TYPELIB_CALLTYPE   CreateLinkQueueEx( DBG_VOIDPASS );
 /* Delete a link queue. Pass the address of the pointer to the
    queue to delete, this function sets the pointer to NULL if
    the queue is actually deleted.                              */
 TYPELIB_PROC  void TYPELIB_CALLTYPE         DeleteLinkQueueEx( PLINKQUEUE *pplq DBG_PASS );
 /* Enque a link to the queue.  */
-TYPELIB_PROC  PLINKQUEUE TYPELIB_CALLTYPE   EnqueLinkEx      ( PLINKQUEUE *pplq, POINTER link DBG_PASS );
+TYPELIB_PROC  void TYPELIB_CALLTYPE   EnqueLinkEx      ( PLINKQUEUE *pplq, POINTER link DBG_PASS );
 TYPELIB_PROC  void TYPELIB_CALLTYPE   EnqueLinkNLEx( PLINKQUEUE *pplq, POINTER link DBG_PASS );
 /* EnqueLink adds the new item at the end of the list. PrequeueLink
    puts the new item at the head of the queue (so it's the next
    one to be retrieved).                                            */
-TYPELIB_PROC  PLINKQUEUE TYPELIB_CALLTYPE   PrequeLinkEx      ( PLINKQUEUE *pplq, POINTER link DBG_PASS );
+TYPELIB_PROC void TYPELIB_CALLTYPE PrequeLinkEx( PLINKQUEUE *pplq, POINTER link DBG_PASS );
 /* If the queue is not empty, returns the address of the next
    element in the queue and removes the element from the queue.
                                                                 */
@@ -2342,7 +2391,15 @@ TYPELIB_PROC  POINTER TYPELIB_CALLTYPE      PeekQueue    ( PLINKQUEUE plq );
 #endif
 /* Creates a PDATAQUEUE. Can pass DBG_FILELINE information to
    blame other code for the allocation.                       */
+TYPELIB_PROC  void TYPELIB_CALLTYPE   MakeDataQueueEx( PDATAQUEUE *into, INDEX size DBG_PASS );
+/* Creates a PDATAQUEUE. Can pass DBG_FILELINE information to
+   blame other code for the allocation.                       */
 TYPELIB_PROC  PDATAQUEUE TYPELIB_CALLTYPE   CreateDataQueueEx( INDEX size DBG_PASS );
+/* Creates a PDATAQUEUE that has an overridden expand-by amount
+   and initial amount of entries in the queue. (expecting
+   something like 1000 to start and expand by 500, instead of
+   the default 0, and expand by 1.                              */
+TYPELIB_PROC void TYPELIB_CALLTYPE MakeLargeDataQueueEx( PDATAQUEUE *pdq, INDEX size, INDEX entries, INDEX expand DBG_PASS );
 /* Creates a PDATAQUEUE that has an overridden expand-by amount
    and initial amount of entries in the queue. (expecting
    something like 1000 to start and expand by 500, instead of
@@ -2351,10 +2408,10 @@ TYPELIB_PROC  PDATAQUEUE TYPELIB_CALLTYPE   CreateLargeDataQueueEx( INDEX size, 
 /* Destroys a data queue. */
 TYPELIB_PROC  void TYPELIB_CALLTYPE         DeleteDataQueueEx( PDATAQUEUE *pplq DBG_PASS );
 /* Add a data element into the queue. */
-TYPELIB_PROC  PDATAQUEUE TYPELIB_CALLTYPE   EnqueDataEx      ( PDATAQUEUE *pplq, POINTER Data DBG_PASS );
+TYPELIB_PROC  void TYPELIB_CALLTYPE   EnqueDataEx      ( PDATAQUEUE *pplq, POINTER Data DBG_PASS );
 /* Enque data at the head of the queue instead of the tail. (Normally
    add at tail, take from head).                                      */
-TYPELIB_PROC  PDATAQUEUE TYPELIB_CALLTYPE   PrequeDataEx      ( PDATAQUEUE *pplq, POINTER Data DBG_PASS );
+TYPELIB_PROC void TYPELIB_CALLTYPE PrequeDataEx( PDATAQUEUE *pplq, POINTER Data DBG_PASS );
 /* Removes data from a queue, resulting with the data in the
    specified buffer, and result TRUE if there was an element
    else FALSE, and the buffer is not modified.               */
@@ -2366,6 +2423,8 @@ TYPELIB_PROC  LOGICAL TYPELIB_CALLTYPE      UnqueData        ( PDATAQUEUE *pplq,
 TYPELIB_PROC  LOGICAL TYPELIB_CALLTYPE      IsDataQueueEmpty ( PDATAQUEUE *pplq );
 /* Empty a dataqueue of all data. (Sets head=tail). */
 TYPELIB_PROC  void TYPELIB_CALLTYPE         EmptyDataQueue ( PDATAQUEUE *pplq );
+/* returns how many entries are in the queue. */
+TYPELIB_PROC  INDEX   TYPELIB_CALLTYPE      GetDataQueueLength( PDATAQUEUE pdq );
 /*
  * get a PDATAQUEUE element at index
  * result buffer is a pointer to the type of structure expected to be
@@ -2419,6 +2478,8 @@ TYPELIB_PROC POINTER TYPELIB_CALLTYPE  PeekDataInQueue    ( PDATAQUEUE *pplq );
 #endif
 //---------------------------------------------------------------------------
 #ifdef __cplusplus
+/* This is a rough emulation of SYSv IPC Message Queue objects.
+*/
 namespace message {
 #endif
 /* handle to a message queue. */
@@ -2592,12 +2653,13 @@ _SETS_NAMESPACE
 #define CPP_(n)
 #endif
 // requires a symbol of MAX<insert name>SPERSET to declare max size...
- //ndef __cplusplus
-#if 1
 #define SizeOfSet(size,count)  (sizeof(POINTER)*2+sizeof(int)+sizeof( uint32_t[((count)+31)/32] ) + ((size)*(count)))
+// declare a type that is a set; this type isn't used internally, but is used for
+// some utility macros, and to get the size of memory to allocate a set block.
 #define DeclareSet( name )  typedef struct name##set_tag {	   struct name##set_tag *next, *prior;	                      uint32_t nUsed;	                                               uint32_t nBias;	                                               uint32_t bUsed[(MAX##name##SPERSET + 31 ) / 32];	              name p[MAX##name##SPERSET];	                           CPP_(int forall(uintptr_t(CPROC*f)(void*,uintptr_t),uintptr_t psv) {if( this ) return _ForAllInSet( (struct genericset_tag*)this, sizeof(name), MAX##name##SPERSET, f, psv ); else return 0; })	 CPP_(name##set_tag() { next = NULL;prior = NULL;nUsed = 0; nBias = 0; MemSet( bUsed, 0, sizeof( bUsed ) ); MemSet( p, 0, sizeof( p ) );} )	} name##SET, *P##name##SET
+// declare a set type that contains class elements; this type isn't used internally, but is used for
+// some utility macros, and to get the size of memory to allocate a set block.
 #define DeclareClassSet( name ) typedef struct name##set_tag {	   struct name##set_tag *next, *prior;	                      uint32_t nUsed;	                                               uint32_t nBias;	                                               uint32_t bUsed[(MAX##name##SPERSET + 31 ) / 32];	              class name p[MAX##name##SPERSET];	                        CPP_(int forall(uintptr_t(CPROC*)(void*f,uintptr_t),uintptr_t psv) {if( this ) return _ForAllInSet( (struct genericset_tag*)this, sizeof(class name), MAX##name##SPERSET, f, psv ); else return 0; })	 } name##SET, *P##name##SET
-#endif
 /* This represents the basic generic set structure. Addtional
    data is allocated at the end of this strcture to fit the bit
    array that maps usage of the set, and for the set size of
@@ -2759,7 +2821,7 @@ TYPELIB_PROC  void TYPELIB_CALLTYPE  DeleteFromSetExx( GENERICSET *set, POINTER 
 #define DeleteFromSetEx( name, set, member, xx ) DeleteFromSetExx( (GENERICSET*)set, member, sizeof( name ), MAX##name##SPERSET DBG_SRC )
 /* <combine sack::containers::sets::DeleteFromSetExx@GENERICSET *@POINTER@int@int max>
    \ \                                                                                 */
-#define DeleteFromSet( name, set, member ) DeleteFromSetExx( (GENERICSET*)set, member, sizeof( name ), MAX##name##SPERSET DBG_SRC )
+#define DeleteFromSet( name, set, member ) DeleteFromSetExx( (GENERICSET*)set, (POINTER)member, sizeof( name ), MAX##name##SPERSET DBG_SRC )
 /* Marks a member in a set as usable.
    Parameters
    set :       pointer to a genericset pointer
@@ -3442,7 +3504,7 @@ TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFrom_64Ex( int64_t value DBG_PASS
 /* \    See Also
    <link DBG_PASS>
    <link SegCreateFromFloat> */
-TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromFloatEx( float value DBG_PASS );
+TYPELIB_PROC  PTEXT TYPELIB_CALLTYPE  SegCreateFromFloatEx( double value DBG_PASS );
 /* Creates a text segment from a floating point value. Probably
    uses something like '%g' to format output. Fairly limited.
    Example
@@ -4139,7 +4201,15 @@ TYPELIB_PROC TEXTSTR TYPELIB_CALLTYPE ConvertTextURI( CTEXTSTR text, INDEX lengt
    \result == https://www.google.com/#hl=en&amp;sugexp=eqn&amp;cp=11&amp;gs_id=1a&amp;xhr=t&amp;q=;+\\+++:+
    </code>                                                                                                                        */
 TYPELIB_PROC TEXTSTR TYPELIB_CALLTYPE ConvertURIText( CTEXTSTR text, INDEX length );
+/* Parses a string that contains a comma separated list of
+   strings into an array of strings. Has no quoting support, and
+   simply parses on any comma in a string.
+   Parameters
+   \ \
+                                                                 */
 TYPELIB_PROC LOGICAL TYPELIB_CALLTYPE ParseStringVector( CTEXTSTR data, CTEXTSTR **pData, int *nData );
+/* Parses a string with numbers separated by commas into an
+   array of ints.                                           */
 TYPELIB_PROC LOGICAL TYPELIB_CALLTYPE ParseIntVector( CTEXTSTR data, int **pData, int *nData );
 #ifdef __cplusplus
  //namespace text {
@@ -4147,6 +4217,8 @@ TYPELIB_PROC LOGICAL TYPELIB_CALLTYPE ParseIntVector( CTEXTSTR data, int **pData
 #endif
 //--------------------------------------------------------------------------
 #ifdef __cplusplus
+/* Binary tree object; supports custom sort routines
+*/
 	namespace BinaryTree {
 #endif
 /* This type defines a specific node in the tree. It is entirely
@@ -4317,9 +4389,12 @@ TYPELIB_PROC  void TYPELIB_CALLTYPE  RemoveBinaryNode( PTREEROOT root, POINTER u
    </code>                                          */
 TYPELIB_PROC  CPOINTER TYPELIB_CALLTYPE  FindInBinaryTree( PTREEROOT root, uintptr_t key );
 // result of fuzzy routine is 0 = match.  100 = inexact match
+// 101 = no longer matching; result with last 100 match.
 // 1 = no match, actual may be larger
 // -1 = no match, actual may be lesser
 // 100 = inexact match- checks nodes near for better match.
+//
+// Basically scans left and right from 100 match to find best match.
 TYPELIB_PROC  CPOINTER TYPELIB_CALLTYPE  LocateInBinaryTree( PTREEROOT root, uintptr_t key
 														, int (CPROC*fuzzy)( uintptr_t psv, uintptr_t node_key ) );
 /* During FindInBinaryTree and LocateInBinaryTree, the last
@@ -4536,7 +4611,9 @@ using namespace sack::containers;
 // Revision 1.39  2003/03/25 08:38:11  panther
 // Add logging
 //
-SACK_NAMESPACE
+#ifdef __cplusplus
+namespace sack {
+#endif
 #ifndef IS_DEADSTART
 // this is always statically linked with libraries, so they may contact their
 // core executable to know when it's done loading everyone else also...
@@ -4592,8 +4669,10 @@ IMPORT_METHOD
 #ifndef NO_SACK_EXIT_OVERRIDE
 #define exit(n) BAG_Exit(n)
 #endif
- // namespace sack {
-SACK_NAMESPACE_END
+#ifdef __cplusplus
+ //SACK_NAMESPACE_END // namespace sack {
+}
+#endif
 // this should become common to all libraries and programs...
 //#include <construct.h> // pronounced 'kahn-struct'
 /*
@@ -4744,8 +4823,9 @@ typedef void (CPROC*UserLoggingCallback)( CTEXTSTR log_string );
 SYSLOG_PROC  void SYSLOG_API  SetSystemLog ( enum syslog_types type, const void *data );
 SYSLOG_PROC  void SYSLOG_API  ProtectLoggedFilenames ( LOGICAL bEnable );
 SYSLOG_PROC  void SYSLOG_API  SystemLogFL ( CTEXTSTR FILELINE_PASS );
-SYSLOG_PROC  void SYSLOG_API  SystemLogEx ( CTEXTSTR DBG_PASS );
-SYSLOG_PROC  void SYSLOG_API  SystemLog ( CTEXTSTR );
+//SYSLOG_PROC  void SYSLOG_API  SystemLogEx ( CTEXTSTR DBG_PASS );
+//SYSLOG_PROC  void SYSLOG_API  SystemLog ( CTEXTSTR );
+SYSLOG_PROC  void SYSLOG_API  BinaryToString( PVARTEXT pvt, const uint8_t* buffer, size_t size DBG_PASS );
 SYSLOG_PROC  void SYSLOG_API  LogBinaryFL ( const uint8_t* buffer, size_t size FILELINE_PASS );
 SYSLOG_PROC  void SYSLOG_API  LogBinaryEx ( const uint8_t* buffer, size_t size DBG_PASS );
 SYSLOG_PROC  void SYSLOG_API  LogBinary ( const uint8_t* buffer, size_t size );
@@ -4767,12 +4847,14 @@ SYSLOG_PROC  void SYSLOG_API  SetSystemLoggingLevel ( uint32_t nLevel );
    The '.' at the end of 'sample string' is a non printable
    character. characters 0-31 and 127+ are printed as '.'.       */
 #define LogBinary(buf,sz) LogBinaryFL((uint8_t*)(buf),sz DBG_SRC )
+#define SystemLogEx(buf,...) SystemLogFL(buf,##__VA_ARGS__)
 #define SystemLog(buf)    SystemLogFL(buf DBG_SRC )
 #else
 // need to include the typecast... binary logging doesn't really care what sort of pointer it gets.
 #define LogBinary(buf,sz) LogBinary((uint8_t*)(buf),sz )
 //#define LogBinaryEx(buf,sz,...) LogBinaryFL(buf,sz FILELINE_NULL)
-//#define SystemLogEx(buf,...) SystemLogFL(buf FILELINE_NULL )
+#define SystemLogEx(buf,...) SystemLogFL(buf FILELINE_NULL )
+#define SystemLog(buf)    SystemLogFL(buf FILELINE_NULL )
 #endif
 // int result is useless... but allows this to be
 // within expressions, which with this method should be easy.
@@ -4960,11 +5042,11 @@ enum SyslogTimeSpecifications {
 /* Specify how time is logged. */
 SYSLOG_PROC void SYSLOG_API SystemLogTime( uint32_t enable );
 #ifndef NO_LOGGING
-#define OutputLogString(s) SystemLog(s)
+#define OutputLogString(s) SystemLogFL(s FILELINE_SRC )
 /* Depricated. Logs a format string that takes 0 parameters.
    See Also
    <link sack::logging::lprintf, lprintf>                    */
-#define Log(s)                                   SystemLog( s )
+#define Log(s)                                   SystemLogFL( s FILELINE_SRC )
 #else
 #define OutputLogString(s)
 /* Depricated. Logs a format string that takes 0 parameters.
@@ -5012,8 +5094,9 @@ SYSLOG_PROC void SYSLOG_API SystemLogTime( uint32_t enable );
    See Also
    <link sack::logging::lprintf, lprintf>                    */
 #define Log10(s,p1,p2,p3,p4,p5,p6,p7,p8,p9,p10)  lprintf( s, p1, p2, p3,p4,p5,p6,p7,p8,p9,p10 )
-LOGGING_NAMESPACE_END
 #ifdef __cplusplus
+ //LOGGING_NAMESPACE_END
+} }
 using namespace sack::logging;
 #endif
 #endif
@@ -5027,19 +5110,62 @@ using namespace sack::logging;
 // if( SUS_GT( 324, int, 545, unsigned int ) ) {
 //    is >
 // }
+/* Compare two numbers a>b, the first being signed and the second
+   being unsigned. Compares only within overlapping ranges else
+   \returns condition of non-overlap.
+   at is the type of a and bt is the type of b
+*/
 #  define SUS_GT(a,at,b,bt)   (((a)<0)?0:(((bt)a)>(b)))
+/* Compare two numbers a>b, the first being unsigned and the second
+   being signed. Compares only within overlapping ranges else
+   \returns condition of non-overlap.
+   at is the type of a and bt is the type of b
+*/
 #  define USS_GT(a,at,b,bt)   (((b)<0)?1:((a)>((at)b)))
+/* Compare two numbers, the first being unsigned and the second
+   being signed. Compares only within overlapping ranges else
+   \returns condition of non-overlap.
+   at is the type of a and bt is the type of b
+*/
 #  define SUS_LT(a,at,b,bt)   (((a)<0)?1:(((bt)a)<(b)))
+/* Compare two numbers, the first being unsigned and the second
+   being signed. Compares only within overlapping ranges else
+   \returns condition of non-overlap.
+   at is the type of a and bt is the type of b
+*/
 #  define USS_LT(a,at,b,bt)   (((b)<0)?0:((a)<((at)b)))
+/* Compare two numbers a>=b, the first being signed and the second
+   being unsigned. Compares only within overlapping ranges else
+   \returns condition of non-overlap.
+   at is the type of a and bt is the type of b
+*/
 #  define SUS_GTE(a,at,b,bt)  (((a)<0)?0:(((bt)a)>=(b)))
+/* Compare two numbers a>=b, the first being unsigned and the second
+   being signed. Compares only within overlapping ranges else
+   \returns condition of non-overlap.
+   at is the type of a and bt is the type of b
+*/
 #  define USS_GTE(a,at,b,bt)  (((b)<0)?1:((a)>=((at)b)))
+/* Compare two numbers a<=b, the first being signed and the second
+   being unsigned. Compares only within overlapping ranges else
+   \returns condition of non-overlap.
+   at is the type of a and bt is the type of b
+*/
 #  define SUS_LTE(a,at,b,bt)  (((a)<0)?1:(((bt)a)<=(b)))
+/* Compare two numbers a<=b, the first being unsigned and the second
+   being signed. Compares only within overlapping ranges else
+   \returns condition of non-overlap.
+   at is the type of a and bt is the type of b
+*/
 #  define USS_LTE(a,at,b,bt)  (((b)<0)?0:((a)<=((at)b)))
 #if 0
 // simplified meanings of the macros
 #  define SUS_GT(a,at,b,bt)   ((a)>(b))
 #  define USS_GT(a,at,b,bt)   ((a)>(b))
 #  define SUS_LT(a,at,b,bt)   ((a)<(b))
+/* Compare two numbers, the first being unsigned and the second
+   being signed. Compares only within overlapping ranges else
+   \returns condition of non-overlap.                           */
 #  define USS_LT(a,at,b,bt)   ((a)<(b))
 #  define SUS_GTE(a,at,b,bt)  ((a)>=(b))
 #  define USS_GTE(a,at,b,bt)  ((a)>=(b))
@@ -5090,8 +5216,13 @@ using namespace sack::containers;
 #ifndef UNDER_CE
 #define HAVE_ENVIRONMENT
 #endif
-SACK_NAMESPACE
-	_SYSTEM_NAMESPACE
+#ifdef __cplusplus
+namespace sack {
+  /*
+    System interface namespace has Tasks, Environment, and dynamic library loading.
+  */
+	namespace system {
+#endif
 typedef struct task_info_tag *PTASK_INFO;
 typedef void (CPROC*TaskEnd)(uintptr_t, PTASK_INFO task_ended);
 typedef void (CPROC*TaskOutput)(uintptr_t, PTASK_INFO task, CTEXTSTR buffer, size_t size );
@@ -5106,10 +5237,30 @@ typedef void (CPROC*TaskOutput)(uintptr_t, PTASK_INFO task, CTEXTSTR buffer, siz
 #define LPP_OPTION_NEW_CONSOLE          16
 #define LPP_OPTION_SUSPEND              32
 #define LPP_OPTION_ELEVATE              64
+// use ctrl-break instead of ctrl-c for break (see also LPP_OPTION_USE_SIGNAL)
+#define LPP_OPTION_USE_CONTROL_BREAK   128
+// specify CREATE_NO_WINDOW in create process
+#define LPP_OPTION_NO_WINDOW           256
+// use process signal to kill process instead of ctrl-c or ctrl-break
+#define LPP_OPTION_USE_SIGNAL          512
+// This might be a useful windows option in some cases
+#define LPP_OPTION_DETACH             1024
+// this is a Linux option - uses forkpty() instead of just fork() to
+// start a process - meant for interactive processes.
+#define LPP_OPTION_INTERACTIVE        2048
 struct environmentValue {
 	char* field;
 	char* value;
 };
+/**
+ start process end monitoring based on a process ID
+ */
+SYSTEM_PROC( PTASK_INFO, MonitorTaskEx )( int pid, int flags, TaskEnd EndNotice, uintptr_t psv DBG_PASS );
+#define MonitorTask(pid,flags,end,psv) MonitorTaskEx( pid, flags, end, psv DBG_SRC )
+/**
+ Launch a process...
+ provides hoooks for task output, task end notification, flags control spawning behavior...
+ */
 SYSTEM_PROC( PTASK_INFO, LaunchPeerProgramExx )( CTEXTSTR program, CTEXTSTR path, PCTEXTSTR args
                                                , int flags
                                                , TaskOutput OutputHandler
@@ -5134,6 +5285,16 @@ SYSTEM_PROC( PTASK_INFO, LaunchProgram )( CTEXTSTR program, CTEXTSTR path, PCTEX
 // abort task, no kill signal, sigabort basically.  Use StopProgram for a more graceful terminate.
 // if (!StopProgram(task)) TerminateProgram(task) would be appropriate.
 SYSTEM_PROC( uintptr_t, TerminateProgram )( PTASK_INFO task );
+enum terminate_program_flags {
+	TERMINATE_PROGRAM_CHAIN = 1,
+	TERMINATE_PROGRAM_CHILDMOST = 2,
+};
+// abort task, no kill signal, sigabort basically.  Use StopProgram for a more graceful terminate.
+// if (!StopProgram(task)) TerminateProgram(task) would be appropriate.
+// additional flags from the enum terminate_program_flags may be used.
+//   _CHAIN = terminate the whole chain, starting from child-most task.
+//   _CHILDMOST = terminate the youngest child in the chain.
+SYSTEM_PROC( uintptr_t, TerminateProgramEx )( PTASK_INFO task, int options );
 SYSTEM_PROC( void, ResumeProgram )( PTASK_INFO task );
 // get first address of program startup code(?) Maybe first byte of program code?
 SYSTEM_PROC( uintptr_t, GetProgramAddress )( PTASK_INFO task );
@@ -5161,6 +5322,8 @@ SYSTEM_PROC( uint32_t, GetTaskExitCode )( PTASK_INFO task );
 SYSTEM_PROC( CTEXTSTR, GetProgramName )( void );
 // returns the path of the executable that is this process
 SYSTEM_PROC( CTEXTSTR, GetProgramPath )( void );
+// this approximates the install path, as the parent of a program in /bin/ so GetProgramPath()/..; otherwise is TARGET_INSTALL_PREFIX
+SYSTEM_PROC( CTEXTSTR, GetInstallPath )( void );
 // returns the path that was the working directory when the program started
 SYSTEM_PROC( CTEXTSTR, GetStartupPath )( void );
 // returns the path of the current sack library.
@@ -5189,6 +5352,8 @@ SYSTEM_PROC( int, pprintf )( PTASK_INFO task, CTEXTSTR format, ... );
 // if a task has been opened with an otuput handler, than IO is trapped, and this is a method of
 // sending output to a task.
 SYSTEM_PROC( int, vpprintf )( PTASK_INFO task, CTEXTSTR format, va_list args );
+// send data to child process.  buffer is an array of bytes of length buflen
+SYSTEM_PROC( size_t, task_send )( PTASK_INFO task, const uint8_t*buffer, size_t buflen );
 typedef void (CPROC*generic_function)(void);
 SYSTEM_PROC( generic_function, LoadFunctionExx )( CTEXTSTR library, CTEXTSTR function, LOGICAL bPrivate DBG_PASS);
 SYSTEM_PROC( generic_function, LoadFunctionEx )( CTEXTSTR library, CTEXTSTR function DBG_PASS);
@@ -5238,8 +5403,124 @@ SYSTEM_PROC( LOGICAL, sack_system_allow_spawn )( void );
    Disallow task spawning.
 */
 SYSTEM_PROC( void, sack_system_disallow_spawn )( void );
-SACK_SYSTEM_NAMESPACE_END
+#ifdef __ANDROID__
+// sets the path the program using this is at
+SYSTEM_PROC(void, SACKSystemSetProgramPath)( CTEXTSTR path );
+// sets the name of the program using this library
+SYSTEM_PROC(void, SACKSystemSetProgramName)( CTEXTSTR name );
+// sets the current working path of the system using this library(getcwd doesn't work?)
+SYSTEM_PROC(void, SACKSystemSetWorkingPath)( CTEXTSTR name );
+// Set the path of this library.
+SYSTEM_PROC(void, SACKSystemSetLibraryPath)( CTEXTSTR name );
+#endif
+#if _WIN32
+/*
+  moves the window of the task; if there is a main window for the task within the timeout perioud.
+  callback is called when the window is moved; this allows a background thread to wait
+  until the task has created its window.
+*/
+SYSTEM_PROC( void, MoveTaskWindow )( PTASK_INFO task, int timeout, int left, int top, int width, int height, void cb( uintptr_t, LOGICAL ), uintptr_t psv );
+/*
+  sets styles for window (class and window style attributes)
+  runs a thread which is able to wait for the task's window to be created.  callback is called when completed.
+  If no callback is supplied, there is no notification of success or failure.
+  `int` status passed to the callback is a combination of statuses for window(1), windowEx(2), and class(4) styles
+  and is 7 if all styles are set successfully.
+  -1 can be passed as a style value to prevent updates to that style type.
+*/
+SYSTEM_PROC( void, StyleTaskWindow )( PTASK_INFO task, int timeout, int windowStyle, int windowExStyle, int classStyle, void cb( uintptr_t, int ), uintptr_t psv );
+/*
+  Moves the window of the specified task to the specified display device; using a lookup to get the display size.
+  -1 is an invalid display.
+  0 is the default display
+  1+ is the first display and subsequent displays - one of which may be the default
+*/
+SYSTEM_PROC( void, MoveTaskWindowToDisplay )( PTASK_INFO task, int timeout, int display, void cb( uintptr_t, LOGICAL ), uintptr_t psv );
+/*
+  Moves the window of the specified task to the specified monitor; using a lookup to get the display size.
+  0 and less is an invalid display.
+  1+ is the first monitor and subsequent monitors
+*/
+SYSTEM_PROC( void, MoveTaskWindowToMonitor )( PTASK_INFO task, int timeout, int display, void cb( uintptr_t, LOGICAL ), uintptr_t psv );
+/*
+* Creates a process-identified exit event which can be signaled to terminate the process.
+*/
+SYSTEM_PROC( void, EnableExitEvent )( void );
+/*
+  Add callback which is called when the exit event is executed.
+  The callback can return non-zero to prevent the task from exiting; but the event is no
+  longer valid, and cannot be triggered again.
+*/
+SYSTEM_PROC( void, AddKillSignalCallback )( int( *cb )( uintptr_t ), uintptr_t );
+/*
+  Remove a callback which was added to event callback list.
+*/
+SYSTEM_PROC( void, RemoveKillSignalCallback )( int( *cb )( uintptr_t ), uintptr_t );
+/*
+  Refresh internal window handle for task; uses internal handle as cached value for performance.
+*/
+SYSTEM_PROC( HWND, RefreshTaskWindow )( PTASK_INFO task );
+/*
+  Returns a character string with the window title in it.  If the window is not found for
+  the task the string is "No Window".
+  The caller is responsible for releasing the string buffer;
+*/
+SYSTEM_PROC( char*, GetWindowTitle )( PTASK_INFO task );
+struct process_tree_pair {
+    int process_id;
+    INDEX parent_id;
+    INDEX child_id;
+    INDEX next_id;
+};
+/*
+  returns a datalist of process_tree_pair members;
+    parent_id is an index into the datalist...
+    current = GetDataItem( &pdlResult, 0)
+    while( current->child_id >= 0 ) {
+      current = GetDataItem( &pdlResult,current->child_id );
+    }
+    // although that doesn't account for peers - and assumes a linear
+    // child list.
+    struct depth_node {
+      struct process_tree_pair *pair;
+      int level;
+    }
+    PDATASTACK stack = CreateDataStack( sizeof( struct depth_node ));
+    struct depth_node node;
+    struct depth_node deepest_node;
+    deepest_node.level = -1;
+    node.pair = GetDataItem( &pdlResult, 0);
+    node.level = 0;
+    PushData( &node );
+    while( current = PopData( &stack ) ) {
+      if( current->child_id >= 0 ){
+        node.pair = GetDataItem( &pdlResult, current->child_id );
+        node.level = current.level+1;
+        if( node.level > deepest_node.level ) {
+          deepest_node = node;
+        }
+        PushData( &node );
+      }
+      if( current->next_id >= 0 ){
+        node.pair = GetDataItem( &pdlResult, current->next_id );
+        node.level = current.level;
+        PushData( &node );
+      }
+    }
+*/
+SYSTEM_PROC( PDATALIST, GetProcessTree )( PTASK_INFO task );
+#endif
+#ifdef __LINUX__
+/*
+  Processes launched with LPP_OPTION_INTERACTIVE have a PTY handle.
+  This retrieves that handle so things like setting terminal size can
+  be done.
+*/
+SYSTEM_PROC( int, GetTaskPTY )( PTASK_INFO task );
+#endif
 #ifdef __cplusplus
+ // SACK_SYSTEM_NAMESPACE_END
+} }
 using namespace sack::system;
 #endif
 #endif
@@ -5293,8 +5574,12 @@ typedef struct addrinfoW {
     struct addrinfoW    *ai_next;
 } ADDRINFOW;
 typedef ADDRINFOW   *PADDRINFOW;
+/* Compatibility declaration for MinGW (use MinGW64 to build now
+   please?)                                                      */
 typedef ADDRINFOA   ADDRINFOT;
 typedef ADDRINFOA   *PADDRINFOT;
+/* Compatibility declaration for MinGW (use MinGW64 to build now
+   please?)                                                      */
 typedef ADDRINFOA   ADDRINFO;
 typedef ADDRINFOA   *LPADDRINFO;
 #endif
@@ -5403,6 +5688,7 @@ typedef struct win_sockaddr_in SOCKADDR_IN;
 #if defined( _WIN32 )
 // on windows, we add a function that returns HANDLE
 #endif
+/* Memory interface. see <link memory>, */
 #ifndef SHARED_MEM_DEFINED
 /* Multiple inclusion protection symbol. */
 #define SHARED_MEM_DEFINED
@@ -5440,16 +5726,25 @@ typedef struct win_sockaddr_in SOCKADDR_IN;
 #ifndef TIMER_NAMESPACE
 #ifdef __cplusplus
 #define _TIMER_NAMESPACE namespace timers {
+#define _TIMER_NAMESPACE_END }
 /* define a timer library namespace in C++. */
 #define TIMER_NAMESPACE SACK_NAMESPACE namespace timers {
 /* define a timer library namespace in C++ end. */
 #define TIMER_NAMESPACE_END } SACK_NAMESPACE_END
 #else
+#define _TIMER_NAMESPACE
+#define _TIMER_NAMESPACE_END
 #define TIMER_NAMESPACE
 #define TIMER_NAMESPACE_END
 #endif
 #endif
-	TIMER_NAMESPACE
+#ifdef __cplusplus
+namespace sack {
+/*
+   timer, timing, threading, and criticalsection.
+*/
+namespace timers {
+# endif
    // enables file/line monitoring of sections and a lot of debuglogging
 //#define DEBUG_CRITICAL_SECTIONS
    /* this symbol controls the logging in timers.c... (higher level interface to NoWait primatives)*/
@@ -5485,9 +5780,9 @@ typedef struct win_sockaddr_in SOCKADDR_IN;
    and probably failing to leave them.                          */
 struct critical_section_tag {
  // this is set when entering or leaving (updating)...
-	uint32_t dwUpdating;
+	volatile uint32_t dwUpdating;
   // count of locks entered.  (only low 24 bits may count for 16M entries, upper bits indicate internal statuses.
-	uint32_t dwLocks;
+	volatile uint32_t dwLocks;
  // windows upper 16 is process ID, lower is thread ID
 	THREAD_ID dwThreadID;
  // ID of thread waiting for this..
@@ -5800,7 +6095,7 @@ MEM_PROC  POINTER MEM_API  ReleaseEx ( POINTER pData DBG_PASS ) ;
 #else
 /* <combine sack::memory::ReleaseEx@POINTER pData>
    \ \                                             */
-#define Release(p) ReleaseEx( (p) DBG_SRC )
+#define Release(p) ReleaseEx( (POINTER)(p) DBG_SRC )
 #endif
 /* Adds a usage count to a block of memory. For each count
    added, an additional release must be used. This can be used
@@ -5827,7 +6122,7 @@ MEM_PROC  POINTER MEM_API  ReleaseEx ( POINTER pData DBG_PASS ) ;
 MEM_PROC  POINTER MEM_API  HoldEx ( POINTER pData DBG_PASS  );
 /* <combine sack::memory::HoldEx@POINTER pData>
    \ \                                          */
-#define Hold(p) HoldEx(p DBG_SRC )
+#define Hold(p) HoldEx((POINTER)p DBG_SRC )
 /* This can be used to add additional space after the end of a
    memory block.
    Parameters
@@ -5960,7 +6255,12 @@ MEM_PROC  void MEM_API  GetMemStats ( uint32_t *pFree, uint32_t *pUsed, uint32_t
    bTrueFalse :  if TRUE, allocation logging is turned on. Enables
                  logging when each block is Allocated, Released,
                  or Held.                                          */
-MEM_PROC  int MEM_API  SetAllocateLogging ( LOGICAL bTrueFalse );
+MEM_PROC  int MEM_API  SetAllocateLoggingEx ( LOGICAL bTrueFalse DBG_PASS );
+#define SetAllocateLogging(tf) SetAllocateLoggingEx( tf DBG_SRC )
+MEM_PROC  int MEM_API  ClearAllocateLoggingEx ( LOGICAL bTrueFalse DBG_PASS );
+#define ClearAllocateLogging(tf) ClearAllocateLoggingEx( tf DBG_SRC )
+MEM_PROC  int MEM_API  ResetAllocateLoggingEx ( LOGICAL bTrueFalse DBG_PASS );
+#define ResetAllocateLogging(tf) ResetAllocateLoggingEx( tf DBG_SRC )
 /* disables storing file/line, also disables auto GetMemStats
    checking
    Parameters
@@ -6101,6 +6401,43 @@ MEM_PROC  int MEM_API  StrCmp ( CTEXTSTR pOne, CTEXTSTR pTwo );
    if s2 is NULL and s1 is not NULL, return is 1.
    if s1 and s2 are NULL return is 0.              */
 MEM_PROC  int MEM_API  StrCaseCmp ( CTEXTSTR s1, CTEXTSTR s2 );
+/* Compares two strings, one utf8 and one utf16, case insensitively.
+	Parameters
+	s1 :  string to compare
+	s2 :  string to compare
+	Returns
+	0 if equal.
+	1 if (s1 \>s2)
+	\-1 if (s1 \< s2)
+	if s1 is NULL and s2 is not NULL, return is -1.
+	if s2 is NULL and s1 is not NULL, return is 1.
+	if s1 and s2 are NULL return is 0.              */
+MEM_PROC  int MEM_API StrCaseCmp_u8u16( const char* s1, const wchar_t* s2 );
+/* Compares two strings, one utf8 and one utf16, case insensitively.
+	Parameters
+	s1 :  string to compare
+	s2 :  string to compare
+	maxlen : maximum characters to compare
+	Returns
+	0 if equal.
+	1 if (s1 \>s2)
+	\-1 if (s1 \< s2)
+	if s1 is NULL and s2 is not NULL, return is -1.
+	if s2 is NULL and s1 is not NULL, return is 1.
+	if s1 and s2 are NULL return is 0.              */
+MEM_PROC  int MEM_API StrCaseCmpEx_u8u16( const char* s1, const wchar_t* s2, size_t maxLen );
+/* Compares two strings, both utf16, case insensitively.
+	Parameters
+	s1 :  string to compare
+	s2 :  string to compare
+	Returns
+	0 if equal.
+	1 if (s1 \>s2)
+	\-1 if (s1 \< s2)
+	if s1 is NULL and s2 is not NULL, return is -1.
+	if s2 is NULL and s1 is not NULL, return is 1.
+	if s1 and s2 are NULL return is 0.              */
+MEM_PROC  int MEM_API  StrCaseCmpW( const wchar_t* s1, const wchar_t* s2 );
 /* String insensitive case comparison with maximum length
    specified.
    Parameters
@@ -6157,6 +6494,18 @@ MEM_PROC  TEXTSTR MEM_API  StrCpy ( TEXTSTR s1, CTEXTSTR s2 );
    Returns
    length of string.                             */
 MEM_PROC  size_t MEM_API  StrLen ( CTEXTSTR s );
+/* \Returns the count of bytes in a string, which includes the \u0000 at the end.
+	Parameters
+	s :  string to measure (with wide characters)
+	Returns
+	length of string.                             */
+MEM_PROC  size_t MEM_API  StrBytesW( wchar_t const* s );
+/* \Returns the count of bytes in a string, if converted to utf8.
+	Parameters
+	s : wide string to measure (with wide characters)
+	Returns
+	length of string.                             */
+MEM_PROC  size_t MEM_API  StrBytesWu8( wchar_t const* s );
 /* Get the length of a string in C chars.
    Parameters
    s :  char * to count.
@@ -6170,7 +6519,15 @@ MEM_PROC  size_t MEM_API  CStrLen ( char const*s );
    Returns
    NULL if character is not in the string.
    a pointer to the last character in s1 that matches c. */
-MEM_PROC  CTEXTSTR MEM_API  StrRChr ( CTEXTSTR s1, TEXTCHAR c );
+MEM_PROC  CTEXTSTR MEM_API  StrRChr ( CTEXTSTR s1, TEXTRUNE c );
+/* Finds the last instance of a character in a string.
+	Parameters
+	s1 :  String to search in
+	c :   character to find
+	Returns
+	NULL if character is not in the string.
+	a pointer to the last character in s1 that matches c. */
+MEM_PROC  const wchar_t* MEM_API  StrRChrW( const wchar_t* s1, TEXTRUNE c );
 #ifdef __cplusplus
 /* This searches a string for the first character that matches
    some specified character.
@@ -6213,6 +6570,7 @@ MEM_PROC  TEXTSTR MEM_API  StrRChr ( TEXTSTR s1, TEXTCHAR c );
 /* <combine sack::memory::StrCmp@CTEXTSTR@CTEXTSTR>
    \ \                                              */
 MEM_PROC  int MEM_API  StrCmp ( const char * s1, CTEXTSTR s2 );
+MEM_PROC  wchar_t* MEM_API  StrRChrW( wchar_t* s1, TEXTRUNE c );
 #endif
 /* <combine sack::memory::StrCmp@char *@CTEXTSTR>
    \ \                                            */
@@ -6387,12 +6745,14 @@ inline void operator delete (void * p)
 #ifndef _TIMER_NAMESPACE
 #ifdef __cplusplus
 #define _TIMER_NAMESPACE namespace timers {
+#define _TIMER_NAMESPACE_END }
 /* define a timer library namespace in C++. */
 #define TIMER_NAMESPACE SACK_NAMESPACE namespace timers {
 /* define a timer library namespace in C++ end. */
 #define TIMER_NAMESPACE_END } SACK_NAMESPACE_END
 #else
 #define _TIMER_NAMESPACE
+#define _TIMER_NAMESPACE_END
 #define TIMER_NAMESPACE
 #define TIMER_NAMESPACE_END
 #endif
@@ -6428,7 +6788,9 @@ SACK_NAMESPACE
    EnterCriticalSec see Also
  EnterCriticalSecNoWait
    LeaveCriticalSec                                            */
-_TIMER_NAMESPACE
+#ifdef __cplusplus
+namespace timers {
+#endif
 #ifdef TIMER_SOURCE
 #define TIMER_PROC(type,name) EXPORT_METHOD type CPROC name
 #else
@@ -6547,6 +6909,13 @@ typedef uintptr_t (*ThreadSimpleStartProc)( POINTER );
   after registering the callback.
 */
 TIMER_PROC( void, OnThreadCreate )( void ( *v )( void ) );
+/*
+  OnThreadExit allows registering a procedure to run
+  when a thread exits.
+  It is called once per thread, for each thread that exits
+  after registering the callback.
+*/
+TIMER_PROC( void, OnThreadExit )( void ( *v )( void ) );
 /* Create a separate thread that starts in the routine
    specified. The uintptr_t value (something that might be a
    pointer), is passed in the PTHREAD structure. (See
@@ -6757,8 +7126,17 @@ TIMER_PROC( void, DeleteCriticalSec )( PCRITICALSECTION pcs );
 	TIMER_PROC( pthread_t, GetThreadHandle )(PTHREAD thread);
 #endif
 #ifdef USE_NATIVE_CRITICAL_SECTION
-#define EnterCriticalSec(pcs) EnterCriticalSection( pcs )
-#define LeaveCriticalSec(pcs) LeaveCriticalSection( pcs )
+#  define EnterCriticalSec(pcs) EnterCriticalSection( pcs )
+#  define LeaveCriticalSec(pcs) LeaveCriticalSection( pcs )
+#  if DBG_AVAILABLE
+#    define EnterCriticalSecEx(pcs, a, b) EnterCriticalSection( pcs )
+#    define LeaveCriticalSecEx(pcs, a, b) LeaveCriticalSection( pcs )
+#    define InitializeCriticalSecEx(pcs, a, b) InitializeCriticalSection( pcs )
+#  else
+#    define EnterCriticalSecEx(pcs) EnterCriticalSection( pcs )
+#    define LeaveCriticalSecEx(pcs) LeaveCriticalSection( pcs )
+#    define InitializeCriticalSecEx(pcs) InitializeCriticalSection( pcs )
+#  endif
 #else
 /* <combine sack::timers::EnterCriticalSecEx@PCRITICALSECTION pcs>
    \ \                                                             */
@@ -7024,6 +7402,8 @@ DeclareThreadLocal struct timespec global_static_time_ts;
 #  endif
 #endif
 #endif
+/* Deadstart interface. Deadstart is like bootstrap, and handles
+   code that runs before main(). See <link deadstart>            */
 #ifndef DEADSTART_DEFINED
 #define DEADSTART_DEFINED
 #ifdef WIN32
@@ -7033,10 +7413,10 @@ DeclareThreadLocal struct timespec global_static_time_ts;
 #define pastejunk_(a,b) a##b
 #define pastejunk(a,b) pastejunk_(a,b)
 #ifdef __cplusplus
-#define USE_SACK_DEADSTART_NAMESPACE using namespace sack::app::deadstart;
-#define SACK_DEADSTART_NAMESPACE   SACK_NAMESPACE namespace app { namespace deadstart {
-#define SACK_DEADSTART_NAMESPACE_END    } } SACK_NAMESPACE_END
-SACK_NAMESPACE
+#  define USE_SACK_DEADSTART_NAMESPACE using namespace sack::app::deadstart;
+#  define SACK_DEADSTART_NAMESPACE  SACK_NAMESPACE namespace app { namespace deadstart {
+#  define SACK_DEADSTART_NAMESPACE_END  } } SACK_NAMESPACE_END
+namespace sack{
 	namespace app{
 /* Application namespace. */
 /* These are compiler-platform abstractions to provide a method
@@ -7083,6 +7463,10 @@ SACK_NAMESPACE
    needs to be initialized before anything else.
                                                                    */
 		namespace deadstart {
+		}
+	}
+ //SACK_NAMESPACE_END
+}
 #else
 #define USE_SACK_DEADSTART_NAMESPACE
 #define SACK_DEADSTART_NAMESPACE
@@ -7090,6 +7474,12 @@ SACK_NAMESPACE
 #endif
 #ifdef TYPELIB_SOURCE
 #define DEADSTART_SOURCE
+#endif
+#ifdef __cplusplus
+namespace sack{
+	namespace app{
+		namespace deadstart {
+//SACK_DEADSTART_NAMESPACE
 #endif
 /* A macro to specify the call type of schedule routines. This
    can be changed in most projects without affect, it comes into
@@ -7241,6 +7631,11 @@ DEADSTART_PROC  void DEADSTART_CALLTYPE  MarkRootDeadstartComplete ( void );
 DEADSTART_PROC  LOGICAL DEADSTART_CALLTYPE  IsRootDeadstartStarted ( void );
 /* \returns whether MarkRootDeadstartComplete has been called. */
 DEADSTART_PROC  LOGICAL DEADSTART_CALLTYPE  IsRootDeadstartComplete ( void );
+/*
+   Setup flags to ignore control C Events on windows.  use 1 << (ControlType) or'd together to set ignore.
+   Use 0 to clear ignore.
+*/
+DEADSTART_PROC void DEADSTART_CALLTYPE IgnoreBreakHandler( int ignore );
 #if defined( __LINUX__ )
 // call this after a fork().  Otherwise, it will falsely invoke shutdown when it exits.
 DEADSTART_PROC  void DEADSTART_CALLTYPE  DispelDeadstart ( void );
@@ -7266,11 +7661,10 @@ DEADSTART_PROC  void DEADSTART_CALLTYPE  DispelDeadstart ( void );
 /* This is used once in deadstart_prog.c which is used to invoke
    startups when the program finishes loading.                   */
 #define MAGIC_PRIORITY_PRELOAD(name,priority) static void CPROC name(void);	 namespace { static class pastejunk(schedule_,name) {	     public:pastejunk(schedule_,name)() {	  name();	    }	  } pastejunk(do_schedul_,name);   }	  static void name(void)
-/* A macro to define some code to run during program shutdown. An
-   additional priority may be specified if the order matters. Higher
-   numbers are called first.
+/*
+  Internal macro used to trigger InvokeExits() which runs scheduled exits.
                                                                      */
-#define ATEXIT_PRIORITY(name,priority) static void CPROC name(void);    static class pastejunk(schedule_,name) {        public:pastejunk(schedule_,name)() {	    RegisterPriorityShutdownProc( name,TOSTR(name),priority,(void*)this DBG_SRC );	  }	  } pastejunk(do_schedule_,name);	     static void name(void)
+#define ATEXIT_INVOKE_INTERNAL(name) static void CPROC name(void);    static class pastejunk(schedule_,name) {        public:pastejunk(~schedule_,name)() {			    name();	  }	  } pastejunk(do_schedule_,name);	     static void name(void)
 /* Defines some code to run at program shutdown time. Allows
    specification of a priority. Higher priorities are run first.
    Example
@@ -7309,7 +7703,7 @@ DEADSTART_PROC  void DEADSTART_CALLTYPE  DispelDeadstart ( void );
 #define ATEXIT(name)      PRIORITY_ATEXIT(name,ATEXIT_PRIORITY_DEFAULT)
 /* This is the core atexit. It dispatches all other exit
    routines. This is defined for internal use only...    */
-#define ROOT_ATEXIT(name) ATEXIT_PRIORITY(name,ATEXIT_PRIORITY_ROOT)
+#define ROOT_ATEXIT(name) ATEXIT_INVOKE_INTERNAL(name)
 //------------------------------------------------------------------------------------
 // Win32 Watcom
 //------------------------------------------------------------------------------------
@@ -7577,6 +7971,8 @@ typedef void(*atexit_priority_proc)(void (*)(void),int,CTEXTSTR DBG_PASS);
    <link sack::app::deadstart, See Also.>                      */
 #define PRELOAD(name)
 #endif
+/* Defines ATEXIT priorities so the library can tear itself down
+   gracefully.                                                   */
 // the higher the number the earlier it is run
 #define ATEXIT_PRIORITY_SHAREMEM  1
 #define ATEXIT_PRIORITY_THREAD_SEMS ATEXIT_PRIORITY_SYSLOG-1
@@ -7593,7 +7989,10 @@ typedef void(*atexit_priority_proc)(void (*)(void),int,CTEXTSTR DBG_PASS);
 #else
 #define ATEXIT_PRIORITY_ROOT 101
 #endif
-SACK_DEADSTART_NAMESPACE_END
+#ifdef __cplusplus
+ //SACK_DEADSTART_NAMESPACE_END
+} } }
+#endif
 USE_SACK_DEADSTART_NAMESPACE
 #endif
 /*
@@ -7632,7 +8031,9 @@ USE_SACK_DEADSTART_NAMESPACE
 #define PROCREG_NAMESPACE
 #define PROCREG_NAMESPACE_END
 #endif
-SACK_NAMESPACE
+#ifdef __cplusplus
+namespace sack {
+#endif
 /* Deadstart is support which differs per compiler, but allows
    applications access a C++ feature - static classes with
    constructors that initialize at loadtime, but, have the
@@ -8223,8 +8624,10 @@ PROCREG_PROC( void, RegisterAndCreateGlobalWithInit )( POINTER *ppGlobal, uintpt
  * Add a transaltion tree index at the same time.
  */
 PROCREG_PROC( CTEXTSTR, SaveNameConcatN )( CTEXTSTR name1, ... );
-// no space stripping, saves literal text
+// no space stripping, saves literal text (case insensitive indexing; '/' and '\' are the same)
 PROCREG_PROC( CTEXTSTR, SaveText )( CTEXTSTR text );
+// no space stripping, saves literal text (case sensitive indexing; '/' and '\' are the same)
+PROCREG_PROC( CTEXTSTR, SaveTextCS )( CTEXTSTR text );
 PROCREG_NAMESPACE_END
 #ifdef __cplusplus
 	using namespace sack::app::registry;
@@ -8233,7 +8636,7 @@ PROCREG_NAMESPACE_END
 #define MY_OFFSETOF( ppstruc, member ) ((uintptr_t)&((*ppstruc)->member)) - ((uintptr_t)(*ppstruc))
 #ifndef USE_CUSTOM_ALLOCER
 #define USE_SACK_CUSTOM_MEMORY_ALLOCATION
-// this has to be a compile option (option from cmake)
+ // this has to be a compile option (option from cmake)
 #ifdef USE_SACK_CUSTOM_MEMORY_ALLOCATION
 #define USE_CUSTOM_ALLOCER 1
 #else
@@ -8244,293 +8647,309 @@ PROCREG_NAMESPACE_END
 namespace sack {
 	namespace containers {
 #endif
-//--------------------------------------------------------------------------
+		//--------------------------------------------------------------------------
 #ifdef __cplusplus
 		namespace list {
 #endif
-static struct list_local_data
-{
-	volatile uint32_t lock;
-} s_list_local, *_list_local;
+			static struct list_local_data
+			{
+				volatile uint32_t lock;
+			}
 #ifdef __STATIC_GLOBALS__
+	s_list_local;
 #  define list_local  (s_list_local)
 #  define list_local_lock (&s_list_local.lock)
 #else
+	 * _list_local, s_list_local;
 #  define list_local  ((_list_local)?(*_list_local):(s_list_local))
 #  define list_local_lock ((_list_local)?(&_list_local->lock):(&s_list_local.lock))
 #endif
 #ifdef UNDER_CE
 #define LockedExchange InterlockedExchange
 #endif
-PLIST  CreateListEx ( DBG_VOIDPASS )
-{
-	PLIST pl;
-	INDEX size;
-	pl = (PLIST)AllocateEx( ( size = (INDEX)offsetof( LIST, pNode[0] ) ) DBG_RELAY );
-	MemSet( pl, 0, size );
-	return pl;
-}
-//--------------------------------------------------------------------------
-PLIST  DeleteListEx ( PLIST *pList DBG_PASS )
-{
-	PLIST ppList;
-	while( LockedExchange( list_local_lock, 1 ) )
-		Relinquish();
-	if( pList &&
-		( ppList = (PLIST)LockedExchangePtrSzVal( (uintptr_t*)pList, 0 ) )
-	  )
-	{
-		ReleaseEx( ppList DBG_RELAY );
-	}
-	list_local_lock[0] = 0;
-	return NULL;
-}
-//--------------------------------------------------------------------------
-static PLIST ExpandListEx( PLIST *pList, INDEX amount DBG_PASS )
-{
- //-V595
-	PLIST old_list = (*pList);
-	PLIST pl;
-	uintptr_t size;
-	uintptr_t old_size;
-	if( !pList )
-		return NULL;
-	if( *pList )
-	{
-		old_size = ((uintptr_t)&((*pList)->pNode[(*pList)->Cnt])) - ((uintptr_t)(*pList));
-		size = ((uintptr_t)&((*pList)->pNode[(*pList)->Cnt+amount])) - ((uintptr_t)(*pList));
-		//old_size = offsetof( LIST, pNode[(*pList)->Cnt]));
-		pl = (PLIST)AllocateEx( size DBG_RELAY );
-	}
-	else
-	{
-		old_size = 0;
-		pl = (PLIST)AllocateEx( size = MY_OFFSETOF( pList, pNode[amount] ) DBG_RELAY );
-		pl->Cnt = 0;
-	}
-	if( old_list )
-	{
-		// copy old list to new list
-		MemCpy( pl, *pList, old_size );
-		if( amount == 1 )
-			pl->pNode[pl->Cnt++] = NULL;
-		else
-		{
-			// clear the new additions to the list
-			MemSet( pl->pNode + pl->Cnt, 0, size - old_size );
-			pl->Cnt += amount;
-		}
-		// set the new list before releasing the old one.
-		(*pList) = pl;
-		// remove the old list...
-		ReleaseEx( old_list DBG_RELAY );
-	}
-	else
-	{
- // clear whole structure on creation...
-		MemSet( pl, 0, size );
-  // one more ( always a free )
-		pl->Cnt = amount;
-		// brand new list.
-		*pList = pl;
-	}
-	return pl;
-}
-//--------------------------------------------------------------------------
- PLIST  AddLinkEx ( PLIST *pList, POINTER p DBG_PASS )
-{
-	INDEX i;
-	if( !pList )
-		return NULL;
-	if( !(*pList ) )
-	{
-	retry1:
-		ExpandListEx( pList, 8 DBG_RELAY );
-	}
-	else
-	{
-		while( LockedExchange( list_local_lock, 1 ) )
-			Relinquish();
-		// cannot trust that the list will exist all the time
-		// we may start calling this function and have the
-		// list re-allocated.
-		if( !(*pList) )
-		{
-			list_local_lock[0] = 0;
-			return NULL;
-		}
-	}
-	for( i = 0; i < (*pList)->Cnt; i++ )
-	{
-		if( !(*pList)->pNode[i] )
-		{
-			(*pList)->pNode[i] = p;
-			break;
-		}
-	}
-	if( i == (*pList)->Cnt )
-  // pList->Cnt changes - don't test in WHILE
-		goto retry1;
-	list_local_lock[0] = 0;
- // might be a NEW list...
-	return *pList;
-}
-//--------------------------------------------------------------------------
- PLIST  SetLinkEx ( PLIST *pList, INDEX idx, POINTER p DBG_PASS )
-{
-	INDEX sz;
-	if( !pList )
-		return NULL;
-	if( *pList )
-	{
-		while( LockedExchange( list_local_lock, 1 ) )
-			Relinquish();
-		if( !(*pList ) )
-		{
-			list_local_lock[0] = 0;
-			return NULL;
-		}
-	}
-	if( idx == INVALID_INDEX )
-	{
-		list_local_lock[0] = 0;
- // not set...
-		return *pList;
-	}
-	sz = 0;
-	while( !(*pList) || ( sz = (*pList)->Cnt ) <= idx )
-		ExpandListEx( pList, (idx - sz) + 1 DBG_RELAY );
-	(*pList)->pNode[idx] = p;
-	list_local_lock[0] = 0;
- // might be a NEW list...
-	return *pList;
-}
-//--------------------------------------------------------------------------
- POINTER  GetLink ( PLIST *pList, INDEX idx )
-{
-	// must lock the list so that it's not expanded out from under us...
-	POINTER p;
-	if( !pList || !(*pList) )
-		return NULL;
-	if( idx == INVALID_INDEX )
- // not set...
-		return pList;
-	while( LockedExchange( list_local_lock, 1 ) )
-		Relinquish();
-	if( !(*pList ) )
-	{
-		list_local_lock[0] = 0;
-		return NULL;
-	}
-	if( (*pList)->Cnt <= idx )
-	{
-		list_local_lock[0] = 0;
-		return NULL;
-	}
-	p = (*pList)->pNode[idx];
-	list_local_lock[0] = 0;
-	return p;
-}
-//--------------------------------------------------------------------------
- POINTER*  GetLinkAddress ( PLIST *pList, INDEX idx )
-{
-	// must lock the list so that it's not expanded out from under us...
-	POINTER *p;
-	if( !pList || !(*pList) )
-		return NULL;
-	if( idx == INVALID_INDEX )
- // not set...
-		return NULL;
-	if( (*pList)->Cnt <= idx )
-	{
-		return NULL;
-	}
-	p = (*pList)->pNode + idx;
-	return p;
-}
-//--------------------------------------------------------------------------
- uintptr_t  ForAllLinks ( PLIST *pList, ForProc func, uintptr_t user )
-{
-	INDEX i;
-	uintptr_t result = 0;
-	while( LockedExchange( list_local_lock, 1 ) )
-		Relinquish();
-	 if( pList && *pList )
-	{
-		for( i=0; i < ((*pList)->Cnt); i++ )
-		{
-			if( (*pList)->pNode[i] )
+			PLIST  CreateListEx( DBG_VOIDPASS )
 			{
-				result = func( user, i, (*pList)->pNode + i );
-				if( result )
-					break;
+				PLIST pl;
+				INDEX size;
+				pl = (PLIST)AllocateEx( (size = (INDEX)offsetof( LIST, pNode[0] )) DBG_RELAY );
+				MemSet( (POINTER)pl, 0, size );
+				return pl;
 			}
-		}
-	}
-	list_local_lock[0] = 0;
-	return result;
-}
- //--------------------------------------------------------------------------
- INDEX GetLinkCount( PLIST pList ) {
-	 INDEX i;
-	 POINTER p;
-	 INDEX count = 0;
-	 LIST_FORALL( pList, i, POINTER, p ) {
-		 count++;
-	 }
-	 return count;
- }
- //--------------------------------------------------------------------------
-static uintptr_t CPROC IsLink( uintptr_t value, INDEX i, POINTER *link )
-{
-	if( value == (uintptr_t)(*link) )
+			//--------------------------------------------------------------------------
+			void  MakeListEx( PLIST *into DBG_PASS )
+			{
+				PLIST pl;
+				INDEX size;
+				(*into) = pl = (PLIST)AllocateEx( (size = (INDEX)offsetof( LIST, pNode[0] )) DBG_RELAY );
+				MemSet( (POINTER)pl, 0, size );
+			}
+			//--------------------------------------------------------------------------
+			void  DeleteListEx( PLIST* pList DBG_PASS )
+			{
+				PLIST ppList;
+				while (LockedExchange( list_local_lock, 1 ))
+					Relinquish();
+				if (pList &&
+					(ppList = (PLIST)LockedExchangePtrSzVal( (uintptr_t*)pList, 0 ))
+					)
+				{
+					ReleaseEx( (POINTER)ppList DBG_RELAY );
+				}
+				list_local_lock[0] = 0;
+			}
+			//--------------------------------------------------------------------------
+			static void ExpandListEx( PLIST* pList, INDEX amount DBG_PASS )
+			{
+ //-V595
+				PLIST old_list = (*pList);
+				PLIST pl;
+				uintptr_t size;
+				uintptr_t old_size;
+				if (!pList)
+					return;
+				if (*pList)
+				{
+					old_size = ((uintptr_t) & ((*pList)->pNode[(*pList)->Cnt])) - ((uintptr_t)(*pList));
+					size = ((uintptr_t) & ((*pList)->pNode[(*pList)->Cnt + amount])) - ((uintptr_t)(*pList));
+					//old_size = offsetof( LIST, pNode[(*pList)->Cnt]));
+					pl = (PLIST)AllocateEx( size DBG_RELAY );
+				}
+				else
+				{
+					old_size = 0;
+					pl = (PLIST)AllocateEx( size = MY_OFFSETOF( pList, pNode[amount] ) DBG_RELAY );
+					pl->Cnt = 0;
+				}
+				if (old_list)
+				{
+					// copy old list to new list
+					MemCpy( (POINTER)pl, (POINTER)*pList, old_size );
+					if (amount == 1)
+						pl->pNode[pl->Cnt++] = NULL;
+					else
+					{
+						// clear the new additions to the list
+						MemSet( (POINTER)(pl->pNode + pl->Cnt), 0, size - old_size );
+						pl->Cnt += amount;
+					}
+					// set the new list before releasing the old one.
+					(*pList) = pl;
+					// remove the old list...
+					ReleaseEx( (POINTER)old_list DBG_RELAY );
+				}
+				else
+				{
+ // clear whole structure on creation...
+					MemSet( (POINTER)pl, 0, size );
+  // one more ( always a free )
+					pl->Cnt = amount;
+					// brand new list.
+					*pList = pl;
+				}
+			}
+			//--------------------------------------------------------------------------
+			void AddLinkEx( PLIST* pList, POINTER p DBG_PASS )
+			{
+				INDEX i;
+				if (!pList)
+					return;
+				if (!(*pList))
+				{
+				retry1:
+					ExpandListEx( pList, 8 DBG_RELAY );
+				}
+				else
+				{
+					while (LockedExchange( list_local_lock, 1 ))
+						Relinquish();
+					// cannot trust that the list will exist all the time
+					// we may start calling this function and have the
+					// list re-allocated.
+					if (!(*pList))
+					{
+						list_local_lock[0] = 0;
+						return;
+					}
+				}
+				for (i = 0; i < (*pList)->Cnt; i++)
+				{
+					if (!(*pList)->pNode[i])
+					{
+						(*pList)->pNode[i] = p;
+						break;
+					}
+				}
+				if (i == (*pList)->Cnt)
+  // pList->Cnt changes - don't test in WHILE
+					goto retry1;
+				list_local_lock[0] = 0;
+			}
+			//--------------------------------------------------------------------------
+			void  SetLinkEx( PLIST* pList, INDEX idx, POINTER p DBG_PASS )
+			{
+				INDEX sz;
+				if (!pList)
+					return;
+				if (*pList)
+				{
+					while (LockedExchange( list_local_lock, 1 ))
+						Relinquish();
+					if (!(*pList))
+					{
+						list_local_lock[0] = 0;
+						return;
+					}
+				}
+				if (idx == INVALID_INDEX)
+				{
+					list_local_lock[0] = 0;
+ // not set...
+					return;
+				}
+				sz = 0;
+				while (!(*pList) || (sz = (*pList)->Cnt) <= idx)
+					ExpandListEx( pList, (idx - sz) + 1 DBG_RELAY );
+				(*pList)->pNode[idx] = p;
+				list_local_lock[0] = 0;
+			}
+			//--------------------------------------------------------------------------
+			POINTER  GetLink( PLIST* pList, INDEX idx )
+			{
+				// must lock the list so that it's not expanded out from under us...
+				POINTER p;
+				if (!pList || !(*pList))
+					return NULL;
+				if (idx == INVALID_INDEX)
+ // not set...
+					return NULL;
+				while (LockedExchange( list_local_lock, 1 ))
+					Relinquish();
+				if (!(*pList))
+				{
+					list_local_lock[0] = 0;
+					return NULL;
+				}
+				if ((*pList)->Cnt <= idx)
+				{
+					list_local_lock[0] = 0;
+					return NULL;
+				}
+				p = (*pList)->pNode[idx];
+				list_local_lock[0] = 0;
+				return p;
+			}
+			//--------------------------------------------------------------------------
+			POINTER* GetLinkAddress( PLIST* pList, INDEX idx )
+			{
+				// must lock the list so that it's not expanded out from under us...
+				POINTER* p;
+				if (!pList || !(*pList))
+					return NULL;
+				if (idx == INVALID_INDEX)
+ // not set...
+					return NULL;
+				if ((*pList)->Cnt <= idx)
+				{
+					return NULL;
+				}
+				p = (POINTER*)((*pList)->pNode + idx);
+				return p;
+			}
+			//--------------------------------------------------------------------------
+			uintptr_t  ForAllLinks( PLIST* pList, ForProc func, uintptr_t user )
+			{
+				INDEX i;
+				uintptr_t result = 0;
+				while (LockedExchange( list_local_lock, 1 ))
+					Relinquish();
+				if (pList && *pList)
+				{
+					for (i = 0; i < ((*pList)->Cnt); i++)
+					{
+						if ((*pList)->pNode[i])
+						{
+							result = func( user, i, (POINTER*)((*pList)->pNode + i) );
+							if (result)
+								break;
+						}
+					}
+				}
+				list_local_lock[0] = 0;
+				return result;
+			}
+			//--------------------------------------------------------------------------
+			INDEX GetLinkCount_( PLIST pList ) {
+				INDEX i;
+				POINTER p;
+				INDEX count = 0;
+				LIST_FORALL( pList, i, POINTER, p ) {
+					count++;
+				}
+				return count;
+			}
+			//--------------------------------------------------------------------------
+			INDEX GetLinksUsed( PLIST *pList ) {
+				INDEX i;
+				POINTER p;
+				INDEX count = 0;
+				LIST_FORALL( (*pList), i, POINTER, p ) {
+					count++;
+				}
+				return count;
+			}
+			//--------------------------------------------------------------------------
+			static uintptr_t CPROC IsLink( uintptr_t value, INDEX i, POINTER* link )
+			{
+				if (value == (uintptr_t)(*link))
  // 0 might be value so add one to make it non zero
-		return i+1;
-	return 0;
-}
-//--------------------------------------------------------------------------
- INDEX  FindLink ( PLIST *pList, POINTER value )
-{
-	if( !pList || !(*pList ) )
-		return INVALID_INDEX;
-	return ForAllLinks( pList, IsLink, (uintptr_t)value ) - 1;
-}
-//--------------------------------------------------------------------------
-static uintptr_t CPROC KillLink( uintptr_t value, INDEX i, POINTER *link )
-{
-	if( value == (uintptr_t)(*link) )
-	{
-		(*link) = NULL;
+					return i + 1;
+				return 0;
+			}
+			//--------------------------------------------------------------------------
+			INDEX  FindLink( PLIST* pList, POINTER value )
+			{
+				if (!pList || !(*pList))
+					return INVALID_INDEX;
+				return ForAllLinks( pList, IsLink, (uintptr_t)value ) - 1;
+			}
+			//--------------------------------------------------------------------------
+			static uintptr_t CPROC KillLink( uintptr_t value, INDEX i, POINTER* link )
+			{
+				if (value == (uintptr_t)(*link))
+				{
+					(*link) = NULL;
  // stop searching
-		return 1;
-	}
-	return 0;
-}
-LOGICAL  DeleteLink( PLIST *pList, CPOINTER value )
-{
-	if( ForAllLinks( pList, KillLink, (uintptr_t)value ) )
-		return TRUE;
-	return FALSE;
-}
-//--------------------------------------------------------------------------
-static uintptr_t CPROC RemoveItem( uintptr_t value, INDEX i, POINTER *link )
-{
-	*link = NULL;
-	return 0;
-}
-void EmptyList( PLIST *pList )
-{
-	ForAllLinks( pList, RemoveItem, 0 );
-}
+					return 1;
+				}
+				return 0;
+			}
+			LOGICAL  DeleteLink( PLIST* pList, CPOINTER value )
+			{
+				if (ForAllLinks( pList, KillLink, (uintptr_t)value ))
+					return TRUE;
+				return FALSE;
+			}
+			//--------------------------------------------------------------------------
+			static uintptr_t CPROC RemoveItem( uintptr_t value, INDEX i, POINTER* link )
+			{
+				*link = NULL;
+				return 0;
+			}
+			void EmptyList( PLIST* pList )
+			{
+				ForAllLinks( pList, RemoveItem, 0 );
+			}
 #ifdef __cplusplus
 //		namespace list {
 		};
-namespace data_list {
+		namespace data_list {
 #endif
-static struct data_list_local_data
-{
-	uint32_t lock;
-} s_data_list_local, *_data_list_local;
+#if 0
+// data list blocks were never auto-locked?
+			static struct data_list_local_data
+			{
+				uint32_t lock;
+			} s_data_list_local, * _data_list_local;
 #ifdef __STATIC_GLOBALS__
 #  define data_list_local  ((s_data_list_local))
 #  define data_list_local_lock  ((&s_data_list_local.lock))
@@ -8538,318 +8957,332 @@ static struct data_list_local_data
 #  define data_list_local  ((_data_list_local)?(*_data_list_local):(s_data_list_local))
 #  define data_list_local_lock  ((_data_list_local)?(&_data_list_local->lock):(&s_data_list_local.lock))
 #endif
-//--------------------------------------------------------------------------
-PDATALIST ExpandDataListEx( PDATALIST *ppdl, INDEX entries DBG_PASS )
-{
+#endif
+			//--------------------------------------------------------------------------
+			PDATALIST ExpandDataListEx( PDATALIST* ppdl, INDEX entries DBG_PASS )
+			{
  //-V595
-	PDATALIST pdl = (*ppdl);
-	PDATALIST pNewList;
-	if( !ppdl || !*ppdl )
+				PDATALIST pdl = (*ppdl);
+				PDATALIST pNewList;
+				if (!ppdl || !*ppdl)
  // can't expand - was not created (no data size)
-		return NULL;
-	if( (*ppdl) )
-		entries += (*ppdl)->Avail;
-	pNewList = (PDATALIST)AllocateEx( sizeof( DATALIST ) + ( (*ppdl)->Size * entries ) - 1 DBG_RELAY );
-	MemCpy( pNewList->data, (*ppdl)->data, (*ppdl)->Avail * (*ppdl)->Size );
-	pNewList->Cnt = (*ppdl)->Cnt;
-	pNewList->Avail = entries;
-	pNewList->Size = (*ppdl)->Size;
-	// set the new list int he pointer
-	*ppdl = pNewList;
-	ReleaseEx( pdl DBG_RELAY );
-	return pNewList;
-}
-//--------------------------------------------------------------------------
- PDATALIST  CreateDataListEx ( uintptr_t nSize DBG_PASS )
-{
-	PDATALIST pdl = (PDATALIST)AllocateEx( sizeof( DATALIST ) + ( nSize * 8 ) - 1 DBG_RELAY );
-	pdl->Cnt = 0;
-	pdl->Avail = 8;
-	pdl->Size = nSize;
-	return pdl;
-}
-//--------------------------------------------------------------------------
- void  DeleteDataListEx ( PDATALIST *ppdl DBG_PASS )
-{
-	if( ppdl )
-	{
-		if( *ppdl )
-		{
-			ReleaseEx( *ppdl DBG_RELAY );
-			*ppdl = NULL;
-		}
-	}
-}
-//--------------------------------------------------------------------------
-POINTER SetDataItemEx( PDATALIST *ppdl, INDEX idx, POINTER data DBG_PASS )
-{
-	POINTER p = NULL;
-	if( !ppdl || !(*ppdl) || idx > 0x1000000 )
-		return NULL;
-	if( idx >= (*ppdl)->Avail )
-	{
-		ExpandDataListEx( ppdl, idx+32 DBG_RELAY );
-	}
-	p = (*ppdl)->data + ( (*ppdl)->Size * idx );
-	MemCpy( p, data, (*ppdl)->Size );
-	if( idx >= (*ppdl)->Cnt )
-		(*ppdl)->Cnt = idx+1;
-	return p;
-}
-//--------------------------------------------------------------------------
-POINTER AddDataItemEx( PDATALIST *ppdl, POINTER data DBG_PASS )
-{
-	if( ppdl && *ppdl )
-		return SetDataItemEx( ppdl, (*ppdl)->Cnt+1, data DBG_RELAY );
-	if( ppdl )
-		return SetDataItemEx( ppdl, 0, data DBG_RELAY );
-	return NULL;
-}
-void EmptyDataList( PDATALIST *ppdl )
-{
-	if( ppdl && (*ppdl) )
-		(*ppdl)->Cnt = 0;
-}
-//--------------------------------------------------------------------------
-void DeleteDataItem( PDATALIST *ppdl, INDEX idx )
-{
-	if( ppdl && *ppdl )
-	{
-		if( idx < ( (*ppdl)->Cnt - 1 ) )
-			MemCpy( (*ppdl)->data + ((*ppdl)->Size * idx )
-					, (*ppdl)->data + ((*ppdl)->Size * (idx + 1) )
-					, (*ppdl)->Size );
-		(*ppdl)->Cnt--;
-	}
-}
-//--------------------------------------------------------------------------
-POINTER GetDataItem( PDATALIST *ppdl, INDEX idx )
-{
-	POINTER p = NULL;
-	if( ppdl && *ppdl && ( idx < (*ppdl)->Cnt ) )
-		p = (*ppdl)->data + ( (*ppdl)->Size * idx );
-	return p;
-}
-//--------------------------------------------------------------------------
+					return NULL;
+				if ((*ppdl))
+					entries += (*ppdl)->Avail;
+				pNewList = (PDATALIST)AllocateEx( sizeof( DATALIST ) + ((*ppdl)->Size * entries) - 1 DBG_RELAY );
+				MemCpy( (POINTER)pNewList->data, (POINTER)(*ppdl)->data, (*ppdl)->Avail * (*ppdl)->Size );
+				pNewList->Cnt = (*ppdl)->Cnt;
+				pNewList->Avail = entries;
+				pNewList->Size = (*ppdl)->Size;
+				// set the new list int he pointer
+				*ppdl = pNewList;
+				ReleaseEx( (POINTER)pdl DBG_RELAY );
+				return pNewList;
+			}
+			//--------------------------------------------------------------------------
+			PDATALIST  CreateDataListEx( uintptr_t nSize DBG_PASS )
+			{
+				PDATALIST pdl = (PDATALIST)AllocateEx( sizeof( DATALIST ) + (nSize * 8) - 1 DBG_RELAY );
+				pdl->Cnt = 0;
+				pdl->Avail = 8;
+				pdl->Size = nSize;
+				return pdl;
+			}
+			//--------------------------------------------------------------------------
+			void  DeleteDataListEx( PDATALIST* ppdl DBG_PASS )
+			{
+				if (ppdl)
+				{
+					if (*ppdl)
+					{
+						ReleaseEx( (POINTER)*ppdl DBG_RELAY );
+						*ppdl = NULL;
+					}
+				}
+			}
+			//--------------------------------------------------------------------------
+			POINTER SetDataItemEx( PDATALIST* ppdl, INDEX idx, POINTER data DBG_PASS )
+			{
+				POINTER p = NULL;
+				if (!ppdl || !(*ppdl) || idx > 0x1000000)
+					return NULL;
+				if (idx >= (*ppdl)->Avail)
+				{
+					ExpandDataListEx( ppdl, idx + 32 DBG_RELAY );
+				}
+				p = (POINTER)((*ppdl)->data + ((*ppdl)->Size * idx));
+				MemCpy( p, data, (*ppdl)->Size );
+				if (idx >= (*ppdl)->Cnt)
+					(*ppdl)->Cnt = idx + 1;
+				return p;
+			}
+			//--------------------------------------------------------------------------
+			POINTER AddDataItemEx( PDATALIST* ppdl, POINTER data DBG_PASS )
+			{
+				if (ppdl && *ppdl)
+					return SetDataItemEx( ppdl, (*ppdl)->Cnt + 1, data DBG_RELAY );
+				if (ppdl)
+					return SetDataItemEx( ppdl, 0, data DBG_RELAY );
+				return NULL;
+			}
+			void EmptyDataList( PDATALIST* ppdl )
+			{
+				if (ppdl && (*ppdl))
+					(*ppdl)->Cnt = 0;
+			}
+			//--------------------------------------------------------------------------
+			void DeleteDataItem( PDATALIST* ppdl, INDEX idx )
+			{
+				if (ppdl && *ppdl)
+				{
+					if (idx < ((*ppdl)->Cnt - 1))
+						MemCpy( (POINTER)((*ppdl)->data + ((*ppdl)->Size * idx))
+							, (POINTER)((*ppdl)->data + ((*ppdl)->Size * (idx + 1)))
+							, (*ppdl)->Size * ( (*ppdl)->Cnt - idx - 1 ) );
+					(*ppdl)->Cnt--;
+				}
+			}
+			//--------------------------------------------------------------------------
+			POINTER GetDataItem( PDATALIST* ppdl, INDEX idx )
+			{
+				POINTER p = NULL;
+				if (ppdl && *ppdl && (idx < (*ppdl)->Cnt))
+					p = (POINTER)((*ppdl)->data + ((*ppdl)->Size * idx));
+				return p;
+			}
+			//--------------------------------------------------------------------------
 #ifdef __cplusplus
 //		namespace data_list {
 		};
-namespace link_stack {
+		namespace link_stack {
 #endif
- PLINKSTACK		CreateLinkStackLimitedEx		  ( int max_entries  DBG_PASS )
-{
-	PLINKSTACK pls;
-	pls = (PLINKSTACK)AllocateEx( sizeof( LINKSTACK ) DBG_RELAY );
-	pls->Top = 0;
-	pls->Cnt = 0;
-	pls->Max = max_entries;
-	return pls;
-}
-//--------------------------------------------------------------------------
- PLINKSTACK  CreateLinkStackEx ( DBG_VOIDPASS )
-{
-	return CreateLinkStackLimitedEx( 0 DBG_RELAY );
-}
-//--------------------------------------------------------------------------
- void  DeleteLinkStackEx ( PLINKSTACK *pls DBG_PASS )
-{
-	if( pls && *pls )
-	{
-		ReleaseEx( *pls DBG_RELAY );
-		*pls = 0;
-	}
-}
-//--------------------------------------------------------------------------
-POINTER  PeekLinkEx ( PLINKSTACK *pls, INDEX n )
-{
-	// should lock - but it's fast enough?
-	POINTER p = NULL;
-	if( pls && *pls && ((*pls)->Top > n) )
-		p = (*pls)->pNode[(*pls)->Top - (n + 1)];
-	return p;
-}
-//--------------------------------------------------------------------------
-POINTER  PeekLink ( PLINKSTACK *pls )
-{
-	return PeekLinkEx( pls, 0 );
-}
-//--------------------------------------------------------------------------
-POINTER  PopLink ( PLINKSTACK *pls )
-{
-	if( pls && *pls && (*pls)->Top )
-		return (*pls)->pNode[--(*pls)->Top];
-	return NULL;
-}
-//--------------------------------------------------------------------------
-static PLINKSTACK ExpandStackEx( PLINKSTACK *stack, INDEX entries DBG_PASS )
-{
-	PLINKSTACK pNewStack;
-	if( *stack )
-		entries += (*stack)->Cnt;
+			void		MakeLinkStackLimitedEx( PLINKSTACK *into, int max_entries  DBG_PASS )
+			{
+				PLINKSTACK pls;
+				(*into) = pls = (PLINKSTACK)AllocateEx( sizeof( LINKSTACK ) DBG_RELAY );
+				pls->Top = 0;
+				pls->Cnt = 0;
+				pls->Max = max_entries;
+			}
+			PLINKSTACK		CreateLinkStackLimitedEx( int max_entries  DBG_PASS )
+			{
+				PLINKSTACK pls;
+				pls = (PLINKSTACK)AllocateEx( sizeof( LINKSTACK ) DBG_RELAY );
+				pls->Top = 0;
+				pls->Cnt = 0;
+				pls->Max = max_entries;
+				return pls;
+			}
+			//--------------------------------------------------------------------------
+			void  MakeLinkStackEx( PLINKSTACK *into DBG_PASS )
+			{
+				MakeLinkStackLimitedEx( into, 0 DBG_RELAY );
+			}
+			//--------------------------------------------------------------------------
+			PLINKSTACK  CreateLinkStackEx( DBG_VOIDPASS )
+			{
+				return CreateLinkStackLimitedEx( 0 DBG_RELAY );
+			}
+			//--------------------------------------------------------------------------
+			void  DeleteLinkStackEx( PLINKSTACK* pls DBG_PASS )
+			{
+				if (pls && *pls)
+				{
+					ReleaseEx( (POINTER)*pls DBG_RELAY );
+					*pls = 0;
+				}
+			}
+			//--------------------------------------------------------------------------
+			POINTER  PeekLinkEx( PLINKSTACK* pls, INDEX n )
+			{
+				// should lock - but it's fast enough?
+				POINTER p = NULL;
+				if (pls && *pls && ((*pls)->Top > n))
+					p = (*pls)->pNode[(*pls)->Top - (n + 1)];
+				return p;
+			}
+			//--------------------------------------------------------------------------
+			POINTER  PeekLink( PLINKSTACK* pls )
+			{
+				return PeekLinkEx( pls, 0 );
+			}
+			//--------------------------------------------------------------------------
+			POINTER  PopLink( PLINKSTACK* pls )
+			{
+				if (pls && *pls && (*pls)->Top)
+					return (*pls)->pNode[--(*pls)->Top];
+				return NULL;
+			}
+			//--------------------------------------------------------------------------
+			static void ExpandStackEx( PLINKSTACK* stack, INDEX entries DBG_PASS )
+			{
+				PLINKSTACK pNewStack;
+				if (*stack)
+					entries += (*stack)->Cnt;
  //-V595
-	pNewStack = (PLINKSTACK)AllocateEx( my_offsetof( stack, pNode[entries] ) DBG_RELAY );
-	if( *stack )
-	{
-		PLINKSTACK pls = (*stack);
-		MemCpy( pNewStack->pNode, (*stack)->pNode, (*stack)->Cnt * sizeof(POINTER) );
-		pNewStack->Top = (*stack)->Top;
-		pNewStack->Max = (*stack)->Max;
-		*stack = pNewStack;
-		ReleaseEx( pls DBG_RELAY );
-	}
-	else
-	{
-		pNewStack->Top = 0;
-		pNewStack->Max = 0;
-		*stack = pNewStack;
-	}
-	pNewStack->Cnt = entries;
-	return pNewStack;
-}
-//--------------------------------------------------------------------------
- PLINKSTACK  PushLinkEx ( PLINKSTACK *pls, POINTER p DBG_PASS )
-{
-	if( !pls )
-		return NULL;
-	// should lock this thing :)
-	if( !*pls ||
-		 (*pls)->Top == (*pls)->Cnt )
-	{
-		ExpandStackEx( pls, ((*pls)?((*pls)->Max):0)+8 DBG_RELAY );
-	}
-	if( (*pls)->Max )
-		if( ((*pls)->Top) >= (*pls)->Max )
-		{
-			MemCpy( (*pls)->pNode, (*pls)->pNode + 1, (*pls)->Top - 1 );
-			(*pls)->Top--;
-		}
-	(*pls)->pNode[(*pls)->Top] = p;
-	(*pls)->Top++;
-	return (*pls);
-}
+				pNewStack = (PLINKSTACK)AllocateEx( my_offsetof( stack, pNode[entries] ) DBG_RELAY );
+				if (*stack)
+				{
+					PLINKSTACK pls = (*stack);
+					MemCpy( (POINTER)pNewStack->pNode, (POINTER)(*stack)->pNode, (*stack)->Cnt * sizeof( POINTER ) );
+					pNewStack->Top = (*stack)->Top;
+					pNewStack->Max = (*stack)->Max;
+					*stack = pNewStack;
+					ReleaseEx( (POINTER)pls DBG_RELAY );
+				}
+				else
+				{
+					pNewStack->Top = 0;
+					pNewStack->Max = 0;
+					*stack = pNewStack;
+				}
+				pNewStack->Cnt = entries;
+				//return pNewStack;
+			}
+			//--------------------------------------------------------------------------
+			void  PushLinkEx( PLINKSTACK* pls, POINTER p DBG_PASS )
+			{
+				if (!pls)
+					return;
+				// should lock this thing :)
+				if (!*pls ||
+					(*pls)->Top == (*pls)->Cnt)
+				{
+					ExpandStackEx( pls, ((*pls) ? ((*pls)->Max) : 0) + 8 DBG_RELAY );
+				}
+				if ((*pls)->Max)
+					if (((*pls)->Top) >= (*pls)->Max)
+					{
+						MemCpy( (POINTER)(*pls)->pNode, (POINTER)((*pls)->pNode + 1), (*pls)->Top - 1 );
+						(*pls)->Top--;
+					}
+				(*pls)->pNode[(*pls)->Top] = p;
+				(*pls)->Top++;
+			}
 #ifdef __cplusplus
 //namespace link_stack
-}
+		}
 #endif
 //--------------------------------------------------------------------------
 //--------------------------------------------------------------------------
 #ifdef __cplusplus
 		namespace data_stack {
 #endif
- POINTER  PopData ( PDATASTACK *pds )
-{
-	POINTER p = NULL;
-	if( (pds) && (*pds) && (*pds)->Top )
-	{
-		 (*pds)->Top--;
-		p = (*pds)->data + ( (*pds)->Size * ((*pds)->Top) );
-	}
-	return p;
-}
-//--------------------------------------------------------------------------
-static PDATASTACK ExpandDataStackEx( PDATASTACK *ppds, INDEX entries DBG_PASS )
-{
-	PDATASTACK pNewStack;
-	PDATASTACK pds = (*ppds);
-	if( !pds )
-		return NULL;
-	entries += pds->Cnt;
-	pNewStack = (PDATASTACK)AllocateEx( sizeof( DATASTACK ) + ( (*ppds)->Size * entries ) - 1 DBG_RELAY );
-	MemCpy( pNewStack->data, (*ppds)->data, (*ppds)->Cnt * (*ppds)->Size );
-	pNewStack->Cnt = entries;
-	pNewStack->Size = (*ppds)->Size;
-	pNewStack->Top = (*ppds)->Top;
-	(*ppds) = pNewStack;
-	ReleaseEx( pds DBG_RELAY );
-	return pNewStack;
-}
-//--------------------------------------------------------------------------
- PDATASTACK  PushDataEx ( PDATASTACK *pds, POINTER pdata DBG_PASS )
-{
-	if( pds && *pds )
-	{
-		if( (*pds)->Top == (*pds)->Cnt )
-		{
-			ExpandDataStackEx( pds, 1 DBG_RELAY );
-		}
-		if( (*pds)->Max )
-			if( ((*pds)->Top) >= (*pds)->Max )
+			POINTER  PopData( PDATASTACK* pds )
 			{
-				MemCpy( (*pds)->data, (*pds)->data + (*pds)->Size, ( (*pds)->Top - 1 ) * (*pds)->Size );
-				(*pds)->Top--;
+				POINTER p = NULL;
+				if ((pds) && (*pds) && (*pds)->Top)
+				{
+					(*pds)->Top--;
+					p = (POINTER)((*pds)->data + ((*pds)->Size * ((*pds)->Top)));
+				}
+				return p;
 			}
-		MemCpy( (*pds)->data + ((*pds)->Top * (*pds)->Size ), pdata, (*pds)->Size );
-		(*pds)->Top++;
-		return (*pds);
-	}
-	if( pds )
-		return *pds;
-	return NULL;
-}
-//--------------------------------------------------------------------------
- POINTER  PeekDataEx ( PDATASTACK *pds, INDEX nBack )
-{
-	POINTER p = NULL;
-	nBack++;
-	if( !(*pds) )
-		return NULL;
-	if( ( (int)((*pds)->Top) - (int)nBack ) >= 0 )
-		p = (*pds)->data + ( (*pds)->Size * ((*pds)->Top - nBack) );
-	return p;
-}
-//--------------------------------------------------------------------------
- POINTER  PeekData ( PDATASTACK *pds )
-{
-	POINTER p = NULL;
-	if( pds && *pds && (*pds)->Top )
-		p = (*pds)->data + ( (*pds)->Size * ((*pds)->Top-1) );
-	return p;
-}
-//--------------------------------------------------------------------------
-void  EmptyDataStack( PDATASTACK *pds )
-{
-	if( pds && *pds )
-		(*pds)->Top = 0;
-}
-//--------------------------------------------------------------------------
- PDATASTACK  CreateDataStackEx ( size_t size DBG_PASS )
-{
-	return CreateDataStackLimitedEx( size, 0 DBG_RELAY );
-}
-//--------------------------------------------------------------------------
- PDATASTACK  CreateDataStackLimitedEx ( size_t size, INDEX max_items DBG_PASS )
-{
-	PDATASTACK pds;
-	pds = (PDATASTACK)AllocateEx( sizeof( DATASTACK ) + ( 10 * size ) DBG_RELAY );
-	pds->Cnt = 10;
-	pds->Top = 0;
-	pds->Size = size;
-	pds->Max = max_items;
-	return pds;
-}
-//--------------------------------------------------------------------------
-void DeleteDataStackEx( PDATASTACK *pds DBG_PASS )
-{
-	ReleaseEx( *pds DBG_RELAY );
-	*pds = NULL;
-}
+			//--------------------------------------------------------------------------
+			static PDATASTACK ExpandDataStackEx( PDATASTACK* ppds, INDEX entries DBG_PASS )
+			{
+				PDATASTACK pNewStack;
+				PDATASTACK pds = (*ppds);
+				if (!pds)
+					return NULL;
+				entries += pds->Cnt;
+				pNewStack = (PDATASTACK)AllocateEx( sizeof( DATASTACK ) + ((*ppds)->Size * entries) - 1 DBG_RELAY );
+				MemCpy( (POINTER)pNewStack->data, (POINTER)(*ppds)->data, (*ppds)->Cnt * (*ppds)->Size );
+				pNewStack->Cnt = entries;
+				pNewStack->Size = (*ppds)->Size;
+				pNewStack->Top = (*ppds)->Top;
+				(*ppds) = pNewStack;
+				ReleaseEx( (POINTER)pds DBG_RELAY );
+				return pNewStack;
+			}
+			//--------------------------------------------------------------------------
+			void  PushDataEx( PDATASTACK* pds, POINTER pdata DBG_PASS )
+			{
+				if (pds && *pds)
+				{
+					if ((*pds)->Top == (*pds)->Cnt)
+					{
+						ExpandDataStackEx( pds, 1 DBG_RELAY );
+					}
+					if ((*pds)->Max)
+						if (((*pds)->Top) >= (*pds)->Max)
+						{
+							MemCpy( (POINTER)(*pds)->data, (POINTER)((*pds)->data + (*pds)->Size), ((*pds)->Top - 1) * (*pds)->Size );
+							(*pds)->Top--;
+						}
+					MemCpy( (POINTER)((*pds)->data + ((*pds)->Top * (*pds)->Size)), pdata, (*pds)->Size );
+					(*pds)->Top++;
+					return;
+				}
+			}
+			//--------------------------------------------------------------------------
+			POINTER  PeekDataEx( PDATASTACK* pds, INDEX nBack )
+			{
+				POINTER p = NULL;
+				nBack++;
+				if (!(*pds))
+					return NULL;
+				if (((int)((*pds)->Top) - (int)nBack) >= 0)
+					p = (POINTER)((*pds)->data + ((*pds)->Size * ((*pds)->Top - nBack)));
+				return p;
+			}
+			//--------------------------------------------------------------------------
+			POINTER  PeekData( PDATASTACK* pds )
+			{
+				POINTER p = NULL;
+				if (pds && *pds && (*pds)->Top)
+					p = (POINTER)((*pds)->data + ((*pds)->Size * ((*pds)->Top - 1)));
+				return p;
+			}
+			//--------------------------------------------------------------------------
+			void  EmptyDataStack( PDATASTACK* pds )
+			{
+				if (pds && *pds)
+					(*pds)->Top = 0;
+			}
+			//--------------------------------------------------------------------------
+			PDATASTACK  CreateDataStackEx( size_t size DBG_PASS )
+			{
+				return CreateDataStackLimitedEx( size, 0 DBG_RELAY );
+			}
+			//--------------------------------------------------------------------------
+			PDATASTACK  CreateDataStackLimitedEx( size_t size, INDEX max_items DBG_PASS )
+			{
+				PDATASTACK pds;
+				pds = (PDATASTACK)AllocateEx( sizeof( DATASTACK ) + (10 * size) DBG_RELAY );
+				pds->Cnt = 10;
+				pds->Top = 0;
+				pds->Size = size;
+				pds->Max = max_items;
+				return pds;
+			}
+			//--------------------------------------------------------------------------
+			void DeleteDataStackEx( PDATASTACK* pds DBG_PASS )
+			{
+				ReleaseEx( (POINTER)(*pds) DBG_RELAY );
+				*pds = NULL;
+			}
 #ifdef __cplusplus
 //		namespace data_stack {
-}
+		}
 #endif
 //--------------------------------------------------------------------------
 //--------------------------------------------------------------------------
 #ifdef __cplusplus
 		namespace queue {
 #endif
-static struct link_queue_local_data
-{
-	volatile uint32_t lock;
-//#if !USE_CUSTOM_ALLOCER
-	volatile PTHREAD thread;
-//#endif
-} s_link_queue_local, *_link_queue_local;
-#ifdef __STATIC_GLOBALS__
+			static struct link_queue_local_data
+			{
+				volatile uint32_t lock;
+				//#if !USE_CUSTOM_ALLOCER
+				volatile PTHREAD thread;
+				//#endif
+			} s_link_queue_local
+#if !defined( __STATIC_GLOBALS__ ) || defined( USE_CUSTOM_ALLOCER )
+					, * _link_queue_local
+#endif
+				;
+#if defined( __STATIC_GLOBALS__ ) && !defined( USE_CUSTOM_ALLOCER )
 #  define link_queue_local  ((s_link_queue_local))
 #  define link_queue_local_thread  ((s_link_queue_local.thread))
 #  define link_queue_local_lock  ((&s_link_queue_local.lock))
@@ -8858,440 +9291,444 @@ static struct link_queue_local_data
 #  define link_queue_local_thread  ((_link_queue_local)?(*_link_queue_local).thread:(s_link_queue_local.thread))
 #  define link_queue_local_lock  ((_link_queue_local)?(&_link_queue_local->lock):(&s_link_queue_local.lock))
 #endif
-PLINKQUEUE CreateLinkQueueEx( DBG_VOIDPASS )
-{
-	PLINKQUEUE plq = 0;
- //-V557
-	plq = (PLINKQUEUE)AllocateEx( MY_OFFSETOF( &plq, pNode[8] ) DBG_RELAY );
-#if USE_CUSTOM_ALLOCER
-	plq->Lock     = 0;
-#endif
-	plq->Top      = 0;
-	plq->Bottom   = 0;
-	plq->Cnt      = 8;
-	plq->pNode[0] = NULL;
- // shrug
-	plq->pNode[1] = NULL;
-	return plq;
-}
-//--------------------------------------------------------------------------
-void DeleteLinkQueueEx( PLINKQUEUE *pplq DBG_PASS )
-{
-	if( !pplq )
-		return;
-#if USE_CUSTOM_ALLOCER
-retry_lock:
-#endif
-	while( LockedExchange( link_queue_local_lock, __LINE__ ) )
-	{
-		Relinquish();
-	}
-#if USE_CUSTOM_ALLOCER
-	if( _link_queue_local )
-		_link_queue_local->thread = MakeThread();
-	if( !(*pplq) )
-	{
-		link_queue_local_lock[0] = 0;
-		return;
-	}
-	if( (*pplq)->Lock )
-	{
-		link_queue_local_lock[0] = 0;
-		Relinquish();
-		goto retry_lock;
-	}
-	(*pplq)->Lock = 1;
-#endif
-	link_queue_local_lock[0] = 0;
-	if( pplq )
-	{
-		if( *pplq )
-			ReleaseEx( *pplq DBG_RELAY );
-		*pplq = NULL;
-	}
-#if USE_CUSTOM_ALLOCER
-	if( _link_queue_local )
-		_link_queue_local->thread = NULL;
-#endif
-	//link_queue_local_lock[0] = 0;
-}
-//--------------------------------------------------------------------------
-static PLINKQUEUE ExpandLinkQueueEx( PLINKQUEUE *pplq, INDEX entries DBG_PASS )
-{
-	PLINKQUEUE plqNew = NULL;
-#if USE_CUSTOM_ALLOCER
-	while( LockedExchange( link_queue_local_lock, __LINE__ ) )
-	{
-		Relinquish();
-	}
-	if( _link_queue_local )
-		_link_queue_local->thread = MakeThread();
-#endif
-	if( pplq )
-	{
-		PLINKQUEUE plq = *pplq;
-		INDEX size;
-		int prior_logging;
-		size = MY_OFFSETOF( pplq, pNode[plq->Cnt + entries] );
-		prior_logging = SetAllocateLogging( FALSE );
-		plqNew = (PLINKQUEUE)AllocateEx( size DBG_RELAY );
-		plqNew->Cnt = plq->Cnt + entries;
-		plqNew->Bottom = 0;
-		if( plq->Bottom > plq->Top )
-		{
-			INDEX bottom_half;
-			plqNew->Top = (bottom_half = plq->Cnt - plq->Bottom ) + plq->Top;
-			MemCpy( plqNew->pNode, plq->pNode + plq->Bottom, sizeof(POINTER)*bottom_half );
-			MemCpy( plqNew->pNode + bottom_half, plq->pNode, sizeof(POINTER)*plq->Top );
-		}
-		else
-		{
-			plqNew->Top = plq->Top - plq->Bottom;
-			MemCpy( plqNew->pNode, plq->pNode + plq->Bottom, sizeof(POINTER)*plqNew->Top );
-		}
-		//need to make sure plq is always valid; can be trying to get a lock
-		(*pplq) = plqNew;
-		Release( plq );
-		SetAllocateLogging( prior_logging );
-	}
-#if USE_CUSTOM_ALLOCER
-	if( _link_queue_local )
-		_link_queue_local->thread = NULL;
-	link_queue_local_lock[0] = 0;
-#endif
-	return plqNew;
-}
-//--------------------------------------------------------------------------
- PLINKQUEUE  EnqueLinkEx ( PLINKQUEUE *pplq, POINTER link DBG_PASS )
-{
-	INDEX tmp;
-	PLINKQUEUE plq;
-#if USE_CUSTOM_ALLOCER
-	int keep_lock = 0;
-#endif
-	if( !pplq )
-		return NULL;
-	if( !(*pplq) )
-		*pplq = CreateLinkQueueEx( DBG_VOIDRELAY );
-#if USE_CUSTOM_ALLOCER
-retry_lock:
-#endif
-	while( LockedExchange( link_queue_local_lock, __LINE__ ) )
-	{
-#if USE_CUSTOM_ALLOCER
-		if( link_queue_local_thread == MakeThread() )
-		{
-			keep_lock = 1;
-			break;
-		}
-#endif
-		Relinquish();
-	}
-#if USE_CUSTOM_ALLOCER
-	if( _link_queue_local )
-		_link_queue_local->thread = MakeThread();
-	if( !(*pplq) )
-	{
-		if( !keep_lock )
-			link_queue_local_lock[0] = 0;
-		return (*pplq);
-	}
-	if( (*pplq)->Lock )
-	{
-		if( !keep_lock )
-			link_queue_local_lock[0] = 0;
-		Relinquish();
-		goto retry_lock;
-	}
-	(*pplq)->Lock = 1;
-	if( !keep_lock )
-	{
-		if( _link_queue_local )
-			_link_queue_local->thread = NULL;
-		link_queue_local_lock[0] = 0;
-	}
-#else
-	if( !(*pplq) )
-	{
-		//it could have been deallocated
-		link_queue_local_lock[0] = 0;
-		return (*pplq);
-	}
-#endif
-	plq = *pplq;
-	//else
-	//	s_link_queue_local.thread = MakeThread();
-	if( link )
-	{
-		tmp = plq->Top + 1;
-		if( tmp >= plq->Cnt )
-			tmp -= plq->Cnt;
- // collided with self...
-		if( tmp == plq->Bottom )
-		{
-			plq = ExpandLinkQueueEx( pplq, 16 DBG_RELAY );
- // should be room at the end of phsyical array....
-			tmp = plq->Top + 1;
-		}
-		plq->pNode[plq->Top] = link;
-		plq->Top = tmp;
-	}
-	*pplq = plq;
-#if USE_CUSTOM_ALLOCER
-	plq->Lock = 0;
-#endif
-	link_queue_local_lock[0] = 0;
-	return plq;
-}
-//--------------------------------------------------------------------------
-void EnqueLinkNLEx( PLINKQUEUE *pplq, POINTER link DBG_PASS )
- {
-	INDEX tmp, t, c;
-	PLINKQUEUE plq;
-	if( !pplq )
-		return;
-	if( !( *pplq ) )
-		*pplq = CreateLinkQueueEx( DBG_VOIDRELAY );
-	plq = *pplq;
-	if( link )
-	{
-		tmp = (t=plq->Top) + 1;
-		if( tmp >= ( c = plq->Cnt ) )
-			tmp -= c;
- // collided with self...
-		if( tmp == ( plq->Bottom ) )
-		{
-			plq = ExpandLinkQueueEx( pplq, 16 DBG_RELAY );
- // should be room at the end of phsyical array....
-			tmp = (t=plq->Top) + 1;
-		}
-		plq->pNode[t] = link;
-		plq->Top = tmp;
-	}
-	*pplq = plq;
- }
- //--------------------------------------------------------------------------
- PLINKQUEUE  PrequeLinkEx ( PLINKQUEUE *pplq, POINTER link DBG_PASS )
-{
-	INDEX tmp;
-	PLINKQUEUE plq;
-	if( !pplq )
-		return NULL;
-	if( !(*pplq) )
-		*pplq = CreateLinkQueueEx( DBG_VOIDRELAY );
-#if USE_CUSTOM_ALLOCER
-retry_lock:
-#endif
-	while( LockedExchange( link_queue_local_lock, __LINE__ ) )
-		Relinquish();
-#if USE_CUSTOM_ALLOCER
-	if( !(*pplq) )
-	{
-		link_queue_local_lock[0] = 0;
-		return NULL;
-	}
-	if( (*pplq)->Lock )
-	{
-		link_queue_local_lock[0] = 0;
-		Relinquish();
-		goto retry_lock;
-	}
-	(*pplq)->Lock = 1;
-	link_queue_local_lock[0] = 0;
-#else
-	if( !(*pplq) )
-	{
-		//it could have been deallocated
-		link_queue_local_lock[0] = 0;
-		return (*pplq);
-	}
-#endif
-	plq = *pplq;
-	if( link )
-	{
-		tmp = plq->Bottom - 1;
-		if( tmp & 0x80000000 )
-			tmp += plq->Cnt;
- // collided with self...
-		if( tmp == plq->Top )
-		{
-			plq = ExpandLinkQueueEx( pplq, 16 DBG_RELAY );
- // should be room at the end of phsyical array....
-			tmp = plq->Cnt - 1;
-		}
-		plq->pNode[tmp] = link;
-		plq->Bottom = tmp;
-	}
-#if USE_CUSTOM_ALLOCER
-	plq->Lock = 0;
-#endif
-	link_queue_local_lock[0] = 0;
-	return plq;
-}
-//--------------------------------------------------------------------------
- LOGICAL  IsQueueEmpty ( PLINKQUEUE *pplq  )
-{
-	if( !pplq || !(*pplq) ||
-		(*pplq)->Bottom == (*pplq)->Top )
-		return TRUE;
-	return FALSE;
-}
-//--------------------------------------------------------------------------
- INDEX  GetQueueLength ( PLINKQUEUE plq )
-{
-	INDEX used = 0;
-	if( plq )
-	{
-		used = plq->Top - plq->Bottom;
-		if( plq->Top < plq->Bottom )
-			used += plq->Cnt;
-	}
-	return used;
-}
-//--------------------------------------------------------------------------
-POINTER  PeekQueueEx	 ( PLINKQUEUE plq, int idx )
-{
-	size_t top;
-	if( !plq )
-		return NULL;
-	if( idx < 0 )
-	{
-		idx++;
-		for( top = plq->Top?(plq->Top - 1):(plq->Cnt-1)
-			 ; idx && top != plq->Bottom
-			  ; )
-		{
-			idx++;
-			if( !top ) top = plq->Cnt - 1;
-			else top--;
-		}
-		if( idx == 0 )
-		{
-			if( plq->Top == plq->Bottom )
-				return NULL;
-			return plq->pNode[top];
-		}
-	}
-	else
-	{
-		for( top = plq->Bottom
-			 ; idx != -1 && top != plq->Top
-			  ; )
-		{
-			if( idx ) {
-				top++;
-				if( top >= plq->Cnt )
-					top-=plq->Cnt;
-				idx--;
-			}else { idx = -1; break; }
-		}
-		if( idx == -1 )
-			return plq->pNode[top];
-	}
-	return NULL;
-}
-POINTER  PeekQueue ( PLINKQUEUE plq )
-{
-	return PeekQueueEx( plq, 0 );
-}
-//--------------------------------------------------------------------------
-POINTER  DequeLink ( PLINKQUEUE *pplq )
-{
-	POINTER p;
-	INDEX tmp;
-	if( pplq && *pplq )
-	{
-#if USE_CUSTOM_ALLOCER
-		int keep_lock = 0;
-#endif
-		uint32_t priorline;
-#if USE_CUSTOM_ALLOCER
-retry_lock:
-#endif
-		while( ( priorline = LockedExchange( link_queue_local_lock, __LINE__ ) ) )
-		{
-#if USE_CUSTOM_ALLOCER
-			if( link_queue_local_thread == MakeThread() )
+			PLINKQUEUE CreateLinkQueueEx( DBG_VOIDPASS )
 			{
-				keep_lock = 1;
-				break;
+				PLINKQUEUE plq = 0;
+ //-V557
+				plq = (PLINKQUEUE)AllocateEx( MY_OFFSETOF( &plq, pNode[8] ) DBG_RELAY );
+#if USE_CUSTOM_ALLOCER
+				plq->Lock = 0;
+#endif
+				plq->Top = 0;
+				plq->Bottom = 0;
+				plq->Cnt = 8;
+				plq->pNode[0] = NULL;
+ // shrug
+				plq->pNode[1] = NULL;
+				return plq;
 			}
-#endif
-			Relinquish();
-		}
+			//--------------------------------------------------------------------------
+			void DeleteLinkQueueEx( PLINKQUEUE* pplq DBG_PASS )
+			{
+				if (!pplq)
+					return;
 #if USE_CUSTOM_ALLOCER
-		if( !pplq )
-		{
-			if( !keep_lock )
+				retry_lock :
+#endif
+				while (LockedExchange( link_queue_local_lock, __LINE__ ))
+				{
+					Relinquish();
+				}
+#if USE_CUSTOM_ALLOCER
+				if (_link_queue_local)
+					_link_queue_local->thread = MakeThread();
+				if (!(*pplq))
+				{
+					link_queue_local_lock[0] = 0;
+					return;
+				}
+				if ((*pplq)->Lock)
+				{
+					link_queue_local_lock[0] = 0;
+					Relinquish();
+					goto retry_lock;
+				}
+				(*pplq)->Lock = 1;
+#endif
 				link_queue_local_lock[0] = 0;
-			return NULL;
-		}
-		if( (*pplq)->Lock )
-		{
-			if( !keep_lock )
+				if (pplq)
+				{
+					if (*pplq)
+						ReleaseEx( (POINTER)(*pplq) DBG_RELAY );
+					*pplq = NULL;
+				}
+#if USE_CUSTOM_ALLOCER
+				if (_link_queue_local)
+					_link_queue_local->thread = NULL;
+#endif
+				//link_queue_local_lock[0] = 0;
+			}
+			//--------------------------------------------------------------------------
+			static PLINKQUEUE ExpandLinkQueueEx( PLINKQUEUE* pplq, INDEX entries DBG_PASS )
+			{
+				PLINKQUEUE plqNew = NULL;
+#if USE_CUSTOM_ALLOCER
+				while (LockedExchange( link_queue_local_lock, __LINE__ ))
+				{
+					Relinquish();
+				}
+				if (_link_queue_local)
+					_link_queue_local->thread = MakeThread();
+#endif
+				if (pplq)
+				{
+					PLINKQUEUE plq = *pplq;
+					INDEX size;
+					int prior_logging;
+					size = MY_OFFSETOF( pplq, pNode[plq->Cnt + entries] );
+					prior_logging = ClearAllocateLogging( FALSE );
+					plqNew = (PLINKQUEUE)AllocateEx( size DBG_RELAY );
+					plqNew->Cnt = plq->Cnt + entries;
+					plqNew->Bottom = 0;
+					if (plq->Bottom > plq->Top)
+					{
+						INDEX bottom_half;
+						plqNew->Top = (bottom_half = plq->Cnt - plq->Bottom) + plq->Top;
+						MemCpy( (POINTER)plqNew->pNode, (POINTER)(plq->pNode + plq->Bottom), sizeof( POINTER ) * bottom_half );
+						MemCpy( (POINTER)(plqNew->pNode + bottom_half), (POINTER)plq->pNode, sizeof( POINTER ) * plq->Top );
+					}
+					else
+					{
+						plqNew->Top = plq->Top - plq->Bottom;
+						MemCpy( (POINTER)plqNew->pNode, (POINTER)(plq->pNode + plq->Bottom), sizeof( POINTER ) * plqNew->Top );
+					}
+					//need to make sure plq is always valid; can be trying to get a lock
+					(*pplq) = plqNew;
+					Release( plq );
+					ResetAllocateLogging( prior_logging );
+				}
+#if USE_CUSTOM_ALLOCER
+				if (_link_queue_local)
+					_link_queue_local->thread = NULL;
 				link_queue_local_lock[0] = 0;
-			Relinquish();
-			goto retry_lock;
-		}
-		(*pplq)->Lock = 1;
-		if( !keep_lock )
-			link_queue_local_lock[0] = 0;
+#endif
+				return plqNew;
+			}
+			//--------------------------------------------------------------------------
+			void  EnqueLinkEx( PLINKQUEUE* pplq, POINTER link DBG_PASS )
+			{
+				INDEX tmp;
+				PLINKQUEUE plq;
+#if USE_CUSTOM_ALLOCER
+				int keep_lock = 0;
+#endif
+				if (!pplq)
+					return;
+				if (!(*pplq))
+					*pplq = CreateLinkQueueEx( DBG_VOIDRELAY );
+#if USE_CUSTOM_ALLOCER
+				retry_lock :
+#endif
+				while (LockedExchange( link_queue_local_lock, __LINE__ ))
+				{
+#if USE_CUSTOM_ALLOCER
+					if (link_queue_local_thread == MakeThread())
+					{
+						keep_lock = 1;
+						break;
+					}
+#endif
+					Relinquish();
+				}
+#if USE_CUSTOM_ALLOCER
+				if (_link_queue_local)
+					_link_queue_local->thread = MakeThread();
+				if (!(*pplq))
+				{
+					if (!keep_lock)
+						link_queue_local_lock[0] = 0;
+					return;
+				}
+				if ((*pplq)->Lock)
+				{
+					if (!keep_lock)
+						link_queue_local_lock[0] = 0;
+					Relinquish();
+					goto retry_lock;
+				}
+				(*pplq)->Lock = 1;
+				if (!keep_lock)
+				{
+					if (_link_queue_local)
+						_link_queue_local->thread = NULL;
+					link_queue_local_lock[0] = 0;
+				}
 #else
-		if( !(*pplq) )
-		{
-			//it could have been deallocated
-			link_queue_local_lock[0] = 0;
-			return (*pplq);
-		}
+				if (!(*pplq))
+				{
+					//it could have been deallocated
+					link_queue_local_lock[0] = 0;
+					return;
+				}
 #endif
-	}
-	else
-		return NULL;
-	p = NULL;
-	if( (*pplq)->Bottom != (*pplq)->Top )
-	{
-		tmp = (*pplq)->Bottom + 1;
-		if( tmp >= (*pplq)->Cnt )
-			tmp -= (*pplq)->Cnt;
-		p = (*pplq)->pNode[(*pplq)->Bottom];
-		(*pplq)->Bottom = tmp;
-	}
+				plq = *pplq;
+				//else
+				//	s_link_queue_local.thread = MakeThread();
+				if (link)
+				{
+					tmp = plq->Top + 1;
+					if (tmp >= plq->Cnt)
+						tmp -= plq->Cnt;
+ // collided with self...
+					if (tmp == plq->Bottom)
+					{
+						plq = ExpandLinkQueueEx( pplq, 16 DBG_RELAY );
+ // should be room at the end of phsyical array....
+						tmp = plq->Top + 1;
+					}
+					plq->pNode[plq->Top] = link;
+					plq->Top = tmp;
+				}
+				*pplq = plq;
 #if USE_CUSTOM_ALLOCER
-	(*pplq)->Lock = 0;
+				plq->Lock = 0;
 #endif
-	link_queue_local_lock[0] = 0;
-	return p;
-}
-POINTER  DequeLinkNL( PLINKQUEUE *pplq )
-{
-	INDEX b, t, c, tmp;
-	POINTER p;
-	if( !pplq || !*pplq )
-		return NULL;
-	p = NULL;
-	if( (b=( *pplq )->Bottom) != (t=( *pplq )->Top) )
-	{
-		tmp = b + 1;
-		if( tmp >= ( c = ( *pplq )->Cnt ) )
-			tmp -= c;
-		p = ( *pplq )->pNode[b];
-		( *pplq )->Bottom = tmp;
-	}
-	return p;
-}
+				link_queue_local_lock[0] = 0;
+			}
+			//--------------------------------------------------------------------------
+			void EnqueLinkNLEx( PLINKQUEUE* pplq, POINTER link DBG_PASS )
+			{
+				INDEX tmp, t, c;
+				PLINKQUEUE plq;
+				if (!pplq)
+					return;
+				if (!(*pplq))
+					*pplq = CreateLinkQueueEx( DBG_VOIDRELAY );
+				plq = *pplq;
+				if (link)
+				{
+					tmp = (t = plq->Top) + 1;
+					if (tmp >= (c = plq->Cnt))
+						tmp -= c;
+ // collided with self...
+					if (tmp == (plq->Bottom))
+					{
+						plq = ExpandLinkQueueEx( pplq, 16 DBG_RELAY );
+ // should be room at the end of phsyical array....
+						tmp = (t = plq->Top) + 1;
+					}
+					plq->pNode[t] = link;
+					plq->Top = tmp;
+				}
+				*pplq = plq;
+			}
+			//--------------------------------------------------------------------------
+			void  PrequeLinkEx( PLINKQUEUE* pplq, POINTER link DBG_PASS )
+			{
+				INDEX tmp;
+				PLINKQUEUE plq;
+				if (!pplq)
+					return;
+				if (!(*pplq))
+					*pplq = CreateLinkQueueEx( DBG_VOIDRELAY );
+#if USE_CUSTOM_ALLOCER
+				retry_lock :
+#endif
+				while (LockedExchange( link_queue_local_lock, __LINE__ ))
+					Relinquish();
+#if USE_CUSTOM_ALLOCER
+				if (!(*pplq))
+				{
+					link_queue_local_lock[0] = 0;
+					return;
+				}
+				if ((*pplq)->Lock)
+				{
+					link_queue_local_lock[0] = 0;
+					Relinquish();
+					goto retry_lock;
+				}
+				(*pplq)->Lock = 1;
+				link_queue_local_lock[0] = 0;
+#else
+				if (!(*pplq))
+				{
+					//it could have been deallocated
+					link_queue_local_lock[0] = 0;
+					return;
+				}
+#endif
+				plq = *pplq;
+				if (link)
+				{
+					tmp = plq->Bottom - 1;
+					if (tmp & 0x80000000)
+						tmp += plq->Cnt;
+ // collided with self...
+					if (tmp == plq->Top)
+					{
+						plq = ExpandLinkQueueEx( pplq, 16 DBG_RELAY );
+ // should be room at the end of phsyical array....
+						tmp = plq->Cnt - 1;
+					}
+					plq->pNode[tmp] = link;
+					plq->Bottom = tmp;
+				}
+#if USE_CUSTOM_ALLOCER
+				plq->Lock = 0;
+#endif
+				link_queue_local_lock[0] = 0;
+			}
+			//--------------------------------------------------------------------------
+			LOGICAL  IsQueueEmpty( PLINKQUEUE* pplq )
+			{
+				if (!pplq || !(*pplq) ||
+					(*pplq)->Bottom == (*pplq)->Top)
+					return TRUE;
+				return FALSE;
+			}
+			//--------------------------------------------------------------------------
+			INDEX  GetQueueLength( PLINKQUEUE plq )
+			{
+				INDEX used = 0;
+				if (plq)
+				{
+					used = plq->Top - plq->Bottom;
+					if (plq->Top < plq->Bottom)
+						used += plq->Cnt;
+				}
+				return used;
+			}
+			//--------------------------------------------------------------------------
+			POINTER  PeekQueueEx( PLINKQUEUE plq, int idx )
+			{
+				size_t top;
+				if (!plq)
+					return NULL;
+				if (idx < 0)
+				{
+					idx++;
+					for (top = plq->Top ? (plq->Top - 1) : (plq->Cnt - 1)
+						; idx && top != plq->Bottom
+						; )
+					{
+						idx++;
+						if (!top) top = plq->Cnt - 1;
+						else top--;
+					}
+					if (idx == 0)
+					{
+						if (plq->Top == plq->Bottom)
+							return NULL;
+						return plq->pNode[top];
+					}
+				}
+				else
+				{
+					for (top = plq->Bottom
+						; idx != -1 && top != plq->Top
+						; )
+					{
+						if (idx) {
+							top++;
+							if (top >= plq->Cnt)
+								top -= plq->Cnt;
+							idx--;
+						}
+						else { idx = -1; break; }
+					}
+					if (idx == -1)
+						return plq->pNode[top];
+				}
+				return NULL;
+			}
+			POINTER  PeekQueue( PLINKQUEUE plq )
+			{
+				return PeekQueueEx( plq, 0 );
+			}
+			//--------------------------------------------------------------------------
+			POINTER  DequeLink( PLINKQUEUE* pplq )
+			{
+				POINTER p;
+				INDEX tmp;
+				if (pplq && *pplq)
+				{
+#if USE_CUSTOM_ALLOCER
+					int keep_lock = 0;
+#endif
+					uint32_t priorline;
+#if USE_CUSTOM_ALLOCER
+					retry_lock :
+#endif
+					while ((priorline = LockedExchange( link_queue_local_lock, __LINE__ )))
+					{
+#if USE_CUSTOM_ALLOCER
+						if (link_queue_local_thread == MakeThread())
+						{
+							keep_lock = 1;
+							break;
+						}
+#endif
+						Relinquish();
+					}
+#if USE_CUSTOM_ALLOCER
+					if (!pplq)
+					{
+						if (!keep_lock)
+							link_queue_local_lock[0] = 0;
+						return NULL;
+					}
+					if ((*pplq)->Lock)
+					{
+						if (!keep_lock)
+							link_queue_local_lock[0] = 0;
+						Relinquish();
+						goto retry_lock;
+					}
+					(*pplq)->Lock = 1;
+					if (!keep_lock)
+						link_queue_local_lock[0] = 0;
+#else
+					if (!(*pplq))
+					{
+						//it could have been deallocated
+						link_queue_local_lock[0] = 0;
+						return NULL;
+					}
+#endif
+				}
+				else
+					return NULL;
+				p = NULL;
+				if ((*pplq)->Bottom != (*pplq)->Top)
+				{
+					tmp = (*pplq)->Bottom + 1;
+					if (tmp >= (*pplq)->Cnt)
+						tmp -= (*pplq)->Cnt;
+					p = (*pplq)->pNode[(*pplq)->Bottom];
+					(*pplq)->Bottom = tmp;
+				}
+#if USE_CUSTOM_ALLOCER
+				( *pplq )->Lock = 0;
+#endif
+				link_queue_local_lock[0] = 0;
+				return p;
+			}
+			POINTER  DequeLinkNL( PLINKQUEUE* pplq )
+			{
+				INDEX b, t, c, tmp;
+				POINTER p;
+				if (!pplq || !*pplq)
+					return NULL;
+				p = NULL;
+				if ((b = (*pplq)->Bottom) != (t = (*pplq)->Top))
+				{
+					tmp = b + 1;
+					if (tmp >= (c = (*pplq)->Cnt))
+						tmp -= c;
+					p = (*pplq)->pNode[b];
+					(*pplq)->Bottom = tmp;
+				}
+				return p;
+			}
 #ifdef __cplusplus
 //		namespace queue {
-}
+		}
 #endif
 //--------------------------------------------------------------------------
 //--------------------------------------------------------------------------
 #ifdef __cplusplus
 		namespace data_queue {
 #endif
-static struct data_queue_local_data
-{
-	volatile uint32_t lock;
-} s_data_queue_local, *_data_queue_local;
+			static struct data_queue_local_data
+			{
+				volatile uint32_t lock;
+			}
+			   s_data_queue_local
+#ifndef __STATIC_GLOBALS__
+				, * _data_queue_local
+#endif
+									;
 #ifdef __STATIC_GLOBALS__
 #  define data_queue_local  ((s_data_queue_local))
 #  define data_queue_local_lock ((&s_data_queue_local.lock))
@@ -9299,312 +9736,324 @@ static struct data_queue_local_data
 #  define data_queue_local  ((_data_queue_local)?(*_data_queue_local):(s_data_queue_local))
 #  define data_queue_local_lock ((_data_queue_local)?(&_data_queue_local->lock):(&s_data_queue_local.lock))
 #endif
-PDATAQUEUE CreateDataQueueEx( INDEX size DBG_PASS )
-{
-	PDATAQUEUE pdq;
-	pdq = (PDATAQUEUE)AllocateEx( ( ( sizeof( DATAQUEUE ) + (2*size) ) - 1 ) DBG_RELAY );
-	pdq->Top      = 0;
-	pdq->Bottom	  = 0;
-	pdq->ExpandBy = 16;
-	pdq->Size     = size;
-	pdq->Cnt      = 2;
-	return pdq;
-}
-//--------------------------------------------------------------------------
-void DeleteDataQueueEx( PDATAQUEUE *ppdq DBG_PASS )
-{
-	if( ppdq )
-	{
-		if( *ppdq )
-			ReleaseEx( *ppdq DBG_RELAY );
-		*ppdq = NULL;
-	}
-}
-//--------------------------------------------------------------------------
-static PDATAQUEUE ExpandDataQueueEx( PDATAQUEUE *ppdq, INDEX entries DBG_PASS )
-{
-	PDATAQUEUE pdqNew = NULL;
-	if( ppdq )
-	{
-		PDATAQUEUE pdq = *ppdq;
-		//pdq->Cnt += entries;
-		pdqNew = (PDATAQUEUE)AllocateEx( (uint32_t)offsetof( DATAQUEUE, data[0] ) + ((pdq->Cnt+entries)  * pdq->Size) DBG_RELAY );
-		pdqNew->Cnt = pdq->Cnt + entries;
-		pdqNew->ExpandBy = pdq->ExpandBy;
-		pdqNew->Bottom = 0;
-		pdqNew->Size = pdq->Size;
-		if( pdq->Bottom > pdq->Top )
-		{
-			INDEX bottom_half;
-			/* if you see '- entries' in a diff... it was decided to not add it to the original queue above, instead */
-			pdqNew->Top = (bottom_half = ( pdq->Cnt ) - pdq->Bottom ) + pdq->Top;
-			MemCpy( pdqNew->data
-				, pdq->data + (pdq->Bottom * pdq->Size)
-				, pdq->Size * bottom_half );
-			MemCpy( pdqNew->data + ( bottom_half * pdq->Size )
-				, pdq->data
-				, pdq->Size * pdq->Top );
-		}
-		else
-		{
-			pdqNew->Top = pdq->Top - pdq->Bottom;
-			MemCpy( pdqNew->data
-				, pdq->data + (pdq->Bottom * pdq->Size)
-				, pdq->Size * pdqNew->Top );
-		}
-		(*ppdq) = pdqNew;
-		Release( pdq );
-	}
-	return pdqNew;
-}
-PDATAQUEUE  CreateLargeDataQueueEx( INDEX size, INDEX entries, INDEX expand DBG_PASS )
-{
-	PDATAQUEUE pdq = CreateDataQueueEx( size DBG_RELAY );
-	pdq->ExpandBy = expand;
-	ExpandDataQueueEx( &pdq, entries DBG_RELAY );
-	return pdq;
-}
-//--------------------------------------------------------------------------
- PDATAQUEUE  EnqueDataEx ( PDATAQUEUE *ppdq, POINTER link DBG_PASS )
-{
-	INDEX tmp;
-	PDATAQUEUE pdq;
-	if( !ppdq )
-		return NULL;
-	if( !(*ppdq) )
+			PDATAQUEUE CreateDataQueueEx( INDEX size DBG_PASS )
+			{
+				PDATAQUEUE pdq;
+				pdq = (PDATAQUEUE)AllocateEx( ((sizeof( DATAQUEUE ) + (2 * size)) - 1) DBG_RELAY );
+				pdq->Top = 0;
+				pdq->Bottom = 0;
+				pdq->ExpandBy = 16;
+				pdq->Size = size;
+				pdq->Cnt = 2;
+				return pdq;
+			}
+			//--------------------------------------------------------------------------
+			void DeleteDataQueueEx( PDATAQUEUE* ppdq DBG_PASS )
+			{
+				if (ppdq)
+				{
+					if (*ppdq)
+						ReleaseEx( (POINTER)*ppdq DBG_RELAY );
+					*ppdq = NULL;
+				}
+			}
+			//--------------------------------------------------------------------------
+			static PDATAQUEUE ExpandDataQueueEx( PDATAQUEUE* ppdq, INDEX entries DBG_PASS )
+			{
+				PDATAQUEUE pdqNew = NULL;
+				if (ppdq)
+				{
+					PDATAQUEUE pdq = *ppdq;
+					//pdq->Cnt += entries;
+					pdqNew = (PDATAQUEUE)AllocateEx( (uint32_t)offsetof( DATAQUEUE, data[0] ) + ((pdq->Cnt + entries) * pdq->Size) DBG_RELAY );
+					pdqNew->Cnt = pdq->Cnt + entries;
+					pdqNew->ExpandBy = pdq->ExpandBy;
+					pdqNew->Bottom = 0;
+					pdqNew->Size = pdq->Size;
+					if (pdq->Bottom > pdq->Top)
+					{
+						INDEX bottom_half;
+						/* if you see '- entries' in a diff... it was decided to not add it to the original queue above, instead */
+						pdqNew->Top = (bottom_half = (pdq->Cnt) - pdq->Bottom) + pdq->Top;
+						MemCpy( (POINTER)pdqNew->data
+							, (POINTER)(pdq->data + (pdq->Bottom * pdq->Size))
+							, pdq->Size * bottom_half );
+						MemCpy( (POINTER)(pdqNew->data + (bottom_half * pdq->Size))
+							, (POINTER)pdq->data
+							, pdq->Size * pdq->Top );
+					}
+					else
+					{
+						pdqNew->Top = pdq->Top - pdq->Bottom;
+						MemCpy( (POINTER)pdqNew->data
+							, (POINTER)(pdq->data + (pdq->Bottom * pdq->Size))
+							, pdq->Size * pdqNew->Top );
+					}
+					(*ppdq) = pdqNew;
+					Release( pdq );
+				}
+				return pdqNew;
+			}
+			PDATAQUEUE  CreateLargeDataQueueEx( INDEX size, INDEX entries, INDEX expand DBG_PASS )
+			{
+				PDATAQUEUE pdq = CreateDataQueueEx( size DBG_RELAY );
+				pdq->ExpandBy = expand;
+				ExpandDataQueueEx( &pdq, entries DBG_RELAY );
+				return pdq;
+			}
+			//--------------------------------------------------------------------------
+			void  EnqueDataEx( PDATAQUEUE* ppdq, POINTER link DBG_PASS )
+			{
+				INDEX tmp;
+				PDATAQUEUE pdq;
+				if (!ppdq)
+					return;
+				if (!(*ppdq))
  // cannot create this - no idea how big.
-		return NULL;
-	while( LockedExchange( data_queue_local_lock, 1 ) )
-		Relinquish();
-	pdq = *ppdq;
-	if( link )
-	{
-		tmp = pdq->Top + 1;
-		if( tmp >= pdq->Cnt )
-			tmp -= pdq->Cnt;
+					return;
+				while (LockedExchange( data_queue_local_lock, 1 ))
+					Relinquish();
+				pdq = *ppdq;
+				if (link)
+				{
+					tmp = pdq->Top + 1;
+					if (tmp >= pdq->Cnt)
+						tmp -= pdq->Cnt;
  // collided with self...
-		if( tmp == pdq->Bottom )
-		{
-			pdq = ExpandDataQueueEx( ppdq, (*ppdq)->ExpandBy DBG_RELAY );
+					if (tmp == pdq->Bottom)
+					{
+						pdq = ExpandDataQueueEx( ppdq, (*ppdq)->ExpandBy DBG_RELAY );
  // should be room at the end of phsyical array....
-			tmp = pdq->Top + 1;
-		}
-		MemCpy( pdq->data + ( pdq->Top * pdq->Size ), link, pdq->Size );
-		pdq->Top = tmp;
-	}
-	data_queue_local_lock[0] = 0;
-	return pdq;
-}
-//--------------------------------------------------------------------------
- PDATAQUEUE  PrequeDataEx ( PDATAQUEUE *ppdq, POINTER link DBG_PASS )
-{
-	INDEX tmp;
-	PDATAQUEUE pdq;
-	if( !ppdq )
-		return NULL;
-	if( !(*ppdq) )
+						tmp = pdq->Top + 1;
+					}
+					MemCpy( (POINTER)(pdq->data + (pdq->Top * pdq->Size)), link, pdq->Size );
+					pdq->Top = tmp;
+				}
+				data_queue_local_lock[0] = 0;
+			}
+			//--------------------------------------------------------------------------
+			void PrequeDataEx( PDATAQUEUE* ppdq, POINTER link DBG_PASS )
+			{
+				INDEX tmp;
+				PDATAQUEUE pdq;
+				if (!ppdq)
+					return;
+				if (!(*ppdq))
  // cannot create this - no idea how big.
-		return NULL;
-	while( LockedExchange( data_queue_local_lock, 1 ) )
-		Relinquish();
-	pdq = *ppdq;
-	if( link )
-	{
-		tmp = pdq->Bottom - 1;
-		if( tmp > 0x80000000 )
-			tmp += pdq->Cnt;
+					return;
+				while (LockedExchange( data_queue_local_lock, 1 ))
+					Relinquish();
+				pdq = *ppdq;
+				if (link)
+				{
+					tmp = pdq->Bottom - 1;
+					if (tmp > 0x80000000)
+						tmp += pdq->Cnt;
  // collided with self...
-		if( tmp == pdq->Top )
-		{
-			// expand re-aligns queue elements so bottom is 0 and top is N
-			// so the bottom will always wrap when we try to add to the beginning...
-			pdq = ExpandDataQueueEx( ppdq, (*ppdq)->ExpandBy DBG_RELAY );
+					if (tmp == pdq->Top)
+					{
+						// expand re-aligns queue elements so bottom is 0 and top is N
+						// so the bottom will always wrap when we try to add to the beginning...
+						pdq = ExpandDataQueueEx( ppdq, (*ppdq)->ExpandBy DBG_RELAY );
  // should be room at the end of phsyical array....
-			tmp = pdq->Cnt - 1;
-		}
-		MemCpy( pdq->data + ( tmp * pdq->Size ), link, pdq->Size );
-		pdq->Bottom = tmp;
-	}
-	data_queue_local_lock[0] = 0;
-	return pdq;
-}
-//--------------------------------------------------------------------------
- LOGICAL  IsDataQueueEmpty ( PDATAQUEUE *ppdq  )
-{
-	if( !ppdq || !(*ppdq) ||
-		(*ppdq)->Bottom == (*ppdq)->Top )
-		return TRUE;
-	return FALSE;
-}
-//--------------------------------------------------------------------------
- LOGICAL  DequeData ( PDATAQUEUE *ppdq, POINTER result )
-{
-	LOGICAL p;
-	INDEX tmp;
-	if( ppdq && *ppdq )
-		while( LockedExchange( data_queue_local_lock, 1 ) )
-			Relinquish();
-	else
-		return 0;
-	p = 0;
-	if( (*ppdq)->Bottom != (*ppdq)->Top )
-	{
-		tmp = (*ppdq)->Bottom + 1;
-		if( tmp >= (*ppdq)->Cnt )
-			tmp -= (*ppdq)->Cnt;
-		if( result )
-			MemCpy( result
-					, (*ppdq)->data + (*ppdq)->Bottom * (*ppdq)->Size
-					, (*ppdq)->Size );
-		p = 1;
-		(*ppdq)->Bottom = tmp;
-	}
-	data_queue_local_lock[0] = 0;
-	return p;
-}
-//--------------------------------------------------------------------------
- LOGICAL  UnqueData ( PDATAQUEUE *ppdq, POINTER result )
-{
-	LOGICAL p;
-	INDEX tmp;
-	if( ppdq && *ppdq )
-		while( LockedExchange( data_queue_local_lock, 1 ) )
-			Relinquish();
-	else
-		return 0;
-	p = 0;
-	if( (*ppdq)->Bottom != (*ppdq)->Top )
-	{
-		tmp = (*ppdq)->Top;
-		if( tmp )
-			tmp--;
-		else
-			tmp = ((*ppdq)->Cnt)-1;
-		if( result )
-			MemCpy( result
-					, (*ppdq)->data + tmp * (*ppdq)->Size
-					, (*ppdq)->Size );
-		p = 1;
-		(*ppdq)->Top = tmp;
-	}
-	data_queue_local_lock[0] = 0;
-	return p;
-}
-//--------------------------------------------------------------------------
-// zero is the first,
+						tmp = pdq->Cnt - 1;
+					}
+					MemCpy( (POINTER)(pdq->data + (tmp * pdq->Size)), link, pdq->Size );
+					pdq->Bottom = tmp;
+				}
+				data_queue_local_lock[0] = 0;
+			}
+			//--------------------------------------------------------------------------
+			LOGICAL  IsDataQueueEmpty( PDATAQUEUE* ppdq )
+			{
+				if (!ppdq || !(*ppdq) ||
+					(*ppdq)->Bottom == (*ppdq)->Top)
+					return TRUE;
+				return FALSE;
+			}
+			//--------------------------------------------------------------------------
+			LOGICAL  DequeData( PDATAQUEUE* ppdq, POINTER result )
+			{
+				LOGICAL p;
+				INDEX tmp;
+				if (ppdq && *ppdq)
+					while (LockedExchange( data_queue_local_lock, 1 ))
+						Relinquish();
+				else
+					return 0;
+				p = 0;
+				if ((*ppdq)->Bottom != (*ppdq)->Top)
+				{
+					tmp = (*ppdq)->Bottom + 1;
+					if (tmp >= (*ppdq)->Cnt)
+						tmp -= (*ppdq)->Cnt;
+					if (result)
+						MemCpy( result
+							, (POINTER)((*ppdq)->data + (*ppdq)->Bottom * (*ppdq)->Size)
+							, (*ppdq)->Size );
+					p = 1;
+					(*ppdq)->Bottom = tmp;
+				}
+				data_queue_local_lock[0] = 0;
+				return p;
+			}
+			//--------------------------------------------------------------------------
+			LOGICAL  UnqueData( PDATAQUEUE* ppdq, POINTER result )
+			{
+				LOGICAL p;
+				INDEX tmp;
+				if (ppdq && *ppdq)
+					while (LockedExchange( data_queue_local_lock, 1 ))
+						Relinquish();
+				else
+					return 0;
+				p = 0;
+				if ((*ppdq)->Bottom != (*ppdq)->Top)
+				{
+					tmp = (*ppdq)->Top;
+					if (tmp)
+						tmp--;
+					else
+						tmp = ((*ppdq)->Cnt) - 1;
+					if (result)
+						MemCpy( result
+							, (POINTER)((*ppdq)->data + tmp * (*ppdq)->Size)
+							, (*ppdq)->Size );
+					p = 1;
+					(*ppdq)->Top = tmp;
+				}
+				data_queue_local_lock[0] = 0;
+				return p;
+			}
+			//--------------------------------------------------------------------------
+			// zero is the first,
 #undef PeekDataQueueEx
- LOGICAL  PeekDataQueueEx ( PDATAQUEUE *ppdq, POINTER result, INDEX idx )
-{
-	INDEX top;
-	if( ppdq && *ppdq )
-		while( LockedExchange( data_queue_local_lock, 1 ) )
-			Relinquish();
-	else
-		return 0;
-	// cannot get invalid id.
-	if( idx != INVALID_INDEX )
-	{
-		for( top = (*ppdq)->Bottom;
-			 idx != INVALID_INDEX && top != (*ppdq)->Top
-			 ; )
-		{
-			idx--;
-			if( idx != INVALID_INDEX )
+			LOGICAL  PeekDataQueueEx( PDATAQUEUE* ppdq, POINTER result, INDEX idx )
 			{
-				top++;
-				if( (top) >= (*ppdq)->Cnt )
-					top = top-(*ppdq)->Cnt;
+				INDEX top;
+				if (ppdq && *ppdq)
+					while (LockedExchange( data_queue_local_lock, 1 ))
+						Relinquish();
+				else
+					return 0;
+				// cannot get invalid id.
+				if (idx != INVALID_INDEX)
+				{
+					for (top = (*ppdq)->Bottom;
+						idx != INVALID_INDEX && top != (*ppdq)->Top
+						; )
+					{
+						idx--;
+						if (idx != INVALID_INDEX)
+						{
+							top++;
+							if ((top) >= (*ppdq)->Cnt)
+								top = top - (*ppdq)->Cnt;
+						}
+					}
+					if (idx == INVALID_INDEX)
+					{
+						MemCpy( result, (POINTER)((*ppdq)->data + top * (*ppdq)->Size), (*ppdq)->Size );
+						data_queue_local_lock[0] = 0;
+						return 1;
+						//return (*ppdq)->pNode + top;
+					}
+				}
+				data_queue_local_lock[0] = 0;
+				return 0;
 			}
-		}
-		if( idx == INVALID_INDEX )
-		{
-			MemCpy( result, (*ppdq)->data + top * (*ppdq)->Size, (*ppdq)->Size );
-			data_queue_local_lock[0] = 0;
-			return 1;
-			//return (*ppdq)->pNode + top;
-		}
-	}
-	data_queue_local_lock[0] = 0;
-	return 0;
-}
 #undef PeekDataQueue
- LOGICAL  PeekDataQueue ( PDATAQUEUE *ppdq, POINTER result )
-{
-	return PeekDataQueueEx( ppdq, result, 0 );
-}
-// zero is the first,
-POINTER  PeekDataInQueueEx ( PDATAQUEUE *ppdq, INDEX idx )
-{
-	INDEX top;
-	if( ppdq && *ppdq )
-		while( LockedExchange( data_queue_local_lock, 1 ) )
-			Relinquish();
-	else
-		return 0;
-	// cannot get invalid id.
-	if( idx != INVALID_INDEX )
-	{
-		for( top = (*ppdq)->Bottom;
-			 idx != INVALID_INDEX && top != (*ppdq)->Top
-			 ; )
-		{
-			idx--;
-			if( idx != INVALID_INDEX )
+			LOGICAL  PeekDataQueue( PDATAQUEUE* ppdq, POINTER result )
 			{
-				top++;
-				if( (top) >= (*ppdq)->Cnt )
-					top = top-(*ppdq)->Cnt;
+				return PeekDataQueueEx( ppdq, result, 0 );
 			}
-		}
-		if( idx == INVALID_INDEX )
-		{
-			data_queue_local_lock[0] = 0;
-			return (*ppdq)->data + top * (*ppdq)->Size;
-		}
-	}
-	data_queue_local_lock[0] = 0;
-	return NULL;
-}
-POINTER  PeekDataInQueue ( PDATAQUEUE *ppdq )
-{
-	return PeekDataInQueueEx( ppdq, 0 );
-}
-void  EmptyDataQueue ( PDATAQUEUE *ppdq )
-{
-	if( ppdq && *ppdq )
-	{
-		while( LockedExchange( data_queue_local_lock, 1 ) )
-			Relinquish();
-		(*ppdq)->Bottom = (*ppdq)->Top = 0;
-		data_queue_local_lock[0] = 0;
-	}
-}
+			// zero is the first,
+			POINTER  PeekDataInQueueEx( PDATAQUEUE* ppdq, INDEX idx )
+			{
+				INDEX top;
+				if (ppdq && *ppdq)
+					while (LockedExchange( data_queue_local_lock, 1 ))
+						Relinquish();
+				else
+					return 0;
+				// cannot get invalid id.
+				if (idx != INVALID_INDEX)
+				{
+					for (top = (*ppdq)->Bottom;
+						idx != INVALID_INDEX && top != (*ppdq)->Top
+						; )
+					{
+						idx--;
+						if (idx != INVALID_INDEX)
+						{
+							top++;
+							if ((top) >= (*ppdq)->Cnt)
+								top = top - (*ppdq)->Cnt;
+						}
+					}
+					if (idx == INVALID_INDEX)
+					{
+						data_queue_local_lock[0] = 0;
+						return (POINTER)((*ppdq)->data + top * (*ppdq)->Size);
+					}
+				}
+				data_queue_local_lock[0] = 0;
+				return NULL;
+			}
+			POINTER  PeekDataInQueue( PDATAQUEUE* ppdq )
+			{
+				return PeekDataInQueueEx( ppdq, 0 );
+			}
+			void  EmptyDataQueue( PDATAQUEUE* ppdq )
+			{
+				if (ppdq && *ppdq)
+				{
+					while (LockedExchange( data_queue_local_lock, 1 ))
+						Relinquish();
+					(*ppdq)->Bottom = (*ppdq)->Top = 0;
+					data_queue_local_lock[0] = 0;
+				}
+			}
+			//--------------------------------------------------------------------------
+			INDEX  GetDataQueueLength( PDATAQUEUE pdq )
+			{
+				INDEX used = 0;
+				if (pdq)
+				{
+					used = pdq->Top - pdq->Bottom;
+					if (pdq->Top < pdq->Bottom)
+						used += pdq->Cnt;
+				}
+				return used;
+			}
 #ifdef __cplusplus
 //		namespace data_queue {
-};
+		};
 #endif
 #ifndef __STATIC_GLOBALS__
-PRIORITY_PRELOAD( InitLocals, NAMESPACE_PRELOAD_PRIORITY + 1 )
-{
+		PRIORITY_PRELOAD( InitLocals, NAMESPACE_PRELOAD_PRIORITY + 1 )
+		{
 #  ifdef __cplusplus
-	RegisterAndCreateGlobal((POINTER*)&list::_list_local, sizeof( *list::_list_local ), "_list_local" );
-	RegisterAndCreateGlobal((POINTER*)&data_list::_data_list_local, sizeof( *data_list::_data_list_local ), "_data_list_local" );
-	RegisterAndCreateGlobal((POINTER*)&queue::_link_queue_local, sizeof( *queue::_link_queue_local ), "_link_queue_local" );
-	RegisterAndCreateGlobal((POINTER*)&data_queue::_data_queue_local, sizeof( *data_queue::_data_queue_local ), "_data_queue_local" );
+			RegisterAndCreateGlobal( (POINTER*)&list::_list_local, sizeof( *list::_list_local ), "_list_local" );
+			//RegisterAndCreateGlobal( (POINTER*)&data_list::_data_list_local, sizeof( *data_list::_data_list_local ), "_data_list_local" );
+			RegisterAndCreateGlobal( (POINTER*)&queue::_link_queue_local, sizeof( *queue::_link_queue_local ), "_link_queue_local" );
+			RegisterAndCreateGlobal( (POINTER*)&data_queue::_data_queue_local, sizeof( *data_queue::_data_queue_local ), "_data_queue_local" );
 #  else
-	SimpleRegisterAndCreateGlobal( _list_local );
-	SimpleRegisterAndCreateGlobal( _data_list_local );
-	SimpleRegisterAndCreateGlobal( _link_queue_local );
-	SimpleRegisterAndCreateGlobal( _data_queue_local );
+			SimpleRegisterAndCreateGlobal( _list_local );
+			//SimpleRegisterAndCreateGlobal( _data_list_local );
+			SimpleRegisterAndCreateGlobal( _link_queue_local );
+			SimpleRegisterAndCreateGlobal( _data_queue_local );
 #  endif
-}
+		}
 #endif
 #ifdef __cplusplus
  //namespace sack {
-}
+	}
  //	namespace containers {
 }
 #endif
+// restore this def in case of amalgamation
+#define PeekDataQueueEx( q, type, result, idx ) PeekDataQueueEx( q, (POINTER)result, idx )
 //--------------------------------------------------------------
 // $Log: typecode.c,v $
 // Revision 1.47  2005/05/25 16:50:30  d3x0r
@@ -10105,12 +10554,12 @@ pResult->data.data[31] = 0;
 	return pResult;
 }
 //---------------------------------------------------------------------------
-PTEXT SegCreateFromFloatEx( float value DBG_PASS )
+PTEXT SegCreateFromFloatEx( double value DBG_PASS )
 {
 	PTEXT pResult;
 	pResult = SegCreateEx( 32 DBG_RELAY);
  //-V512
-	pResult->data.size = snprintf( pResult->data.data, 32, "%f", value );
+	pResult->data.size = snprintf( pResult->data.data, 32, "%g", value );
 	pResult->data.data[31] = 0;
 	return pResult;
 }
@@ -11563,7 +12012,8 @@ int IsSegAnyNumberEx( PTEXT *ppText, double *fNumber, int64_t *iNumber, int *bIn
 	CTEXTSTR pCurrentCharacter = NULL;
 	PTEXT pBegin;
 	PTEXT pText = *ppText;
-	int decimal_count, s, begin = TRUE, digits;
+	int decimal_count, begin = TRUE, digits;
+	// int s;  // used to count negative signs... but this doesn't do a conversion so it's not needed.
 	// remember where we started...
 	// if the first segment is indirect, collect it and only it
 	// as the number... making indirects within a number what then?
@@ -11588,7 +12038,7 @@ int IsSegAnyNumberEx( PTEXT *ppText, double *fNumber, int64_t *iNumber, int *bIn
 	}
 	pBegin = pText;
 	decimal_count = 0;
-	s = 0;
+	//s = 0;
 	digits = 0;
 	while( pText )
 	{
@@ -11616,7 +12066,7 @@ int IsSegAnyNumberEx( PTEXT *ppText, double *fNumber, int64_t *iNumber, int *bIn
 			}
 			else if( ((*pCurrentCharacter) == '-') && begin)
 			{
-				s++;
+				//s++;
 			}
 			else if( ((*pCurrentCharacter) < '0') || ((*pCurrentCharacter) > '9') )
 			{
@@ -12642,10 +13092,13 @@ wchar_t * CharWConvertExx ( const char *wch, size_t len DBG_PASS )
 	// WideCharToMultiByte()
 	// wcstombs_s()
 	// ... etc
-	size_t  sizeInChars = 0;
-	const char *_wch = wch;
+	size_t  sizeInChars;
+	const char *_wch;
 	wchar_t	*ch;
 	wchar_t   *_ch;
+	if( !wch ) return NULL;
+	sizeInChars = 0;
+	_wch = wch;
 	{
 		size_t n;
 		for( n = 0; n < len; n++ )
@@ -12712,6 +13165,7 @@ wchar_t * CharWConvertExx ( const char *wch, size_t len DBG_PASS )
 wchar_t * CharWConvertEx ( const char *ch DBG_PASS )
 {
 	int len;
+	if( !ch ) return NULL;
 	for( len = 0; ch[len]; len++ );
 	return CharWConvertExx( ch, len DBG_RELAY );
 }
@@ -12961,7 +13415,7 @@ TEXTRUNE GetUtfCharW( const wchar_t * *from )
 	TEXTRUNE result = (unsigned)(*from)[0];
 	if( !result ) return result;
 	if( ( ( (*from)[0] & 0xFC00 ) >= 0xD800 )
-		&& ( ( (*from)[0] & 0xFC00 ) <= 0xDF00 ) )
+		&& ( ( (*from)[1] & 0xFC00 ) <= 0xDF00 ) )
 	{
 		result = 0x10000 + ( ( ( (*from)[0] & 0x3ff ) << 10 ) | ( ( (*from)[1] & 0x3ff ) ) );
 		(*from) += 2;
@@ -12986,15 +13440,15 @@ TEXTRUNE GetPriorUtfCharW( const wchar_t*start, const wchar_t* *from )
 {
 	TEXTRUNE result = (unsigned)(*from)[-1];
 	if( !result ) return result;
-	if( ( ( (*from)[0] & 0xFC00 ) >= 0xD800 )
-		&& ( ( (*from)[0] & 0xFC00 ) <= 0xDF00 ) )
+	if( ( ( (*from)[-2] & 0xFC00 ) >= 0xD800 )
+		&& ( ( (*from)[-1] & 0xFC00 ) <= 0xDF00 ) )
 	{
-		result = 0x10000 + ( ( ( (*from)[0] & 0x3ff ) << 10 ) | ( ( (*from)[1] & 0x3ff ) ) );
-		(*from) += 2;
+		result = 0x10000 + ( ( ( (*from)[-2] & 0x3ff ) << 10 ) | ( ( (*from)[-1] & 0x3ff ) ) );
+		(*from) -= 2;
 	}
 	else
 	{
-		(*from)++;
+		(*from)--;
 	}
 	return result;
 }
@@ -13152,7 +13606,10 @@ PRELOAD( initTables ) {
 			u8xor_table2[n][(uint8_t)encodings2[m]] = (TEXTCHAR)(n^m);
 	}
 	//LogBinary( (uint8_t*)u8xor_table[0], sizeof( u8xor_table ) );
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wchar-subscripts"
 	b64xor_table['=']['='] = '=';
+#pragma clang diagnostic pop
 }
 char * b64xor( const char *a, const char *b ) {
 	int n;
@@ -13195,7 +13652,10 @@ char * u8xor( const char *a, size_t alen, const char *b, size_t blen, int *ofs )
 			lprintf( "short utf8 sequence found" ); l = 5; mask = 0;  _mask = 0x03; }
 		// B is a base64 key; it would never be > 128 so char index is OK.
 		char bchar = b[(n+o)%(keylen)]&0x7f;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wchar-subscripts"
 		(*out) = (v & ~mask ) | ( u8xor_table[v & mask ][bchar] & mask );
+#pragma clang diagnostic pop
 		out++;
 	}
 	(*out) = 0;
@@ -13213,6 +13673,8 @@ static void encodeblock( unsigned char in[3], TEXTCHAR out[4], size_t len, const
 	out[2] = (len > 1 ? base64[ ((in[1] & 0x0f) << 2) | ( ( len > 2 ) ? ((in[2] & 0xc0) >> 6) : 0 ) ] : base64[64]);
 	out[3] = (len > 2 ? base64[ in[2] & 0x3f ] : base64[64]);
 }
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wchar-subscripts"
 static void decodeblock( const char in[4], uint8_t out[3], size_t len, const char *base64 )
 {
 	int index[4];
@@ -13230,6 +13692,7 @@ static void decodeblock( const char in[4], uint8_t out[3], size_t len, const cha
 	out[2] = (char)(( index[2] ) << 6 | ( ( index[3] ) & 0x3F ));
 	//out[] = (len > 2 ? base64[ in[2] & 0x3f ] : 0);
 }
+#pragma clang diagnostic pop
 TEXTCHAR *EncodeBase64Ex( const uint8_t* buf, size_t length, size_t *outsize, const char *base64 )
 {
 	size_t fake_outsize;
@@ -13256,6 +13719,8 @@ TEXTCHAR *EncodeBase64Ex( const uint8_t* buf, size_t length, size_t *outsize, co
 	}
 	return real_output;
 }
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wchar-subscripts"
 static void setupDecodeBytes( const char *code ) {
 	int n = 0;
 	// default all of these, allow code to override them.
@@ -13295,6 +13760,7 @@ static void setupDecodeBytes( const char *code ) {
                 }
         }
 }
+#pragma clang diagnostic pop
 uint8_t *DecodeBase64Ex( const char* buf, size_t length, size_t *outsize, const char *base64 )
 {
 	static const char *useBase64;
@@ -13363,6 +13829,8 @@ uint8_t *DecodeBase64Ex( const char* buf, size_t length, size_t *outsize, const 
  *
  *  (c)1999-2006++ Freedom Collective
  */
+/* SQL Option Interface. Gets and sets options; option interface
+   resembles legacy windows INI interface.                       */
 #ifndef SQL_OPTIONS_DEFINED
 #define SQL_OPTIONS_DEFINED
 /* more documentation at end */
@@ -13403,6 +13871,7 @@ uint8_t *DecodeBase64Ex( const char* buf, size_t length, size_t *outsize, const 
 #if defined( SQLSTUB_SOURCE ) || defined( SQLPROXY_LIBRARY_SOURCE )
 #define PSSQL_PROC(type,name) EXPORT_METHOD type CPROC name
 #else
+/* Macro declaring PSSQL procs. */
 #define PSSQL_PROC(type,name) IMPORT_METHOD type CPROC name
 #endif
 #ifdef __cplusplus
@@ -13413,10 +13882,14 @@ uint8_t *DecodeBase64Ex( const char* buf, size_t length, size_t *outsize, const 
 #else
 #define _SQL_NAMESPACE
 #define _SQL_NAMESPACE_END
+/* Marks the beginning of SQL Namespace. */
 #define SQL_NAMESPACE
+/* Marks the end of SQL Namespace. */
 #define SQL_NAMESPACE_END
 #endif
-SACK_NAMESPACE
+#ifdef __cplusplus
+namespace sack {
+#endif
 /* SQL access library. This provides a simple access to ODBC
    connections, and to sqlite. If no database is specified,
    there is an internal database that can be used. These methods
@@ -13435,7 +13908,9 @@ SACK_NAMESPACE
    ProcessConfigurationFile(); If this file does not exist, it
    will be automatically created with default values.
    (Need to describe this sql.config file)                       */
-_SQL_NAMESPACE
+#ifdef __cplusplus
+    namespace sql {
+#endif
 /* <combine PSSQL_PROC>
    \ \                    */
 #define SQLPROXY_PROC PSSQL_PROC
@@ -13762,6 +14237,13 @@ PSSQL_PROC( LOGICAL, CheckODBCTable)( PODBC odbc, PTABLE table, uint32_t options
    odbc :      connection to disable logging on
    bDisable :  if TRUE disables logging, else restores logging. */
 PSSQL_PROC( void, SetSQLLoggingDisable )( PODBC odbc, LOGICAL bDisable );
+/* Set required connection flag, this causes a connection that fails, to wait until
+   the connection is reconnected before continuing.
+*/
+PSSQL_PROC( void, SetConnectionRequired )( PODBC odbc, LOGICAL require );
+/* Get the required connection flag froma connection.
+*/
+PSSQL_PROC( LOGICAL, GetConnectionRequired )( PODBC odbc );
 #ifndef SQLPROXY_INCLUDE
 // result is FALSE on error
 // result is TRUE on success
@@ -14343,6 +14825,10 @@ PSSQL_PROC( int, SQLRecordQuery_js )( PODBC odbc
 	, PDATALIST *pdlResults
 	, PDATALIST pdlParams
 	DBG_PASS );
+/*
+	this properly releases the list and all allocated strings within the entires
+ */
+PSSQL_PROC( void, ReleaseSQLResults )( PDATALIST *ppdlResults );
 /* Do a SQL query on the default odbc connection. The first
    record results immediately if there are any records. Returns
    the results as an array of strings. If you know the select
@@ -14460,16 +14946,30 @@ PSSQL_PROC( int, PushSQLQueryEx )(PODBC);
 #define PushSQLQueryEx(odbc) PushSQLQueryExEx(odbc DBG_SRC )
 // no application support for username/password, sorry, trust thy odbc layer, please
 PSSQL_PROC( PODBC, ConnectToDatabase )( CTEXTSTR dsn );
+// get a connection to a database by name.
 PSSQL_PROC( PODBC, SQLGetODBC )( CTEXTSTR dsn );
+// get a connection to the database specifying user and password.
 PSSQL_PROC( PODBC, SQLGetODBCEx )( CTEXTSTR dsn, CTEXTSTR user, CTEXTSTR pass );
+// drop an interface (no longer in use/close); these are in a pool, and the underlaying connection might not close.
 PSSQL_PROC( void, SQLDropODBC )( PODBC odbc );
+// Drop the odbc instance, and close the connection.
 PSSQL_PROC( void, SQLDropAndCloseODBC )( CTEXTSTR dsn );
 #endif
 // default parameter to require is the global flag RequireConnection from sql.config....
 PSSQL_PROC( PODBC, ConnectToDatabaseExx )( CTEXTSTR DSN, LOGICAL bRequireConnection DBG_PASS );
+// default parameter to require is the global flag RequireConnection from sql.config....
+// the require connection parameter indicates the connection must connect, and will block until connected.
 PSSQL_PROC( PODBC, ConnectToDatabaseEx )( CTEXTSTR DSN, LOGICAL bRequireConnection );
+// default parameter to require is the global flag RequireConnection from sql.config....
 #define ConnectToDatabaseEx( dsn, required ) ConnectToDatabaseExx( dsn, required DBG_SRC )
+// default parameter to require is the global flag RequireConnection from sql.config....
 #define ConnectToDatabase( dsn ) ConnectToDatabaseExx( dsn, FALSE DBG_SRC )
+// Extended connect to database function; provides user and password separate from the DSN
+// which allows logging the SQL connection name, without dumping the username ans password.
+// adds onOpen Callback, which, especially on reconnection, triggers a callback to condition
+// the connection (issue pragmas, setup database options).
+PSSQL_PROC( PODBC, ConnectToDatabaseLoginCallback)( CTEXTSTR DSN, CTEXTSTR user, CTEXTSTR pass, LOGICAL bRequireConnection
+			, void (*onOpen)(uintptr_t,PODBC), uintptr_t psv DBG_PASS );
 /* Close a database connection. Releases all resources
    associated with the odbc connection.
    Parameters
@@ -14694,6 +15194,9 @@ PSSQL_PROC( CTEXTSTR, GuidZero )( void );
    litte_endian will byte-swap the grouped portions of numbers in a guid so they can be printed appropriately*/
 PSSQL_PROC( uint8_t*, GetGUIDBinaryEx )( CTEXTSTR guid, LOGICAL litte_endian );
 #define GetGUIDBinary(g) GetGUIDBinaryEx(g, TRUE )
+/* structure of a little endian UUID.  This allows formatting into the various
+ size fields of a uuid text string.
+ */
 struct guid_binary {
 	union {
 		struct {
@@ -14872,6 +15375,11 @@ PSSQL_PROC( void, PSSQL_GetSqliteValueInt64 )( struct sqlite3_value *val, int64_
 PSSQL_PROC( const char *, PSSQL_GetColumnTableName )( PODBC odbc, int col );
 PSSQL_PROC( const char *, PSSQL_GetColumnTableAliasName )( PODBC odbc, int col );
 PSSQL_PROC( void, PSSQL_GetSqliteValue )( struct sqlite3_value *val, const char **text, int *textLen );
+/*
+ Get Database Provider (type of database).
+   1=Sqlite, 2=MyQL, 3=PSQL, 4=Access, 5=MariaDB, 6=?, -1=unknown
+*/
+PSSQL_PROC( int, GetDatabaseProvider )( PODBC odbc );
 #endif
 SQL_NAMESPACE_END
 #ifdef __cplusplus
@@ -14882,7 +15390,12 @@ SQL_NAMESPACE_END
 #endif
 // sqloptint.h leaves namespace open.
 // these headers should really be collapsed.
+/* Provies SQL Option Interface. Options are implemented as a
+   tree of nodes with names and values. Defines abstract
+   interface that can be filled by varying providers.         */
 #ifndef SQL_GET_OPTION_DEFINED
+/* Inclusion protection; used to prevent duplicate inclusion of
+   the same file.                                               */
 #define SQL_GET_OPTION_DEFINED
 #ifdef __cplusplus
 #define _OPTION_NAMESPACE namespace options {
@@ -15149,6 +15662,11 @@ namespace sack {
 		using namespace sack::memory;
 		using namespace sack::logging;
 #endif
+#ifdef __64__
+#  define FLAGSET_MIN_SIZE 64
+#else
+#  define FLAGSET_MIN_SIZE 64
+#endif
 #ifndef __NO_OPTIONS__
 PRELOAD( InitSetLogging )
 {
@@ -15177,7 +15695,7 @@ PGENERICSET GetFromSetPoolEx( GENERICSET **pSetSet, int setsetsizea, int setunit
 	PGENERICSET set;
 	uint32_t maxbias = 0;
 	void *unit = NULL;
-	uintptr_t ofs = ( ( ( maxcnt + 31 ) / 32 ) * 4 );
+	uintptr_t ofs = ( ( ( maxcnt + (FLAGSET_MIN_SIZE-1) ) / FLAGSET_MIN_SIZE ) * (FLAGSET_MIN_SIZE/8) );
 	//if( pSet && (*pSet) && ( (*pSet)->nBias > 1000 ))
 	//	_lprintf( DBG_RELAY )("GetFromSet: %p", pSet );
 	if( !pSet )
@@ -15261,7 +15779,8 @@ ExtendSet:
 				set->nUsed = n;
 				goto ExtendSet;
 			}
-			for( n = n; n < maxcnt; n++ )
+ /*n = n*/
+			for(; n < maxcnt; n++ )
 			{
 				if( !IsUsed( set, n ) )
 				{
@@ -15283,7 +15802,7 @@ ExtendSet:
 			}
 		}
 #ifdef Z_DEBUG
-		if( bLog ) _lprintf( DBG_RELAY )( "Unit result: %p from %p %d %d %d %d", unit, set, unitsize, maxcnt, n, ( ( (maxcnt +31) / 32 ) * 4 )  );
+		if( bLog ) _lprintf( DBG_RELAY )( "Unit result: %p from %p %d %d %d %d", unit, set, unitsize, maxcnt, n, ( ( (maxcnt +(FLAGSET_MIN_SIZE-1))) / FLAGSET_MIN_SIZE ) * (FLAGSET_MIN_SIZE/8) )  );
 #endif
 	}
 	return (PGENERICSET)unit;
@@ -15346,11 +15865,11 @@ static POINTER GetSetMemberExx( GENERICSET **pSet, INDEX nMember, int setsize, i
 		(*bUsed) = 1;
 	if( bLog ) _lprintf(DBG_RELAY)( "Resulting unit %" _PTRSZVALfs,  ((uintptr_t)(set->bUsed))
  // skip over the bUsed bitbuffer
-						+ ( ( (maxcnt +31) / 32 ) * 4 )
+						+ ( ( (maxcnt +(FLAGSET_MIN_SIZE-1)) / FLAGSET_MIN_SIZE ) * (FLAGSET_MIN_SIZE/8) )
 						+ nMember * unitsize );
 	return (void*)( ((uintptr_t)(set->bUsed))
  // skip over the bUsed bitbuffer
-						+ ( ( (maxcnt +31) / 32 ) * 4 )
+						+ ( ( (maxcnt +(FLAGSET_MIN_SIZE-1)) / FLAGSET_MIN_SIZE ) * (FLAGSET_MIN_SIZE/8) )
  // go to the appropriate offset
 						+ nMember * unitsize );
 }
@@ -15384,8 +15903,8 @@ INDEX GetMemberIndex(GENERICSET **ppSet, POINTER unit, int unitsize, int max )
 {
 	GENERICSET *pSet = ppSet?*ppSet:NULL;
 	uintptr_t nUnit = (uintptr_t)unit;
-	int ofs = ( ( max + 31 ) / 32) * 4;
-	int base = 0;
+	int ofs = ( ( max + (FLAGSET_MIN_SIZE-1) ) / FLAGSET_MIN_SIZE) * (FLAGSET_MIN_SIZE/8);
+	//int base = 0;
 	while( pSet )
 	{
 		if( nUnit >= ((uintptr_t)(pSet->bUsed) + ofs ) &&
@@ -15401,17 +15920,18 @@ INDEX GetMemberIndex(GENERICSET **ppSet, POINTER unit, int unitsize, int max )
 			n /= unitsize;
 			return (INDEX)(n + pSet->nBias);
 		}
-		base += max;
+		//base += max;
 		pSet = pSet->next;
 	}
 	return INVALID_INDEX;
 }
+#define GetMemberIndex(name,set,member) GetMemberIndex( (GENERICSET**)set, member, sizeof( name ), MAX##name##SPERSET )
 //----------------------------------------------------------------------------
 #undef MemberValidInSet
 int MemberValidInSet( GENERICSET *pSet, void *unit, int unitsize, int max )
 {
 	uintptr_t nUnit = (uintptr_t)unit;
-	int ofs = ( ( max + 31 ) / 32) * 4;
+	int ofs = ( ( max + (FLAGSET_MIN_SIZE-1) ) / FLAGSET_MIN_SIZE) * (FLAGSET_MIN_SIZE/8);
 	while( pSet )
 	{
 		if( nUnit >= ((uintptr_t)(pSet->bUsed) + ofs ) &&
@@ -15435,7 +15955,7 @@ int MemberValidInSet( GENERICSET *pSet, void *unit, int unitsize, int max )
 void DeleteFromSetExx( GENERICSET *pSet, void *unit, int unitsize, int max DBG_PASS )
 {
 	uintptr_t nUnit = (uintptr_t)unit;
-	uintptr_t ofs = ( ( max + 31 ) / 32) * 4;
+	uintptr_t ofs = ( ( max + (FLAGSET_MIN_SIZE-1) ) / FLAGSET_MIN_SIZE) * (FLAGSET_MIN_SIZE/8);
 	uintptr_t base;
 	//if( bLog )
 	//if( pSet && ((pSet)->nBias > 1000) )
@@ -15506,6 +16026,7 @@ void DeleteSetMember( GENERICSET *pSet, INDEX iMember, int unitsize, int max )
 {
 	DeleteSetMemberEx( pSet, iMember, unitsize, max );
 }
+#define DeleteSetMember( name, set, member ) DeleteSetMemberEx( (GENERICSET*)set, member, sizeof( name ), MAX##name##SPERSET )
 //----------------------------------------------------------------------------
 int CountUsedInSetEx( GENERICSET *pSet, int max )
 {
@@ -15532,7 +16053,7 @@ void **GetLinearSetArrayEx( GENERICSET *pSet, int *pCount, int unitsize, int max
 	items = CountUsedInSetEx( pSet, max );
 	if( pCount )
 		*pCount = items;
-	ofs = ( ( max + 31) / 32 ) * 4;
+	ofs = ( ( max + (FLAGSET_MIN_SIZE-1)) / FLAGSET_MIN_SIZE ) * (FLAGSET_MIN_SIZE/8);
 	array = (void**)Allocate( sizeof( void* ) * items );
  // 0
 	nMin = 0;
@@ -15606,7 +16127,7 @@ uintptr_t _ForAllInSet( GENERICSET *pSet, int unitsize, int max, FAISCallback f,
 	if( f )
 	{
 		int ofs, n;
-		ofs = ( ( max + 31) / 32 ) * 4;
+		ofs = ( ( max + (FLAGSET_MIN_SIZE-1)) / FLAGSET_MIN_SIZE ) * (FLAGSET_MIN_SIZE/8);
 		while( pSet )
 		{
 			for( n = 0; n < max; n++ )
@@ -16082,7 +16603,11 @@ int HangBinaryNode( PTREEROOT root, PTREENODE node )
 		}
 	}
 	if( node->parent->lesser != node && node->parent->greater != node ) {
+#ifdef __clang__
+		__builtin_trap();
+#else
 		*(int*)0 = 0;
+#endif
 	}
 	AVLbalancer( root, node );
 #ifdef DEBUG_AVL_VALIDATION
@@ -16130,7 +16655,11 @@ static void NativeRemoveBinaryNode( PTREEROOT root, PTREENODE node )
 		if( !node->parent->flags.bRoot
 			&& node->parent->lesser != node
 			&& node->parent->greater != node ) {
+#ifdef __clang__
+			__builtin_trap();
+#else
 			*(int*)0=0;
+#endif
 		}
 		PTREENODE least = NULL;
 		PTREENODE backtrack;
@@ -16183,7 +16712,8 @@ static void NativeRemoveBinaryNode( PTREEROOT root, PTREENODE node )
 						if( backtrack->lesser )
 							if( backtrack->greater ) {
 								int tmp1, tmp2;
-								PTREENODE z_, y_, x_;
+/*, x_*/
+								PTREENODE z_, y_;
 								if( (tmp1=backtrack->lesser->depth) > (tmp2=backtrack->greater->depth) ) {
 									if( backtrack->depth != ( tmp1 + 1 ) )
 										backtrack->depth = tmp1 + 1;
@@ -16197,12 +16727,12 @@ static void NativeRemoveBinaryNode( PTREEROOT root, PTREENODE node )
 										z_ = backtrack;
 										y_ = backtrack->lesser;
 										if( tmp3 > tmp4 ) {
-											x_ = backtrack->lesser->lesser;
+											//x_ = backtrack->lesser->lesser;
 											// left-left Rotate Right(Z)
 											AVL_RotateToRight( z_ );
 										} else {
 											// left-right
-											x_ = backtrack->lesser->greater;
+											//x_ = backtrack->lesser->greater;
 											AVL_RotateToLeft( y_ );
 											AVL_RotateToRight( z_ );
 										}
@@ -16220,12 +16750,12 @@ static void NativeRemoveBinaryNode( PTREEROOT root, PTREENODE node )
 										z_ = backtrack;
 										y_ = backtrack->greater;
 										if( tmp4 > tmp3 ) {
-											x_ = y_->greater;
+											//x_ = y_->greater;
 											// right-right Rotate Right(Z)
 											AVL_RotateToLeft( y_ );
 										} else {
 											// right-left
-											x_ = y_->lesser;
+											//x_ = y_->lesser;
 											AVL_RotateToRight( y_ );
 											AVL_RotateToLeft( z_ );
 										}
@@ -16939,6 +17469,8 @@ PTREEROOT ShadowBinaryTree( PTREEROOT Original )
  //namespace sack {
 }
 #endif
+/* Networking interface to provide an event based dispatcher
+   over berkley polled sockets. See <link network>           */
 #ifndef NETWORK_HEADER_INCLUDED
 #define NETWORK_HEADER_INCLUDED
 #ifdef NETWORK_SOURCE
@@ -16971,7 +17503,9 @@ PTREEROOT ShadowBinaryTree( PTREEROOT Original )
 #define SACK_NETWORK_TCP_NAMESPACE_END _TCP_NAMESPACE_END _NETWORK_NAMESPACE_END SACK_NAMESPACE_END
 #define SACK_NETWORK_UDP_NAMESPACE  SACK_NAMESPACE _NETWORK_NAMESPACE _UDP_NAMESPACE
 #define SACK_NETWORK_UDP_NAMESPACE_END _UDP_NAMESPACE_END _NETWORK_NAMESPACE_END SACK_NAMESPACE_END
-SACK_NAMESPACE
+#ifdef __cplusplus
+namespace sack {
+#endif
 	/* Event based networking interface.
 	   Example
 	   \Example One : A simple client side application. Reads
@@ -17089,16 +17623,24 @@ SACK_NAMESPACE
 	       return 0;
 	   }
 	   </code>                                                                                    */
-	_NETWORK_NAMESPACE
-//#ifndef CLIENT_DEFINED
+#ifdef __cplusplus
+	namespace network {
+#endif
+/*
+  Opaque structure representing a network connection.
+*/
 typedef struct NetworkClient *PCLIENT;
-//typedef struct Client
-//{
-//   unsigned char Private_Structure_information_here;
-//}CLIENT, *PCLIENT;
-//#endif
+/*
+   Get the system name.
+*/
 NETWORK_PROC( CTEXTSTR, GetSystemName )( void );
+/*
+  Lock a network connection for read or for write.
+*/
 NETWORK_PROC( PCLIENT, NetworkLockEx )( PCLIENT pc, int readWrite DBG_PASS );
+/*
+  Unlock a network connection for read or for write.
+*/
 NETWORK_PROC( void, NetworkUnlockEx )( PCLIENT pc, int readWrite DBG_PASS );
 /* <combine sack::network::NetworkLockEx@PCLIENT pc>
    \ \                                               */
@@ -17118,6 +17660,11 @@ typedef void (CPROC*cppCloseCallback)(uintptr_t);
 typedef void (CPROC*cppWriteComplete)(uintptr_t, CPOINTER buffer, size_t len );
 typedef void (CPROC*cppNotifyCallback)(uintptr_t, PCLIENT newClient);
 typedef void (CPROC*cppConnectCallback)(uintptr_t, int);
+enum NetworkAddressFlags {
+	NETWORK_ADDRESS_FLAG_PREFER_NONE = 0,
+	NETWORK_ADDRESS_FLAG_PREFER_V6 = 1,
+	NETWORK_ADDRESS_FLAG_PREFER_V4 = 2,
+};
 enum SackNetworkErrorIdentifier {
 	SACK_NETWORK_ERROR_,
  // error during control information exchange over TLS
@@ -17132,6 +17679,8 @@ enum SackNetworkErrorIdentifier {
 	SACK_NETWORK_ERROR_HTTP_CHUNK,
  // command parsing resulted in invalid command.  (HTTPS request to HTTP)
 	SACK_NETWORK_ERROR_HTTP_UNSUPPORTED,
+ // host name could not be resolved
+	SACK_NETWORK_ERROR_HOST_NOT_FOUND,
 };
 typedef void (CPROC*cErrorCallback)(uintptr_t psvError, PCLIENT pc, enum SackNetworkErrorIdentifier error, ... );
 NETWORK_PROC( void, SetNetworkWriteComplete )( PCLIENT, cWriteComplete );
@@ -17215,6 +17764,15 @@ NETWORK_PROC( SOCKADDR *, SetNonDefaultPort )( SOCKADDR *pAddr, uint16_t nDefaul
  *
  */
 NETWORK_PROC( SOCKADDR *, CreateSockAddress )( CTEXTSTR name, uint16_t nDefaultPort );
+#define CreateSockAddress(name,port) CreateSockAddressV2( name, port, NETWORK_ADDRESS_FLAG_PREFER_NONE )
+/*
+ * this is the preferred method to create an address
+ * name may be "* / *" with a slash, then the address result will be a unix socket (if supported)
+ * name may have an options ":port" port number associated, if there is no port, then the default
+ * port is used.
+ *  flags controls whether to prefer V4 or V6 lookups.
+ */
+NETWORK_PROC( SOCKADDR *, CreateSockAddressV2 )( CTEXTSTR name, uint16_t nDefaultPort, enum NetworkAddressFlags flags );
 /*
  * set (*data) and (*datalen) to a binary buffer representation of the sockete address.
  */
@@ -17223,11 +17781,24 @@ NETWORK_PROC( void, GetNetworkAddressBinary )( SOCKADDR *addr, uint8_t **data, s
  * create a socket address form data and datalen binary buffer representation of the sockete address.
  */
 NETWORK_PROC( SOCKADDR *, MakeNetworkAddressFromBinary )( uintptr_t *data, size_t datalen );
+NETWORK_PROC( SOCKADDR*, CreateRemoteV2 )( CTEXTSTR lpName, uint16_t nHisPort, enum NetworkAddressFlags flags );
 NETWORK_PROC( SOCKADDR *, CreateRemote )( CTEXTSTR lpName,uint16_t nHisPort);
+#define CreateRemote(name,port) CreateRemoteV2( name, port, NETWORK_ADDRESS_FLAG_PREFER_NONE )
 NETWORK_PROC( SOCKADDR *, CreateLocal )(uint16_t nMyPort);
 NETWORK_PROC( int, GetAddressParts )( SOCKADDR *pAddr, uint32_t *pdwIP, uint16_t *pwPort );
  // release a socket resource that has been created by an above routine
 NETWORK_PROC( void, ReleaseAddress )(SOCKADDR *lpsaAddr);
+NETWORK_PROC( SOCKADDR*, AllocAddrEx )( DBG_VOIDPASS );
+#define AllocAddr() AllocAddrEx( DBG_VOIDSRC )
+#define IN_SOCKADDR_LENGTH sizeof(struct sockaddr_in)
+#define IN6_SOCKADDR_LENGTH sizeof(struct sockaddr_in6)
+// this might have to be like sock_addr_len_t
+#define SOCKADDR_LENGTH(sa) ( (int)*(uintptr_t*)( ( (uintptr_t)(sa) ) - 2*sizeof(uintptr_t) ) )
+#ifdef __MAC__
+#  define SET_SOCKADDR_LENGTH(sa,size) ( ( ( *(uintptr_t*)( ( (uintptr_t)(sa) ) - 2*sizeof(uintptr_t) ) ) = size ), ( sa->sa_len = size ) )
+#else
+#  define SET_SOCKADDR_LENGTH(sa,size) ( ( *(uintptr_t*)( ( (uintptr_t)(sa) ) - 2*sizeof(uintptr_t) ) ) = size )
+#endif
 // result with TRUE if equal, else FALSE
 NETWORK_PROC( LOGICAL, CompareAddress )(SOCKADDR *sa1, SOCKADDR *sa2 );
 #define SA_COMPARE_FULL 1
@@ -17261,6 +17832,15 @@ NETWORK_PROC( LOGICAL, IsAddressV6 )( SOCKADDR *addr );
  // return a copy of this address...
 NETWORK_PROC( SOCKADDR *, DuplicateAddressEx )( SOCKADDR *pAddr DBG_PASS );
 #define DuplicateAddress(a) DuplicateAddressEx( a DBG_SRC )
+/*
+ *  Duplicate a sockaddr appropriately for the specified network.
+ *  SOCKADDR has in(near) it the size of the address block, so this
+ * can safely duplicate the the right amount of memory.
+ * If the address is a v6 address, it will be converted to a v4 address.
+ */
+ // return a copy of this address...
+NETWORK_PROC( SOCKADDR*, DuplicateAddress_6to4_Ex )( SOCKADDR *pAddr DBG_PASS );
+#define DuplicateAddress_6to4(a) DuplicateAddress_6to4_Ex( a DBG_SRC )
 /* Transmission Control Protocol connection methods. This
    controls opening sockets that are based on TCP.        */
 _TCP_NAMESPACE
@@ -17338,7 +17918,13 @@ NETWORK_PROC( void, SetNetworkListenerReady )( PCLIENT pListen );
 /* <combine sack::network::tcp::OpenTCPListenerEx@uint16_t@cNotifyCallback>
    \ \                                                                 */
 #define OpenTCPServerAddrEx OpenTCPListenerAddrEx
+// used with OpenTCPClientAddrExx
+// use NetworkConnectTCP to begin connection
 #define OPEN_TCP_FLAG_DELAY_CONNECT 1
+// Socket expects to be SSL client; defer initial read callback until SSL is enabled.
+#define OPEN_TCP_FLAG_SSL_CLIENT 2
+#define OPEN_TCP_FLAG_PREFER_V6  4
+#define OPEN_TCP_FLAG_PREFER_V4  8
 #ifdef __cplusplus
 /* <combine sack::network::tcp::OpenTCPClientAddrExx@SOCKADDR *@cReadComplete@cCloseCallback@cWriteComplete@cConnectCallback>
    \ \                                                                                                                        */
@@ -17456,7 +18042,7 @@ NETWORK_PROC( PCLIENT, OpenTCPClientExEx )( CTEXTSTR, uint16_t, cReadComplete,
 #define OpenTCPClientEx( addr,port,read,close,write ) OpenTCPClientExEx( addr,port,read,close,write DBG_SRC )
 /* Do the connect to
 */
-int NetworkConnectTCPEx( PCLIENT pc DBG_PASS );
+NETWORK_PROC( int, NetworkConnectTCPEx )( PCLIENT pc DBG_PASS );
 #define NetworkConnectTCP( pc ) NetworkConnectTCPEx( pc DBG_SRC )
 /* Drain is an operation on a TCP socket to just drop the next X
    bytes. They are ignored and not stored into any user buffer.
@@ -17611,18 +18197,53 @@ NETWORK_PROC( LOGICAL, doTCPWriteExx )( PCLIENT lpClient
                                    , int failpending
                                    DBG_PASS
                                   );
+/* \#The buffer will be sent in the order of the writes to the
+   socket, and released when empty. If the socket is immediatly
+   able to write, the buffer will be sent, and any remai
+   Parameters
+   lpClient :     network connection to write to
+   pInBuffer :    buffer to write
+   nInLen :       Length of the buffer to send
+   bLongBuffer :  if TRUE, then the buffer written is maintained
+				  exactly by the network layer. A WriteComplete
+				  callback will be invoked when the buffer has
+				  been sent so the application might delete the
+				  buffer.
+   failpending :  Uhmm... maybe if it goes to pending, fail?
+   pend_on_fail : True/false - if the write fails, should it be
+				  pending until it can be sent.
+   Remarks
+   If bLongBuffer is not set, then if the write cannot
+   immediately complete, then a new buffer is allocated
+   internally, and unsent data is buffered by the network
+   collection. This allows the user to not worry about slowdowns
+   due to blocking writes. Often writes complete immediately,
+   and are not buffered other than in the user's own buffer
+   passed to this write.                                         */
+NETWORK_PROC( LOGICAL,  doTCPWriteV2 )( PCLIENT lpClient
+                     , CPOINTER pInBuffer
+                     , size_t nInLen
+                     , int bLongBuffer
+                     , int failpending
+                     , int pend_on_fail
+                     DBG_PASS
+                     );
 /* <combine sack::network::tcp::doTCPWriteExx@PCLIENT@CPOINTER@int@int@int failpending>
    \ \                                                                                  */
-#define doTCPWriteEx( c,b,l,f1,f2) doTCPWriteExx( (c),(b),(l),(f1),(f2) DBG_SRC )
+#define doTCPWriteExx( c,b,l,f1,f2,fop,...) doTCPWriteV2( (c),(b),(l),(f1),(f2),(fop),##__VA_ARGS__ )
 /* <combine sack::network::tcp::doTCPWriteExx@PCLIENT@CPOINTER@int@int@int failpending>
    \ \                                                                                  */
-#define SendTCPEx( c,b,l,p) doTCPWriteExx( c,b,l,FALSE,p DBG_SRC)
+#define doTCPWriteEx( c,b,l,f1,f2) doTCPWriteV2( (c),(b),(l),(f1),(f2),TRUE DBG_SRC )
 /* <combine sack::network::tcp::doTCPWriteExx@PCLIENT@CPOINTER@int@int@int failpending>
    \ \                                                                                  */
-#define SendTCP(c,b,l) doTCPWriteExx(c,b,l, FALSE, FALSE DBG_SRC)
+#define SendTCPEx( c,b,l,p) doTCPWriteV2( c,b,l,FALSE,p,TRUE DBG_SRC)
 /* <combine sack::network::tcp::doTCPWriteExx@PCLIENT@CPOINTER@int@int@int failpending>
    \ \                                                                                  */
-#define SendTCPLong(c,b,l) doTCPWriteExx(c,b,l, TRUE, FALSE DBG_SRC)
+#define SendTCP(c,b,l) doTCPWriteV2(c,b,l, FALSE, FALSE,TRUE DBG_SRC)
+/* <combine sack::network::tcp::doTCPWriteExx@PCLIENT@CPOINTER@int@int@int failpending>
+   \ \                                                                                  */
+#define SendTCPLong(c,b,l) doTCPWriteV2(c,b,l, TRUE, FALSE,TRUE DBG_SRC)
+NETWORK_PROC( void, SetTCPWriteAggregation )( PCLIENT pc, int bAggregate );
 _TCP_NAMESPACE_END
 NETWORK_PROC( void, SetNetworkLong )(PCLIENT lpClient,int nLong,uintptr_t dwValue);
 NETWORK_PROC( uintptr_t, GetNetworkLong )(PCLIENT lpClient, int nLong);
@@ -17653,7 +18274,7 @@ enum GetNetworkLongAccessInternal{
  GNL_LOCAL_ADDRESS = (-8),
 };
 //int get_mac_addr (char *device, unsigned char *buffer)
-NETWORK_PROC( int, GetMacAddress)(PCLIENT pc, uint8_t* buf, size_t *buflen );
+NETWORK_PROC( int, GetMacAddress)(PCLIENT pc, uint8_t* bufLocal, size_t *bufLocalLen, uint8_t* bufRemote, size_t *bufRemoteLen );
 //NETWORK_PROC( int, GetMacAddress)(PCLIENT pc );
 //int get_mac_addr (char *device, unsigned char *buffer)
 NETWORK_PROC( PLIST, GetMacAddresses)( void );
@@ -17679,6 +18300,28 @@ NETWORK_PROC( LOGICAL, ssl_BeginServer_v2 )( PCLIENT pc, CPOINTER cert, size_t c
 	, CPOINTER keypair, size_t keylen
 	, CPOINTER keypass, size_t keypasslen
 	, char* hosts );
+struct ssl_session;
+// add more certificates to a server socket that it can use to resolve host requests
+NETWORK_PROC( struct ssl_hostContext*, ssl_setupHostCert )( PCLIENT pc, CTEXTSTR host, CTEXTSTR cert, size_t certlen, CTEXTSTR keypair, size_t keylen, CTEXTSTR keypass, size_t keypasslen );
+// add more certificates to a server socket that it can use to resolve host requests (uses internal)
+NETWORK_PROC( struct ssl_hostContext*, ssl_setupHost )( struct ssl_session* session, CTEXTSTR host, CTEXTSTR cert, size_t certlen, CTEXTSTR keypair, size_t keylen, CTEXTSTR keypass, size_t keypasslen );
+/*
+* Get the SSL session for a client
+*/
+NETWORK_PROC( struct ssl_session*, ssl_GetSession )( PCLIENT pc );
+/*
+* add data to the SSL session ( this is new data from a network source)
+* results with standard read/write callbacks (original set in the socket, but now?)
+*/
+NETWORK_PROC( void, ssl_WriteData )( struct ssl_session* session, POINTER buffer, size_t length );
+/*
+* Send data out ssl connection
+*/
+NETWORK_PROC( LOGICAL, ssl_SendPipe )( struct ssl_session** ses, CPOINTER buffer, size_t length );
+/*
+* set the send and receive work functions for an SSL connection
+*/
+NETWORK_PROC( void, ssl_SetSendRecvCallbacks )( struct ssl_session* session, void ( *send )( uintptr_t, CPOINTER, size_t ), void ( *recv )( uintptr_t, POINTER, size_t ), uintptr_t psvSendRecv );
 NETWORK_PROC( LOGICAL, ssl_GetPrivateKey )(PCLIENT pc, POINTER *keydata, size_t *keysize);
 NETWORK_PROC( LOGICAL, ssl_IsClientSecure )(PCLIENT pc);
 NETWORK_PROC( void, ssl_SetIgnoreVerification )(PCLIENT pc);
@@ -17691,6 +18334,10 @@ NETWORK_PROC( CTEXTSTR, ssl_GetRequestedHostName )(PCLIENT pc);
 // just closed, but new error handling allows fallback to HTTP in order to send
 // a redirect to the HTTPS address proper.
 NETWORK_PROC( void, ssl_EndSecure )(PCLIENT pc, POINTER buffer, size_t buflen );
+/*
+ For a ssl_session pipe, this is a close.
+ */
+NETWORK_PROC( void, ssl_EndSecurePipe )(struct ssl_session** session );
 /* use this to send on SSL Connection instead of SendTCP. */
 NETWORK_PROC( LOGICAL, ssl_Send )( PCLIENT pc, CPOINTER buffer, size_t length );
 /* User Datagram Packet connection methods. This controls
@@ -17856,6 +18503,16 @@ NETWORK_PROC( void, DumpAddrEx )( CTEXTSTR name, SOCKADDR *sa DBG_PASS );
 /* <combine sack::network::udp::DumpAddrEx@CTEXTSTR@SOCKADDR *sa>
    \ \                                                            */
 #define DumpAddr(n,sa) DumpAddrEx(n,sa DBG_SRC )
+/*
+* Convert a socket address to a string.
+*/
+NETWORK_PROC( CTEXTSTR, AddrToString )( CTEXTSTR name, SOCKADDR* sa DBG_PASS );
+/*
+* Free a string returned from AddrToString
+*/
+NETWORK_PROC( void, FreeAddrString )( CTEXTSTR string DBG_PASS );
+#define FreeAddrString(s) FreeAddrString( s DBG_SRC )
+#define AddrToString(n,s) AddrToString( n, s DBG_SRC )
 NETWORK_PROC( int, SetSocketReuseAddress )( PCLIENT pClient, int32_t enable );
 NETWORK_PROC( int, SetSocketReusePort )( PCLIENT pClient, int32_t enable );
 _UDP_NAMESPACE_END
@@ -17870,6 +18527,8 @@ NETWORK_PROC( SOCKADDR*, GetInterfaceAddressForBroadcast )(SOCKADDR *addr);
 NETWORK_PROC( struct interfaceAddress*, GetInterfaceForAddress )( SOCKADDR *addr );
 NETWORK_PROC( LOGICAL, IsBroadcastAddressForInterface )( struct interfaceAddress *address, SOCKADDR *addr );
 NETWORK_PROC( void, LoadNetworkAddresses )(void);
+// This initializes the libressl library, which registers the correct allocation methods...
+NETWORK_PROC( LOGICAL, ssl_InitLibrary )( void );
 //----- PING.C ------
 NETWORK_PROC( LOGICAL, DoPing )( CTEXTSTR pstrHost,
              int maxTTL,
@@ -17877,17 +18536,24 @@ NETWORK_PROC( LOGICAL, DoPing )( CTEXTSTR pstrHost,
              int nCount,
              PVARTEXT pResult,
              LOGICAL bRDNS,
-             void (*ResultCallback)( uint32_t dwIP, CTEXTSTR name, int min, int max, int avg, int drop, int hops ) );
+             void (*ResultCallback)( SOCKADDR* dwIP, CTEXTSTR name, int min, int max, int avg, int drop, int hops ) );
 NETWORK_PROC( LOGICAL, DoPingEx )( CTEXTSTR pstrHost,
              int maxTTL,
              uint32_t dwTime,
              int nCount,
              PVARTEXT pResult,
              LOGICAL bRDNS,
-											 void (*ResultCallback)( uintptr_t psv, uint32_t dwIP, CTEXTSTR name, int min, int max, int avg, int drop, int hops )
+											 void (*ResultCallback)( uintptr_t psv, SOCKADDR* dwIP, CTEXTSTR name, int min, int max, int avg, int drop, int hops )
 											, uintptr_t psv );
 //----- WHOIS.C -----
 NETWORK_PROC( LOGICAL, DoWhois )( CTEXTSTR pHost, CTEXTSTR pServer, PVARTEXT pvtResult );
+//----- NETSTAT ----
+struct listener_pid_info {
+	uint16_t port;
+	uint64_t pid;
+};
+// list is filled with struct listener_pid_info entries
+NETWORK_PROC( void, SackNetstat_GetListeners )( PDATALIST* ppList );
 #ifdef __cplusplus
 #  if defined( INCLUDE_SAMPLE_CPLUSPLUS_WRAPPERS )
 typedef class network *PNETWORK;
@@ -18023,8 +18689,9 @@ public:
 }NETWORK;
 #  endif
 #endif
-SACK_NETWORK_NAMESPACE_END
 #ifdef __cplusplus
+ //SACK_NETWORK_NAMESPACE_END
+} }
 using namespace sack::network;
 using namespace sack::network::tcp;
 using namespace sack::network::udp;
@@ -18256,22 +18923,35 @@ struct HTTPRequestOptions {
 	size_t contentLen;
  // set to true to request over SSL;
 	LOGICAL ssl;
+ // HTTP Version ("1.0" default)
+	const char *httpVersion;
+ // defaults to 3 seconds if set to 0.
+	int timeout;
+ // defaults to 3 retries if set to 0.
+	int retries;
+	enum NetworkAddressFlags addrFlags;
  //optionally this can be used to specify the certain, if not set, uses parameter, which will otherwise be NULL.
 	const char* certChain;
+	LOGICAL rejectUnauthorized;
 	// specify the agent field, default to SACK(System)
 	const char* agent;
 	// if set, will be called when content buffer has been sent.
 	void ( *writeComplete )( uintptr_t userData );
 	uintptr_t userData;
+ // did get a connect state, so connectError is not checked... (timeout before connect complete?)
+	LOGICAL connected;
+  // feedback to application if there was an error connecting.
+	int connectError;
+	const char *hostname;
 };
 typedef struct HttpState *HTTPState;
 enum ProcessHttpResult{
 	HTTP_STATE_RESULT_NOTHING = 0,
 	HTTP_STATE_RESULT_CONTENT = 200,
-    HTTP_STATE_RESULT_CONTINUE = 100,
+	HTTP_STATE_RESULT_CONTINUE = 100,
 	HTTP_STATE_INTERNAL_SERVER_ERROR=500,
 	HTTP_STATE_RESOURCE_NOT_FOUND=404,
-   HTTP_STATE_BAD_REQUEST=400,
+	HTTP_STATE_BAD_REQUEST=400,
 };
 /* Creates an empty http state, the next operation should be
    AddHttpData.                                              */
@@ -18291,7 +18971,7 @@ HTTP_EXPORT
    size :        length of data bytes
    Returns: TRUE if content is added... if collecting chunked encoding may return FALSE.
    */
-LOGICAL HTTPAPI AddHttpData( HTTPState pHttpState, POINTER buffer, size_t size );
+LOGICAL HTTPAPI AddHttpData( HTTPState pHttpState, CPOINTER buffer, size_t size );
 /* \returns TRUE if completed until content-length if
    content-length is not specified, data is still collected, but
    the status never results TRUE.
@@ -18305,7 +18985,7 @@ LOGICAL HTTPAPI AddHttpData( HTTPState pHttpState, POINTER buffer, size_t size )
             to 'content\-length' meta tag.
    FALSE :  Still collecting full packet                           */
 //HTTP_EXPORT int HTTPAPI ProcessHttp( HTTPState pHttpState );
-HTTP_EXPORT int HTTPAPI ProcessHttp( PCLIENT pc, HTTPState pHttpState );
+HTTP_EXPORT enum ProcessHttpResult HTTPAPI ProcessHttp( HTTPState pHttpState, int (*send)(uintptr_t psv, CPOINTER buf, size_t len), uintptr_t psv );
 HTTP_EXPORT
  /* Gets the specific result code at the header of the packet -
    http 2.0 OK sort of thing.                                  */
@@ -18433,7 +19113,7 @@ struct url_data
 	CTEXTSTR resource_file;
 	CTEXTSTR resource_extension;
 	CTEXTSTR resource_anchor;
-   // list of struct url_cgi_data *
+	// list of struct url_cgi_data *
 	PLIST cgi_parameters;
 };
 HTTP_EXPORT struct url_data * HTTPAPI SACK_URLParse( const char *url );
@@ -18491,6 +19171,7 @@ struct HttpState {
 	size_t read_chunk_byte;
 	size_t read_chunk_length;
 	size_t read_chunk_total_length;
+	PVARTEXT pvt_chunk;
 	enum ReadChunkState read_chunk_state;
 	uint32_t last_read_tick;
 	PTHREAD waiter;
@@ -18524,6 +19205,7 @@ static struct local_http_data
 		BIT_FIELD bLogReceived : 1;
 	} flags;
 	PLIST pendingConnects;
+	PLIST activeConnects;
 }local_http_data;
 #define l local_http_data
 struct pendingConnect {
@@ -18558,6 +19240,7 @@ void GatherHttpData( struct HttpState *pHttpState )
 		if( GetTextSize( pHttpState->partial ) >= pHttpState->content_length )
 		{
 			//lprintf( "Partial is complete with %d", GetTextSize( pHttpState->partial ) );
+			pHttpState->flags.no_content_length = 0;
 			pHttpState->content = SegSplit( &pHttpState->partial, pHttpState->content_length );
 			pHttpState->partial = NEXTLINE( pHttpState->partial );
 			SegGrab( pHttpState->partial );
@@ -18568,13 +19251,164 @@ void GatherHttpData( struct HttpState *pHttpState )
 	}
 	else
 	{
-		PTEXT pMergedLine;
-		PTEXT pInput = VarTextGet( pHttpState->pvt_collector );
-		PTEXT pNewLine = SegAppend( pHttpState->partial, pInput );
-		pMergedLine = SegConcat( NULL, pNewLine, 0, GetTextSize( pHttpState->partial ) + GetTextSize( pInput ) );
-		LineRelease( pNewLine );
-		pHttpState->partial = pMergedLine;
-		pHttpState->content = pHttpState->partial;
+		if( pHttpState->read_chunks )
+		{
+			PTEXT pMergedLine;
+			PTEXT pInput = VarTextGet( pHttpState->pvt_collector );
+			PTEXT pNewLine = SegAppend( pHttpState->partial, pInput );
+			pMergedLine = SegConcat( NULL, pNewLine, 0, GetTextSize( pHttpState->partial ) + GetTextSize( pInput ) );
+			LineRelease( pNewLine );
+			pHttpState->partial = NULL;
+//(const uint8_t*)buffer;
+			const uint8_t* buf = (const uint8_t*)GetText( pMergedLine );
+			size_t size = GetTextSize( pMergedLine );
+			size_t ofs = 0;
+			while( ofs < size )
+			{
+				switch( pHttpState->read_chunk_state )
+				{
+				case READ_VALUE:
+					if( buf[0] >= '0' && buf[0] <= '9' )
+					{
+						pHttpState->read_chunk_length *= 16;
+						pHttpState->read_chunk_length += buf[0] - '0';
+					}
+					else if( ( buf[0] | 0x20 ) >= 'a' && (buf[0] | 0x20) <= 'f' )
+					{
+						pHttpState->read_chunk_length *= 16;
+						pHttpState->read_chunk_length += (buf[0] | 0x20) - 'a' + 10;
+					}
+					else if( buf[0] == '\r' )
+					{
+						pHttpState->read_chunk_byte = 0;
+						pHttpState->read_chunk_total_length += pHttpState->read_chunk_length;
+	#ifdef _DEBUG
+						if( l.flags.bLogReceived ) {
+							lprintf( "Chunck will be %zd", pHttpState->read_chunk_length );
+						}
+	#endif
+						pHttpState->read_chunk_state = READ_VALUE_LF;
+					}
+					else
+					{
+						lprintf( "Chunk Processing Error expected \\n, found %d(%c)", buf[0], buf[0] );
+						TriggerNetworkErrorCallback( pHttpState->request_socket, SACK_NETWORK_ERROR_HTTP_CHUNK );
+						unlockHttp( pHttpState );
+						RemoveClient( pHttpState->request_socket );
+						LineRelease( pMergedLine );
+// FALSE;
+						return;
+					}
+					break;
+				case READ_VALUE_CR:
+					// didn't actually implement to get into this state... just looks for newlines really.
+					break;
+				case READ_VALUE_LF:
+					if( buf[0] == '\n' )
+					{
+						if( pHttpState->read_chunk_length == 0 )
+							pHttpState->read_chunk_state = READ_CR;
+						else
+							pHttpState->read_chunk_state = READ_BYTES;
+					}
+					else
+					{
+						lprintf( "Chunk Processing Error expected \\n, found %d(%c)", buf[0], buf[0] );
+						TriggerNetworkErrorCallback( pHttpState->request_socket, SACK_NETWORK_ERROR_HTTP_CHUNK );
+						unlockHttp( pHttpState );
+						RemoveClient( pHttpState->request_socket );
+						LineRelease( pMergedLine );
+// FALSE;
+						return;
+					}
+					break;
+				case READ_CR:
+					if( buf[0] == '\r' )
+					{
+						pHttpState->read_chunk_state = READ_LF;
+					}
+					else
+					{
+						lprintf( "Chunk Processing Error expected \\r, found %d(%c)", buf[0], buf[0] );
+						LogBinary( buf-16, 16 );
+						LogBinary( buf, size-ofs );
+						TriggerNetworkErrorCallback( pHttpState->request_socket, SACK_NETWORK_ERROR_HTTP_CHUNK );
+						unlockHttp( pHttpState );
+						RemoveClient( pHttpState->request_socket );
+						LineRelease( pMergedLine );
+// FALSE;
+						return;
+					}
+					break;
+				case READ_LF:
+					if( buf[0] == '\n' )
+					{
+						if( pHttpState->read_chunk_length )
+						{
+							pHttpState->read_chunk_length = 0;
+							pHttpState->read_chunk_state = READ_VALUE;
+						}
+						else
+						{
+							// this would be last chunk (0\r\n) val (\r\n) data
+							//
+							pHttpState->flags.success = 1;
+							pHttpState->content_length = GetTextSize( pHttpState->content  = VarTextGet( pHttpState->pvt_chunk ) );
+							//lprintf( "This may or may not be the end of content? %d", pHttpState->content_length );
+							if( pHttpState->waiter ) {
+								WakeThread( pHttpState->waiter );
+							}
+							LineRelease( pMergedLine );
+							unlockHttp( pHttpState );
+// TRUE;
+							return;
+						}
+					}
+					else
+					{
+						lprintf( "Chunk Processing Error expected \\n, found %d(%c)", buf[0], buf[0] );
+						TriggerNetworkErrorCallback( pHttpState->request_socket, SACK_NETWORK_ERROR_HTTP_CHUNK );
+						unlockHttp( pHttpState );
+						RemoveClient( pHttpState->request_socket );
+						LineRelease( pMergedLine );
+// FALSE;
+						return;
+					}
+					break;
+				case READ_BYTES:
+					VarTextAddData( pHttpState->pvt_chunk, (CTEXTSTR)(buf), 1 );
+					pHttpState->read_chunk_byte++;
+					if( pHttpState->read_chunk_byte >= pHttpState->read_chunk_length ) {
+						//lprintf( "Gathered the bytes required in the first packet... %d %zd", ofs, GetTextSize( VarTextPeek( pHttpState->pvt_chunk)));
+						pHttpState->read_chunk_state = READ_CR;
+					}
+					break;
+				}
+				ofs++;
+				buf++;
+			}
+			if( l.flags.bLogReceived ) {
+				lprintf( "chunk read is %zd of %zd", pHttpState->read_chunk_byte, pHttpState->read_chunk_total_length );
+			}
+			// chunked reading is going to read the full block, and have no partial...
+			LineRelease( pMergedLine );
+			unlockHttp( pHttpState );
+			//lprintf( "Gathered some of the chunk? %d %zd", ofs, GetTextSize( VarTextPeek( pHttpState->pvt_chunk)));
+// FALSE;
+			return;
+		}
+		else{
+			PTEXT pMergedLine;
+			PTEXT pInput = VarTextGet( pHttpState->pvt_collector );
+			PTEXT pNewLine = SegAppend( pHttpState->partial, pInput );
+			pMergedLine = SegConcat( NULL, pNewLine, 0, GetTextSize( pHttpState->partial ) + GetTextSize( pInput ) );
+			LineRelease( pNewLine );
+			pHttpState->partial = pMergedLine;
+			if( !pHttpState->flags.no_content_length ) {
+				pHttpState->content = pHttpState->partial;
+				pHttpState->content_length = GetTextSize( pHttpState->content );
+			}
+		}
 	}
 	unlockHttp( pHttpState );
 }
@@ -18584,8 +19418,9 @@ static PTEXT  resolvePercents( PTEXT urlword ) {
 	//while( url = urlword )
 	{
 		char *_url = GetText(url);
+		char *start = _url;
 		TEXTRUNE ch;
-		char *newUrl = _url;
+		char *newUrl = start;
 		int decode = 0;
 		while( _url[0] ) {
 			if( decode ) {
@@ -18618,26 +19453,29 @@ static PTEXT  resolvePercents( PTEXT urlword ) {
 			_url++;
 		}
 		newUrl[0] = _url[0];
-		SetTextSize( url, _url - GetText( url ) );
+		SetTextSize( url, newUrl - start );
 		urlword = NEXTLINE( url );
 	}
 	return url;
 }
-void ProcessURL_CGI( struct HttpState *pHttpState, PLIST *cgi_fields,PTEXT params )
+void ProcessURL_CGI( struct HttpState *pHttpState, PLIST *cgi_fields,PTEXT *pparams )
 {
+	PTEXT params = pparams[0];
 	PTEXT start = TextParse( params, "&=", NULL, 1, 1 DBG_SRC );
 	PTEXT next = start;
 	PTEXT tmp;
 	for( tmp = start; tmp; tmp = NEXTLINE( tmp ) ) {
 		if( tmp->format.position.offset.spaces ) {
 			SegBreak( tmp );
-			LineRelease( tmp );
+			//LineRelease( tmp );
  // weren't actually any parameters.
 			if( tmp == start )
 				return;
-			else
+			else{
+				pparams[0] = tmp;
   // okay, stripped the end off, use the start...
-	    break;
+				break;
+			}
 		}
 	}
 	//lprintf( "Input was %s", GetText( params ) );
@@ -18664,12 +19502,11 @@ void ProcessURL_CGI( struct HttpState *pHttpState, PLIST *cgi_fields,PTEXT param
 		LineRelease( start );
 }
 //int ProcessHttp( struct HttpState *pHttpState )
-int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
+enum ProcessHttpResult ProcessHttp( struct HttpState *pHttpState, int ( *send )( uintptr_t psv, CPOINTER buf, size_t len ), uintptr_t psv )
 {
 	lockHttp( pHttpState );
 	if( pHttpState->final )
 	{
-		//if( !pHttpState->method )
 		{
 			//lprintf( "Reading more, after returning a packet before... %d", pHttpState->response_version );
 			if( pHttpState->response_version ) {
@@ -18678,10 +19515,11 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
 				if( pHttpState->flags.success && !pHttpState->returned_status ) {
 					unlockHttp( pHttpState );
 					pHttpState->returned_status = 1;
-					return pHttpState->numeric_code;
+					return (enum ProcessHttpResult)pHttpState->numeric_code;
 				}
 			}
 			else {
+				// this is a request not a response we are processing...
 				if( pHttpState->content_length ) {
 					GatherHttpData( pHttpState );
 					if( ((GetTextSize( pHttpState->partial ) >= pHttpState->content_length)
@@ -18696,6 +19534,7 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
 			}
 		}
 		unlockHttp( pHttpState );
+		//lprintf( "return http nothing  %d %d %d", pHttpState->content_length, pHttpState->flags.success, pHttpState->returned_status );
 		return HTTP_STATE_RESULT_NOTHING;
 	}
 	else
@@ -18704,7 +19543,7 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
 		PTEXT pCurrent;
 		PTEXT pLine = NULL;
 		TEXTCHAR *c, *line;
-		size_t size, pos, len;
+		size_t size, pos;
 		INDEX start = 0;
 		PTEXT pMergedLine;
 		PTEXT pInput = VarTextGet( pHttpState->pvt_collector );
@@ -18716,7 +19555,6 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
 		//pStart = pCurrent; // at lest is this block....
 		//lprintf( "ND THIS IS WHAT WE PROCESSL:" );
 		//LogBinary( (const uint8_t*)GetText( pInput ), GetTextSize( pInput ) );
-		len = 0;
 		// we always start without having a line yet, because all input is already merged
 		{
 			//lprintf( "process HTTP: %s %d", GetText( pCurrent ), pHttpState->bLine );
@@ -18730,9 +19568,15 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
 					if( ((int)pos - (int)start - (int)pHttpState->bLine) < 0 )
 						continue;
 					if( c[pos] == '\r' )
-						pHttpState->bLine++;
+						if( !(pHttpState->bLine & 1 ) )
+							pHttpState->bLine++;
+						else
+							pHttpState->bLine=0;
 					else if( c[pos] == '\n' )
-						pHttpState->bLine++;
+						if( pHttpState->bLine & 1 )
+							pHttpState->bLine++;
+						else
+							pHttpState->bLine=0;
  // non end of line character....
 					else
 					{
@@ -18772,6 +19616,7 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
 									value = NEXTLINE( pLine );
 									field_name = SegSplit( &pLine, field_end - field_start );
 									trash = NEXTLINE( field_name );
+									// these fields are kept for some things like websockets, until they are closed...
 									{
 										struct HttpField *field = New( struct HttpField );
 										field->name = SegGrab( field_name );
@@ -18791,13 +19636,13 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
 								}
 								else
 								{
-									lprintf( "Header field [%s] invalid", GetText( pLine ) );
+									lprintf( "Header field [%.*s] invalid(%.*s)", (int)GetTextSize(pLine),GetText( pLine ), (int)GetTextSize(pCurrent), GetText( pCurrent ) );
 									LineRelease( pLine );
 								}
 							}
 							else
 							{
-			//lprintf( "Parsing http state content for something.." );
+								//lprintf( "Parsing http state request for something.." );
 								pLine = SegCreate( pos - start - pHttpState->bLine );
 								MemCpy( line = GetText( pLine ), c + start, (pos - start - pHttpState->bLine)*sizeof(TEXTCHAR));
 								line[pos-start- pHttpState->bLine] = 0;
@@ -18815,8 +19660,9 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
  // initialize to assume it's incomplete; NOT OK.  (requests should be OK)
 											pHttpState->numeric_code = HTTP_STATE_RESULT_CONTENT;
 											request = NEXTLINE( request );
-                                                                                        pHttpState->method = SegBreak( request );
-                                                                                        pHttpState->flags.no_content_length = 0;
+											pHttpState->method = SegBreak( request );
+											//GET will never have a body?
+											pHttpState->flags.no_content_length = 0;
 										}
 										else if( TextSimilar( request, "POST" ) )
 										{
@@ -18824,7 +19670,8 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
 											pHttpState->numeric_code = HTTP_STATE_RESULT_CONTENT;
 											request = NEXTLINE( request );
 											pHttpState->method = SegBreak( request );
-											pHttpState->flags.no_content_length = 0;
+											// a post could have a body, and we should wait for it?
+											//pHttpState->flags.no_content_length = 0;
 										}
 										// this loop is used for both client and server http requests...
 										// this will be the first part of a HTTP response (this one will have a result code, the other is just version)
@@ -18873,6 +19720,7 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
 										}
 										for( tmp = request; tmp; tmp = next )
 										{
+											// this describes a GET or POST request; an HTTP response would be handled above, and would be before or equal to 'request'
 											//lprintf( "word %s", GetText( tmp ) );
 											next = NEXTLINE( tmp );
 											//lprintf( "Line : %s", GetText( pLine ) );
@@ -18900,12 +19748,13 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
 											}
 											else if( GetText(tmp)[0] == '?' )
 											{
-												ProcessURL_CGI( pHttpState, &pHttpState->cgi_fields, next );
-												next = NEXTLINE( next );
+												ProcessURL_CGI( pHttpState, &pHttpState->cgi_fields, &next );
+												//next = NEXTLINE( next );
 											}
 											else if( GetText(tmp)[0] == '#' )
 											{
-												ProcessURL_CGI( pHttpState, &pHttpState->anchor_fields, next );
+												// anchor is stripped by the client before requesting
+												ProcessURL_CGI( pHttpState, &pHttpState->anchor_fields, &next );
 												lprintf( "Page anchor of URL is lost(not saved)...%s %s"
 													, GetText( tmp )
 													, GetText( next ) );
@@ -18941,14 +19790,16 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
 							if( pHttpState->bLine == 2 )
 								pHttpState->bLine = 0;
 						}
+ // 0 or 1
+						else
+							pHttpState->bLine = 0;
 						// may not receive anything other than header information?
 						if( pHttpState->bLine == 4 )
 						{
-							// end of header
+							// end of header (after finalcheck:)
 							// copy the previous line out...
 							//pStart = pCurrent;
- // remaing size
-							len = size - pos;
+							//len = size - pos; // remaing size
 							break;
 						}
 					}
@@ -18967,8 +19818,8 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
 					goto FinalCheck;
 				}
 			}
-			else
-				len += size;
+			//else
+			//	len += size;
 			//pCurrent = NEXTLINE( pCurrent );
 			/* Move the remaining data into a single binary data packet...*/
 		}
@@ -18977,6 +19828,8 @@ int ProcessHttp( PCLIENT pc, struct HttpState *pHttpState )
 			/*PTEXT tmp = */
 SegSplit( &pCurrent, start );
 			pHttpState->partial = NEXTLINE( pCurrent );
+			//lprintf( "Partial HTTP data put back...");
+			//LogBinary( (const uint8_t*)GetText( pHttpState->partial ), GetTextSize( pHttpState->partial ) );
 			LineRelease( SegGrab( pCurrent ) );
 			start = 0;
 		}
@@ -19008,17 +19861,26 @@ SegSplit( &pCurrent, start );
 					if( StrCaseStr( GetText( field->value ), "upgrade" ) ) {
 						pHttpState->flags.upgrade = 1;
 					}
+					else if( StrCaseStr( GetText( field->value ), "close" ) ) {
+						// the close defines the length of content...
+ // might have length already specified...
+						if( !pHttpState->content_length )
+							pHttpState->flags.no_content_length = 1;
+					}
 				}
 				else if( TextLike( field->name, "Transfer-Encoding" ) )
 				{
 					if( TextLike( field->value, "chunked" ) )
 					{
-						pHttpState->content_length = 0xFFFFFFF;
+						//lprintf( "Setup state to read chunked data - final should still be set? %d"
+						//		, pHttpState->final );
+						pHttpState->content_length = 0;
 						pHttpState->flags.no_content_length = 0;
 						pHttpState->read_chunks = TRUE;
 						pHttpState->read_chunk_state = READ_VALUE;
 						pHttpState->read_chunk_length = 0;
 						pHttpState->read_chunk_total_length = 0;
+						pHttpState->pvt_chunk = VarTextCreate();
 					}
 				}
 				else if( TextLike( field->name, "Expect" ) )
@@ -19027,7 +19889,7 @@ SegSplit( &pCurrent, start );
 					{
 						if( l.flags.bLogReceived )
 							lprintf( "Generating 100-continue response..." );
-						SendTCP( pc, "HTTP/1.1 100 Continue\r\n\r\n", 25 );
+						send( psv, "HTTP/1.1 100 Continue\r\n\r\n", 25 );
 					}
 				}
 			}
@@ -19037,6 +19899,7 @@ SegSplit( &pCurrent, start );
 	}
 	unlockHttp( pHttpState );
 	if( pHttpState->final &&
+		( !pHttpState->read_chunks ) &&
 		( ( pHttpState->content_length
 			&& ( ( GetTextSize( pHttpState->partial ) >= pHttpState->content_length )
 				||( GetTextSize( pHttpState->content ) >= pHttpState->content_length ) ) )
@@ -19044,10 +19907,10 @@ SegSplit( &pCurrent, start );
 			) )
 	{
 		pHttpState->returned_status = 1;
-		//lprintf( "return http %d",pHttpState->numeric_code );
+		//lprintf( "return http %d l:%d nl:%d",pHttpState->numeric_code, pHttpState->content_length, pHttpState->flags.no_content_length );
 		if( pHttpState->numeric_code == 500 )
 			return HTTP_STATE_INTERNAL_SERVER_ERROR;
-		if( pHttpState->content && (pHttpState->numeric_code == 200) ) {
+		if( pHttpState->content && ( (pHttpState->numeric_code == 201) || (pHttpState->numeric_code == 200) ) ) {
 			return HTTP_STATE_RESULT_CONTENT;
 		}
 		if( pHttpState->numeric_code == 100 )
@@ -19056,143 +19919,26 @@ SegSplit( &pCurrent, start );
 			return HTTP_STATE_RESOURCE_NOT_FOUND;
 		if( pHttpState->numeric_code == 400 )
 			return HTTP_STATE_BAD_REQUEST;
-		return pHttpState->numeric_code;
+		return (enum ProcessHttpResult)pHttpState->numeric_code;
 	}
 	//lprintf( "return http nothing" );
 	return HTTP_STATE_RESULT_NOTHING;
 }
-LOGICAL AddHttpData( struct HttpState *pHttpState, POINTER buffer, size_t size )
+LOGICAL AddHttpData( struct HttpState *pHttpState, CPOINTER buffer, size_t size )
 {
 	lockHttp( pHttpState );
+	//lprintf( "AddHttpData:%d", size );
 	pHttpState->last_read_tick = timeGetTime();
-	if( pHttpState->read_chunks )
-	{
-		const uint8_t* buf = (const uint8_t*)buffer;
-		size_t ofs = 0;
-      //lprintf( "Add Chunk HTTP Data:%d", size );
-		while( ofs < size )
-		{
-			switch( pHttpState->read_chunk_state )
-			{
-			case READ_VALUE:
-				if( buf[0] >= '0' && buf[0] <= '9' )
-				{
-					pHttpState->read_chunk_length *= 16;
-					pHttpState->read_chunk_length += buf[0] - '0';
-				}
-				else if( ( buf[0] | 0x20 ) >= 'a' && (buf[0] | 0x20) <= 'f' )
-				{
-					pHttpState->read_chunk_length *= 16;
-					pHttpState->read_chunk_length += (buf[0] | 0x20) - 'a' + 10;
-				}
-				else if( buf[0] == '\r' )
-				{
-					pHttpState->read_chunk_total_length += pHttpState->read_chunk_length;
-#ifdef _DEBUG
-					if( l.flags.bLogReceived ) {
-						lprintf( "Chunck will be %zd", pHttpState->read_chunk_length );
-					}
-#endif
-					pHttpState->read_chunk_state = READ_VALUE_LF;
-				}
-				else
-				{
-					lprintf( "Chunk Processing Error expected \\n, found %d(%c)", buf[0], buf[0] );
-					TriggerNetworkErrorCallback( pHttpState->request_socket, SACK_NETWORK_ERROR_HTTP_CHUNK );
-					unlockHttp( pHttpState );
-					RemoveClient( pHttpState->request_socket );
-					return FALSE;
-				}
-				break;
-			case READ_VALUE_CR:
-				// didn't actually implement to get into this state... just looks for newlines really.
-				break;
-			case READ_VALUE_LF:
-				if( buf[0] == '\n' )
-				{
-					if( pHttpState->read_chunk_length == 0 )
-						pHttpState->read_chunk_state = READ_CR;
-					else
-						pHttpState->read_chunk_state = READ_BYTES;
-				}
-				else
-				{
-					lprintf( "Chunk Processing Error expected \\n, found %d(%c)", buf[0], buf[0] );
-					TriggerNetworkErrorCallback( pHttpState->request_socket, SACK_NETWORK_ERROR_HTTP_CHUNK );
-					unlockHttp( pHttpState );
-					RemoveClient( pHttpState->request_socket );
-					return FALSE;
-				}
-				break;
-			case READ_CR:
-				if( buf[0] == '\r' )
-				{
-					pHttpState->read_chunk_state = READ_LF;
-				}
-				else
-				{
-					lprintf( "Chunk Processing Error expected \\r, found %d(%c)", buf[0], buf[0] );
-					TriggerNetworkErrorCallback( pHttpState->request_socket, SACK_NETWORK_ERROR_HTTP_CHUNK );
-					unlockHttp( pHttpState );
-					RemoveClient( pHttpState->request_socket );
-					return FALSE;
-				}
-				break;
-			case READ_LF:
-				if( buf[0] == '\n' )
-				{
-					if( pHttpState->read_chunk_length )
-					{
-						pHttpState->read_chunk_length = 0;
-						pHttpState->read_chunk_state = READ_VALUE;
-					}
-					else
-					{
-						pHttpState->content_length = GetTextSize( VarTextPeek( pHttpState->pvt_collector ) );
-						//lprintf( "This may or may not be the end of content? %d", pHttpState->content_length );
-						if( pHttpState->waiter ) {
-							//lprintf( "Waking waiting to return with result." );
-							WakeThread( pHttpState->waiter );
-						}
-						unlockHttp( pHttpState );
-						return TRUE;
-					}
-				}
-				else
-				{
-                                    lprintf( "Chunk Processing Error expected \\n, found %d(%c)", buf[0], buf[0] );
-					TriggerNetworkErrorCallback( pHttpState->request_socket, SACK_NETWORK_ERROR_HTTP_CHUNK );
-					unlockHttp( pHttpState );
-					RemoveClient( pHttpState->request_socket );
-					return FALSE;
-				}
-				break;
-			case READ_BYTES:
-				VarTextAddData( pHttpState->pvt_collector, (CTEXTSTR)(buf), 1 );
-				pHttpState->read_chunk_byte++;
-				if( pHttpState->read_chunk_byte == pHttpState->read_chunk_length )
-					pHttpState->read_chunk_state = READ_CR;
-				break;
-			}
-			ofs++;
-			buf++;
-		}
-		if( l.flags.bLogReceived ) {
-			lprintf( "chunk read is %zd of %zd", pHttpState->read_chunk_byte, pHttpState->read_chunk_total_length );
-		}
-		unlockHttp( pHttpState );
-		return FALSE;
-	}
-	else
 	{
 		//lprintf( "Add HTTP Data:%p %d", pHttpState->pc[0], size );
 		//LogBinary( (uint8_t*)buffer, 256>size?size:256 );
 		if( size )
 			VarTextAddData( pHttpState->pvt_collector, (CTEXTSTR)buffer, size );
 		unlockHttp( pHttpState );
+		if(0)
 		if( pHttpState->final ) {
 			// this will cause it to wait until 'endhttp' to process next block.
-			//lprintf( "still handling a previous requet in add data", pHttpState->pc[0] );
+			//lprintf( "still handling a previous request in add data", pHttpState->pc[0] );
 			return FALSE;
 		}
 		return TRUE;
@@ -19216,7 +19962,7 @@ void EndHttp( struct HttpState *pHttpState )
 	pHttpState->bLine = 0;
 	pHttpState->final = 0;
 	pHttpState->response_version = 0;
-	pHttpState->flags.no_content_length = 0;
+	pHttpState->flags.no_content_length = 1;
 	pHttpState->content_length = 0;
 	LineRelease( pHttpState->method );
 	pHttpState->method = NULL;
@@ -19276,6 +20022,7 @@ void ProcessHttpFields( struct HttpState *pHttpState, void (CPROC*f)( uintptr_t 
 {
 	INDEX idx;
 	struct HttpField *field;
+	if( !pHttpState ) return;
 	lockHttp( pHttpState );
 	LIST_FORALL( pHttpState->fields, idx, struct HttpField *, field )
 	{
@@ -19287,6 +20034,7 @@ void ProcessCGIFields( struct HttpState *pHttpState, void (CPROC*f)( uintptr_t p
 {
 	INDEX idx;
 	struct HttpField *field;
+	if( !pHttpState ) return;
 	lockHttp( pHttpState );
 	LIST_FORALL( pHttpState->cgi_fields, idx, struct HttpField *, field )
 	{
@@ -19299,11 +20047,12 @@ PTEXT GetHttpField( struct HttpState *pHttpState, CTEXTSTR name )
 	INDEX idx;
 	struct HttpField *field;
 	lockHttp( pHttpState );
-	LIST_FORALL( pHttpState->fields, idx, struct HttpField *, field )
-	{
-		if( StrCaseCmp( GetText( field->name ), name ) == 0 )
-			return field->value;
-	}
+	if( pHttpState->fields )
+		LIST_FORALL( pHttpState->fields, idx, struct HttpField *, field )
+		{
+			if( StrCaseCmp( GetText( field->name ), name ) == 0 )
+				return field->value;
+		}
 	unlockHttp( pHttpState );
 	return NULL;
 }
@@ -19339,13 +20088,15 @@ PTEXT GetHttpMethod( struct HttpState *pHttpState )
 void DestroyHttpStateEx( struct HttpState *pHttpState DBG_PASS )
 {
 	lockHttp( pHttpState );
-	//_lprintf(DBG_RELAY)( "Destroy http state... (should clear content too?" );
+	//_lprintf(DBG_RELAY)( "Destroy http state... (should clear content too? %p", pHttpState );
  // empties variables
 	EndHttp( pHttpState );
+	//lprintf( "Fields should have been emptied already?" );
 	DeleteList( &pHttpState->fields );
 	DeleteList( &pHttpState->cgi_fields );
 	VarTextDestroy( &pHttpState->pvtOut );
 	VarTextDestroy( &pHttpState->pvt_collector );
+	VarTextDestroy( &pHttpState->pvt_chunk );
 	if( pHttpState->buffer )
 		Release( pHttpState->buffer );
 	unlockHttp( pHttpState );
@@ -19453,21 +20204,23 @@ static void CPROC HttpReader( PCLIENT pc, POINTER buffer, size_t size )
 #ifdef _DEBUG
 		if( l.flags.bLogReceived )
 		{
-			lprintf( "Received web request... %zu", size );
+			lprintf( "Received web data... %zu", size );
 			LogBinary( (const uint8_t*) buffer, size );
 		}
 #endif
-		//lprintf( "adding data:%d", size );
-		if( AddHttpData( state, buffer, size ) )
-			if( ProcessHttp( pc, state ) )
+		if( AddHttpData( state, buffer, size ) ) {
+			enum ProcessHttpResult r;
+ // this shouldn't cause any auto send?
+			if( r = ProcessHttp( state, NULL, 0 ) )
 			{
-				//lprintf( "this is where we should close and not end... %d %d",state->flags.close , !state->flags.keep_alive );
+				//lprintf( "this is where we should close and not end...%d %d %d",r, state->flags.close , !state->flags.keep_alive );
 				if( state->flags.close || !state->flags.keep_alive) {
-					RemoveClient( pc );
+					RemoveClient( state->pc[0]);
 					return;
 				} else
 					EndHttp( state );
 			}
+		}
 	}
 	// read is handled by the SSL layer instead of here.  Just trust that someone will give us data later
 	if( buffer && ( !state || ( state && !state->ssl ) ) )
@@ -19481,15 +20234,17 @@ static void CPROC HttpReaderClose( PCLIENT pc )
 	if( !data ) return;
 // (PCLIENT*)GetNetworkLong( pc, 0 );
 	PCLIENT *ppc = data->pc;
+	//lprintf( "HTTP Socket Close Event" );
  // data is collected into 'partial' until close
 	if( data->flags.no_content_length ) {
+		//lprintf( "HTTP Close event... collecting data...");
 		GatherHttpData( data );
 		data->content_length = GetTextSize( data->partial );
-		//lprintf( "at close what is content length? %d", data->content_length );
+		//lprintf( "at close what is content length? %p %d", data, data->content_length );
 	}
 	if( data->content_length ) {
 		// should do one further gather; will set resulting status better.
-		ProcessHttp( pc, data );
+		ProcessHttp( data, NULL, 0 );
 	}
 	//lprintf( "Closing http: %p ", pc );
 	if( ppc[0] == pc ) {
@@ -19511,19 +20266,27 @@ static void CPROC HttpReaderClose( PCLIENT pc )
 static void CPROC HttpConnected( PCLIENT pc, int error ) {
 	INDEX idx;
 	struct pendingConnect *connect;
+	//lprintf( "Connection for Http: %p", pc );
 	while( 1 ) {
 		LIST_FORALL( l.pendingConnects, idx, struct pendingConnect *, connect ) {
 			if( connect->pc == pc ) {
+				//lprintf( "Found pending connect(Http): %p %d", connect, idx );
 				SetLink( &l.pendingConnects, idx, NULL );
 				break;
 			}
 		}
 		if( connect )
 			break;
+		else {
+			AddLink( &l.activeConnects, pc );
+			break;
+		}
 		Relinquish();
 	}
-	SetNetworkLong( pc, 0, (uintptr_t)connect->state );
-	Release( connect );
+	if( connect ) {
+		SetNetworkLong( pc, 0, (uintptr_t)connect->state );
+		Release( connect );
+	}
 	//lprintf( "Got connected... so connect gets released?");
 }
 HTTPState PostHttpQuery( PTEXT address, PTEXT url, PTEXT content )
@@ -19531,8 +20294,10 @@ HTTPState PostHttpQuery( PTEXT address, PTEXT url, PTEXT content )
 	PCLIENT pc;
 	struct pendingConnect *connect = New( struct pendingConnect );
 	struct HttpState *state = CreateHttpState(&connect->pc);
+	connect->pc = NULL;
 	connect->state = state;
 	state->closed = FALSE;
+	//lprintf( "adding pending: %p", connect->pc );
 	AddLink( &l.pendingConnects, connect );
 	pc = OpenTCPClientExx( GetText( address ), 80, HttpReader, NULL, NULL, HttpConnected );
 	connect->pc = pc;
@@ -19578,25 +20343,40 @@ PTEXT PostHttp( PTEXT address, PTEXT url, PTEXT content )
 	return NULL;
 }
 static void httpConnected( PCLIENT pc, int error ) {
+	struct HttpState *pHttpState = (struct HttpState *)GetNetworkLong( pc, 0 );
+	if( error ) {
+		pHttpState->options->connectError = error;
+		lprintf( "This is a request, and it failed with error %d", error );
+		RemoveClient( pc );
+	}
+	else {
+		pHttpState->options->connected = TRUE;
+	}
+	if(0)
 	{
 		INDEX idx;
 		struct pendingConnect *connect;
+		//lprintf( "Connection for http: %p", pc );
 		while( 1 ) {
 			LIST_FORALL( l.pendingConnects, idx, struct pendingConnect *, connect ) {
 				if( connect->pc == pc ) {
+					//lprintf( "Found pending connect(http): %p %d", connect, idx );
 					SetLink( &l.pendingConnects, idx, NULL );
 					break;
 				}
 			}
 			if( connect )
 				break;
+			else {
+				AddLink( &l.activeConnects, pc );
+				break;
+			}
 			Relinquish();
 		}
-		SetNetworkLong( pc, 0, (uintptr_t)connect->state );
-		Release( connect );
-	}
-	if( error ) {
-		RemoveClient( pc );
+		if( connect ){
+			SetNetworkLong( pc, 0, (uintptr_t)connect->state );
+			Release( connect );
+		}
 	}
 }
 HTTPState GetHttpQuery( PTEXT address, PTEXT url )
@@ -19610,16 +20390,20 @@ HTTPState GetHttpQuery( PTEXT address, PTEXT url )
 		SOCKADDR *addr = CreateSockAddress( GetText( address ), 443 );
 		struct pendingConnect *connect = New( struct pendingConnect );
 		struct HttpState *state = CreateHttpState( &connect->pc );
+		connect->pc = NULL;
 		connect->state = state;
 		state->closed = FALSE;
-		AddLink( &l.pendingConnects, connect );
+		//lprintf( "adding pending2: %p", connect->pc );
+		//AddLink( &l.pendingConnects, connect );
 		pc = OpenTCPClientAddrExxx( addr, HttpReader, HttpReaderClose, NULL, httpConnected, 0 DBG_SRC );
 		connect->pc = pc;
 		ReleaseAddress( addr );
 		if( pc ) {
 			PVARTEXT pvtOut = VarTextCreate();
+			const char* resource = GetText( url );
+			if( !resource ) resource = "/";
 			SetTCPNoDelay( pc, TRUE );
-			vtprintf( pvtOut, "GET %s HTTP/1.0\r\n", GetText( url ) );
+			vtprintf( pvtOut, "GET %s HTTP/1.0\r\n", resource );
 			vtprintf( pvtOut, "Host: %s\r\n", GetText( address ) );
 			//vtprintf( pvtOut, "connection: close\r\n" );
 			vtprintf( pvtOut, "\r\n" );
@@ -19627,13 +20411,13 @@ HTTPState GetHttpQuery( PTEXT address, PTEXT url )
 			{
 				PTEXT send = VarTextGet( pvtOut );
 				state->waiter = MakeThread();
-				state->request_socket = connect->pc;
+				state->request_socket = pc;
 				state->pc = &state->request_socket;
-				SetNetworkLong( connect->pc, 0, (uintptr_t)connect );
+				SetNetworkLong( pc, 0, (uintptr_t)state );
 				//SetNetworkCloseCallback( connect->pc, HttpReaderClose );
 				if( l.flags.bLogReceived )
 				{
-					lprintf( "Sending POST..." );
+					lprintf( "Sending GET..." );
 					LogBinary( (uint8_t*)GetText( send ), GetTextSize( send ) );
 				}
 				SendTCP( pc, GetText( send ), GetTextSize( send ) );
@@ -19649,9 +20433,19 @@ HTTPState GetHttpQuery( PTEXT address, PTEXT url )
 	}
 	return NULL;
 }
+void httpSSLError( uintptr_t psv, PCLIENT pc, enum SackNetworkErrorIdentifier error, ... ) {
+	lprintf( "SSL Level Error: %d (unhandled)", error );
+}
 HTTPState GetHttpsQuery( PTEXT address, PTEXT url, const char* certChain )
 {
-	return GetHttpsQueryEx( address, url, certChain, NULL );
+	static struct HTTPRequestOptions defaultOpts = {
+		"GET",
+		NULL,
+		NULL,
+		NULL, NULL, 0,
+		TRUE
+	};
+	return GetHttpsQueryEx( address, url, certChain, &defaultOpts );
 }
 static void writeComplete( PCLIENT pc, CPOINTER buffer, size_t length ) {
 	struct HttpState* data = (struct HttpState*)GetNetworkLong( pc, 0 );
@@ -19661,65 +20455,100 @@ static void writeComplete( PCLIENT pc, CPOINTER buffer, size_t length ) {
 HTTPState GetHttpsQueryEx( PTEXT address, PTEXT url, const char* certChain, struct HTTPRequestOptions* options )
 {
 	static struct HTTPRequestOptions defaultOpts = {
+  // method
 		"GET",
+  // url
 		NULL,
+  // address (IP:PORT)
 		NULL,
+  // headers
+		NULL,
+  // content
+		NULL,
+     // content length
+		0,
+ // SSL
+		FALSE,
+ // HTTP Version ("1.1" default)
+		"1.1",
+ // timeout (3000 default)
+		3000,
+ // retries (3 default)
+		3,
+		NETWORK_ADDRESS_FLAG_PREFER_NONE
 	};
 	if( !options ) options = &defaultOpts;
 	int retries;
 	if( !address )
 		return NULL;
-	for( retries = 0; retries < 3; retries++ )
+	if( !options->timeout ) options->timeout = 3000;
+	if( !options->retries ) options->retries = 3;
+	for( retries = 0; retries < options->retries; retries++ )
 	{
 		PCLIENT pc;
-		SOCKADDR *addr = CreateSockAddress( GetText( address ), 443 );
+		SOCKADDR *addr = CreateSockAddressV2( GetText( address ), options->ssl?443:80, options->addrFlags );
 		struct pendingConnect *connect = New( struct pendingConnect );
 		struct HttpState *state = CreateHttpState( &connect->pc );
 		state->options = options;
 		state->closed = FALSE;
+		connect->pc = NULL;
 		connect->state = state;
-		AddLink( &l.pendingConnects, connect );
-		if( retries ) {
-			//lprintf( "HTTP(S) Query (retry):%s", GetText( url ) );
-			//lprintf( "PC of connect:%p  %d", pc, retries );
-		}
+		//lprintf( "adding pending3: %p", connect );
+		//AddLink( &l.pendingConnects, connect );
+		//lprintf( "added pending3" );
 		//DumpAddr( "Http Address:", addr );
+ // clear any previous error.
+		options->connectError = 0;
 		pc = OpenTCPClientAddrExxx( addr, HttpReader, HttpReaderClose
 				, writeComplete, httpConnected, OPEN_TCP_FLAG_DELAY_CONNECT DBG_SRC );
 		connect->pc = pc;
+		//lprintf( "setting pending3: %p", connect->pc );
 		ReleaseAddress( addr );
 		if( pc )
 		{
 			char* header;
+			LOGICAL skipLength = FALSE;
 			INDEX idx;
+			LOGICAL hadUserAgent = FALSE;
+			const char* resource = GetText( url );
+			if( !resource ) resource = "/";
 			state->last_read_tick = timeGetTime();
 			state->waiter = MakeThread();
 			state->request_socket = connect->pc;
 			state->pc = &state->request_socket;
-			SetNetworkLong( pc, 0, (uintptr_t)connect );
+			SetNetworkLong( pc, 0, (uintptr_t)state );
 			//SetNetworkConn
 			state->ssl = options->ssl;
 			state->pvtOut = VarTextCreate();
 			// 1.0 expects close after request - this is a one shot synchronous process so...
-			vtprintf( state->pvtOut, "%s %s HTTP/1.0\r\n", options->method, GetText( url ) );
+			vtprintf( state->pvtOut, "%s %s HTTP/%s\r\n", options->method, resource, options->httpVersion?options->httpVersion:"1.0" );
 			// 1.1 would need this sort of header....
 			//vtprintf( state->pvtOut, "connection: close\r\n" );
-			if( options->content && options->contentLen ) {
-				vtprintf( state->pvtOut, "Content-Length:%d\r\n", options->contentLen);
-			}
-			vtprintf( state->pvtOut, "Host:%s\r\n", GetText( address ) );
-			vtprintf( state->pvtOut, "User-Agent:%s\r\n", options->agent?options->agent:"SACK(System)" );
+			vtprintf( state->pvtOut, "Host:%s\r\n", options->hostname?options->hostname:GetText( address ) );
 			LIST_FORALL( options->headers, idx, char*, header ) {
+				if( !hadUserAgent && ( StrCaseCmpEx( header, "user-agent", 10 ) == 0 ) ) hadUserAgent = TRUE;
+				if( !skipLength   && ( StrCaseCmpEx( header, "Content-Length", 15 ) == 0 ) ) {
+					skipLength = TRUE;
+ // force content length to get hidden; should be ':' to be valid
+					if( header[15] == '~' )
+						continue;
+				}
 				vtprintf( state->pvtOut, "%s\r\n", header );
 			}
+			if( !skipLength && options->content && options->contentLen ) {
+				vtprintf( state->pvtOut, "Content-Length:%d\r\n", options->contentLen);
+			}
+			if( !hadUserAgent )
+				vtprintf( state->pvtOut, "User-Agent:%s\r\n", options->agent?options->agent:"SACK/1.3" );
  // send blank header
 			vtprintf( state->pvtOut, "\r\n" );
 #ifndef NO_SSL
 			if( options->ssl ) {
 				if( ssl_BeginClientSession( pc, NULL, 0, NULL, 0, options->certChain?options->certChain:certChain, certChain
 							? strlen( options->certChain ? options->certChain:certChain ) : 0 ) ) {
+					SetNetworkErrorCallback( pc, httpSSLError, (uintptr_t)state );
 					state->waiter = MakeThread();
-					if( !certChain )
+					if( !options->rejectUnauthorized )
 						ssl_SetIgnoreVerification( pc );
 					if( NetworkConnectTCP( pc ) < 0 ) {
 						DestroyHttpState( state );
@@ -19746,11 +20575,13 @@ HTTPState GetHttpsQueryEx( PTEXT address, PTEXT url, const char* certChain, stru
 			}
 			// wait for response.
 			while( state->request_socket && !state->closed
-				&& ( state->last_read_tick > ( timeGetTime() - 3000 ) ) ) {
+				&& ( state->last_read_tick > ( timeGetTime() - options->timeout ) ) ) {
+				//lprintf( "waiting for response 1000 second %d", options->timeout );
 				WakeableSleep( 1000 );
 			}
 			//lprintf( "Request has completed.... %p %p %d", pc, state->content, state->closed );
 			if( state->request_socket && !state->closed ) {
+				//lprintf( "Closing in got response?" );
  // this shouldn't happen... it should have ben closed already.
 				RemoveClient( state->request_socket );
 			}
@@ -19852,7 +20683,7 @@ static void CPROC HandleRequest( PCLIENT pc, POINTER buffer, size_t length )
 		//lprintf( "RECEVED HTTP FROM NETWORK." );
 		//LogBinary( buffer, length );
 		AddHttpData( pHttpState, buffer, length );
-		while( ( result = ProcessHttp( pc, pHttpState ) ) )
+		while( ( result = ProcessHttp( pHttpState, NULL, 0 ) ) )
 		{
 			int status;
 			struct HttpServer *server = (struct HttpServer *)GetNetworkLong( pc, 0 );
@@ -20791,16 +21622,22 @@ PFAMILYNODE  FamilyTreeAddChild ( PFAMILYTREE *root, PFAMILYNODE parent, POINTER
 #  endif
 #  define	 SACK_MATH_FRACTION_NAMESPACE_END
 #endif
-SACK_NAMESPACE
+#ifdef __cplusplus
+namespace sack {
+#endif
 	/* Namespace of custom math routines.  Contains operators
 	 for Vectors and fractions. */
-	_MATH_NAMESPACE
+#ifdef __cplusplus
+	namespace math {
+#endif
 	/* Fraction namespace contains a PFRACTION type which is used to
    store integer fraction values. Provides for ration and
    proportion scaling. Can also represent fractions that contain
    a whole part and a fractional part (5 2/3 : five and
 	two-thirds).                                                  */
-	_FRACTION_NAMESPACE
+#ifdef __cplusplus
+	namespace fraction {
+#endif
 /* Define the call type of the function. */
 #define FRACTION_API CPROC
 #  ifdef FRACTION_SOURCE
@@ -20925,8 +21762,9 @@ FRACTION_PROC  uint32_t FRACTION_API  ScaleValue ( PFRACTION f, int32_t value );
    Returns
    the value of ( value * 1/ f )               */
 FRACTION_PROC  uint32_t FRACTION_API  InverseScaleValue ( PFRACTION f, int32_t value );
-	SACK_MATH_FRACTION_NAMESPACE_END
 #ifdef __cplusplus
+ //	SACK_MATH_FRACTION_NAMESPACE_END
+} } }
 using namespace sack::math::fraction;
 #endif
 #endif
@@ -21212,8 +22050,8 @@ static void NormalizeFraction( PFRACTION f )
  uint32_t  InverseScaleValue ( PFRACTION f, int32_t value )
 {
 	int32_t result =0;
-if( f->numerator )
-	result = ( value * f->denominator ) / f->numerator;
+	if( f->numerator )
+		result = ( value * f->denominator ) / f->numerator;
 	return result;
 }
 //---------------------------------------------------------------------------
@@ -21338,7 +22176,9 @@ if( f->numerator )
 #define FILEMON_NAMESPACE_END _FILEMON_NAMESPACE_END _FILESYS_NAMESPACE_END SACK_NAMESPACE_END
 /* Defines the file montior namespace when compiling C++. */
 #define FILEMON_NAMESPACE SACK_NAMESPACE _FILESYS_NAMESPACE _FILEMON_NAMESPACE
-SACK_NAMESPACE
+#ifdef __cplusplus
+namespace sack {
+#endif
 /* \File system abstractions. A few things like get current path
    may or may not exist on a function.
    Primarily this defines functions 'pathchr' and 'pathrchr'
@@ -21348,7 +22188,9 @@ SACK_NAMESPACE
    methods on windows and linux to get event notifications when
    directories and, by filtering, files that have changed.
                                                                  */
-_FILESYS_NAMESPACE
+#ifdef __cplusplus
+	namespace filesys {
+#endif
 	enum ScanFileFlags {
 SFF_DEFAULT = 0,
  // go into subdirectories
@@ -21406,9 +22248,12 @@ struct file_system_interface {
 	int ( CPROC* _mkdir )( uintptr_t psvInstance, const char* );
 	int ( CPROC* _rmdir )( uintptr_t psvInstance, const char* );
                 //file *
-    int (CPROC* _lock)(void*);
+	int (CPROC* _lock)(void*);
               //file *
-    int (CPROC* _unlock)(void*);
+	int (CPROC* _unlock)(void*);
+ // set chmod( filename, 0777 )
+	int (CPROC* _make_public)( uintptr_t psvInstance, CTEXTSTR filename );
+	int ( CPROC* _chdir )( uintptr_t psvInstance, const char* );
 };
 /* \ \
    Parameters
@@ -21460,11 +22305,22 @@ FILESYS_PROC struct find_cursor * FILESYS_API GetScanFileCursor( void *pInfo );
 FILESYS_PROC  int FILESYS_API  GetMatchingFileName ( CTEXTSTR filemask, enum ScanFileFlags flags, TEXTSTR pResult, int nResult );
 // searches a path for the last '/' or '\'
 FILESYS_PROC  CTEXTSTR FILESYS_API  pathrchr ( CTEXTSTR path );
+// searches a path for the last '/' or '\'
+FILESYS_PROC  const wchar_t* FILESYS_API  pathrchrW( const wchar_t* path );
 #ifdef __cplusplus
 FILESYS_PROC  TEXTSTR FILESYS_API  pathrchr ( TEXTSTR path );
+FILESYS_PROC  wchar_t* FILESYS_API pathrchrW( wchar_t* path );
 #endif
 // searches a path for the first '/' or '\'
 FILESYS_PROC  CTEXTSTR FILESYS_API  pathchr ( CTEXTSTR path );
+/*
+   compares filenames case insensitively and slash agnostic
+*/
+FILESYS_PROC int FILESYS_API PathCmpEx( CTEXTSTR s1, CTEXTSTR s2, int maxlen );
+/*
+   compares filenames case insensitively and slash agnostic.  Uses PathCmpEx() with maxlen=65535
+*/
+FILESYS_PROC int FILESYS_API PathCmp( CTEXTSTR s1, CTEXTSTR s2 );
 // returns pointer passed (if it worked?)
 FILESYS_PROC  TEXTSTR FILESYS_API  GetCurrentPath ( TEXTSTR path, int buffer_len );
 FILESYS_PROC  int FILESYS_API  SetCurrentPath ( CTEXTSTR path );
@@ -21520,9 +22376,38 @@ FILESYS_PROC  TEXTSTR FILESYS_API  sack_prepend_path ( INDEX group, CTEXTSTR fil
    int group = GetFileGroup( "fonts", "./fonts" );
    </code>                                                      */
 FILESYS_PROC INDEX FILESYS_API  GetFileGroup ( CTEXTSTR groupname, CTEXTSTR default_path );
+/*
+   Get the path the filegroup is defined as; or has been reloaded from option
+   database as.
+*/
 FILESYS_PROC TEXTSTR FILESYS_API GetFileGroupText ( INDEX group, TEXTSTR path, int path_chars );
-FILESYS_PROC TEXTSTR FILESYS_API ExpandPathEx( CTEXTSTR path, struct file_system_interface *fsi );
-FILESYS_PROC TEXTSTR FILESYS_API ExpandPath( CTEXTSTR path );
+/*
+ExpandPath() returns a string, which the caller must release.  The path is insepcted to see if it is
+an absolute path ( '/' on unix or '?:/' on windows, where ? is any character).  All checks for slashes
+check both `\` and `/` as the same character.
+If it is absolute, it returns a copy of the path.
+If the path starts with a special character followed by a slash, then the character is replaced.
+|character| meaning|
+|---|----|
+|'./'| the current directory.  The dot is replaced with the full path to the current directory. |
+|'~/'|the home directory.  The `~` is replaced with `HOME` (on *nix) or `HOMEPATH`(on windows), and '.' (on android). This is also checked after all of these have previously been checked. so ';' can use '~'|
+|`@/`| the libraries path.  This is the path of the library or program currently running the filesystem abstraction. |
+|'?/'| %resources%.  This is defaulted to the install location, and is the common resources instealled with SACK. |
+|'^/'| Startup path.  This is the first path the application started in.  This is often the same as current directory, but current directoy can change. |
+|'*' '/'| on linux this is /var/Freedom Collective/<application>, on windows this is c:/programdata/Freedom Collective/<application.  This is actually (common writeable data/<provider>/<application>/ and it is possible to set/change the provider name.  The application name is determined by the name used to run the program.|
+|';/'| on linux this is ~/.[provider]/<application>, on windows this is c:/users/<user>/programdata/[provider]/[application].
+The default `[provider]` is Freedom Collective (shrug) needed to come up with a company name at some point.  To date
+there is no company other than in name only.
+Varibles bounded by `%` are replaced with file group path, if there is no filepath, then the name is looked up
+in the environment and that's used.
+The path characters `/` and `\` are then forced to the host system preferred type of slash.  Although windows
+has been agnositic, updating the interfaces on windows to the system to be unicode(since ascii isn't uft8),
+the wide APIs require `\`; and really linux requires `/`.
+Finally relative paths that are left are resolved, if there is a path part before the `..` to remove.
+*/
+FILESYS_PROC TEXTSTR FILESYS_API ExpandPathExx( CTEXTSTR path, struct file_system_interface* fsi DBG_PASS );
+#define ExpandPathEx( path, fsi )  ExpandPathExx( path, fsi DBG_SRC )
+#define ExpandPath(path) ExpandPathExx( path, NULL DBG_SRC )
 FILESYS_PROC LOGICAL FILESYS_API SetFileLength( CTEXTSTR path, size_t length );
 /* \Returns the size of the file.
    Parameters
@@ -21677,6 +22562,7 @@ FILESYS_PROC  int FILESYS_API  sack_unlink ( INDEX group, CTEXTSTR filename );
 FILESYS_PROC  int FILESYS_API  sack_rmdirEx( INDEX group, CTEXTSTR filename, struct file_system_mounted_interface* mount );
 FILESYS_PROC  int FILESYS_API  sack_rmdir( INDEX group, CTEXTSTR filename );
 FILESYS_PROC  int FILESYS_API  sack_mkdirEx( INDEX group, CTEXTSTR filename, struct file_system_mounted_interface* mount );
+FILESYS_PROC  int FILESYS_API  sack_chdirEx( INDEX group, CTEXTSTR filename, struct file_system_mounted_interface* mount );
 FILESYS_PROC  int FILESYS_API  sack_mkdir( INDEX group, CTEXTSTR filename );
 FILESYS_PROC  int FILESYS_API  sack_renameEx ( CTEXTSTR file_source, CTEXTSTR new_name, struct file_system_mounted_interface *mount );
 FILESYS_PROC  int FILESYS_API  sack_rename ( CTEXTSTR file_source, CTEXTSTR new_name );
@@ -21686,6 +22572,17 @@ FILESYS_PROC  uintptr_t FILESYS_API  sack_ioctl( FILE *file, uintptr_t opCode, .
 FILESYS_PROC  uintptr_t FILESYS_API  sack_fs_ioctl( struct file_system_mounted_interface *mount, uintptr_t opCode, ... );
 FILESYS_PROC int FILESYS_API sack_flock( FILE* file );
 FILESYS_PROC int FILESYS_API sack_funlock( FILE* file );
+/*
+  change permissions so everyone can read and write the file.
+  result is < 0 and errno is set to ENOENT if there is no handler entry for the mount found.
+*/
+FILESYS_PROC int FILESYS_API make_public( CTEXTSTR filename );
+/*
+  change permissions so everyone can read and write the file; on a given mount.
+  many mounts do not support this yet.
+  result is < 0 and errno is set to ENOENT if there is no handler entry for the mount specified.
+*/
+FILESYS_PROC int FILESYS_API make_public_mount( CTEXTSTR filename, struct file_system_mounted_interface*mount );
 #ifndef NO_FILEOP_ALIAS
 #  ifndef NO_OPEN_MACRO
 # define open(a,...) sack_iopen(0,a,##__VA_ARGS__)
@@ -21832,29 +22729,6 @@ namespace sack {
 #define SECTION_LOGGED_WAIT 0
 #define AND_NOT_SECTION_LOGGED_WAIT(n) (n)
 #define AND_SECTION_LOGGED_WAIT(n) (0)
-#endif
-// If you change this structure please change the public
-// reference of this structure, and please, do hand-count
-// the bytes to set there... so not include this file
-// to get the size.  The size there should be the worst
-// case - debug or release mode.
-#ifdef NO_PRIVATE_DEF
-struct critical_section_tag {
- // this is set when entering or leaving (updating)...
-	volatile uint32_t dwUpdating;
-	volatile uint32_t dwLocks;
- // windows upper 16 is process ID, lower is thread ID
-	THREAD_ID dwThreadID;
- // ID of thread waiting for this..
-	THREAD_ID dwThreadWaiting;
-	//PDATAQUEUE pPriorWaiters;
-#ifdef DEBUG_CRITICAL_SECTIONS
-	uint32_t bCollisions ;
-	CTEXTSTR pFile;
-	uint32_t  nLine;
-#endif
-};
-typedef struct critical_section_tag CRITICALSECTION;
 #endif
 #ifdef __cplusplus
 	}
@@ -22008,8 +22882,8 @@ static uintptr_t masks[33] = { makeULong(0), makeULong(0), makeULong(1), 0
 #    define _lprintf2( f, ... ) { TEXTCHAR buf[256]; tnprintf( buf, 256, FILELINE_FILELINEFMT f,_pFile,_nLine,##__VA_ARGS__ ); SystemLogFL( buf FILELINE_SRC ); } }
 #    define ll__lprintf( a ) {const TEXTCHAR *_pFile = pFile; int _nLine = nLine; _lprintf2
 #  else
-#    define ll_lprintf( f, ... ) { TEXTCHAR buf[256]; tnprintf( buf, 256, f,##__VA_ARGS__ ); SystemLog( buf ); }
-#    define _lprintf2( f, ... ) { TEXTCHAR buf[256]; tnprintf( buf, 256, f,##__VA_ARGS__ ); SystemLog( buf ); } }
+#    define ll_lprintf( f, ... ) { TEXTCHAR buf[256]; tnprintf( buf, 256, f,##__VA_ARGS__ ); SystemLogFL( buf FILELINE_SRC ); }
+#    define _lprintf2( f, ... ) { TEXTCHAR buf[256]; tnprintf( buf, 256, f,##__VA_ARGS__ ); SystemLogFL( buf FILELINE_SRC ); } }
 #    define ll__lprintf( a ) { _lprintf2
 #  endif
 #else
@@ -22072,9 +22946,17 @@ struct global_memory_tag {
 	uint32_t bMemInstanced;
 	LOGICAL deadstart_finished;
 	PMEM pMemInstance;
+	uint32_t last_set_allocate;
+	int nLogAllocateClears;
+	int bDefaultLogAllocate;
 };
 #ifdef __STATIC__
-static struct global_memory_tag global_memory_data = { 0x10000 * 0x08, 1, 1
+static struct global_memory_tag global_memory_data = { 0x10000 * 0x08
+#  ifdef _DEBUG
+                                                     , 0, 0
+#else
+                                                     , 1, 1
+#  endif
 													, 0
 													, 0
 													, 0
@@ -22085,7 +22967,7 @@ static struct global_memory_tag global_memory_data = { 0x10000 * 0x08, 1, 1
 																	  , 0
 																	  , NULL
 #ifdef _WIN32
-																	  , { 0 }
+																	  , {}
 #endif
 																	  , 0
 																	  , 0
@@ -22110,7 +22992,7 @@ struct global_memory_tag global_memory_data = { 0x10000 * 0x08, 0, 0
 																	  , 0
 																	  , NULL
 #ifdef _WIN32
-																	  , { 0 }
+																	  , {}
 #endif
 																	  , 0
 																	  , 0
@@ -22133,7 +23015,7 @@ struct global_memory_tag global_memory_data = { 0x10000 * 0x08, 1, 1
 																	  , 0
 																	  , NULL
 #ifdef _WIN32
-																	  , { 0 }
+																	  , {}
 #endif
 																	  , 0
 																	  , 0
@@ -22148,22 +23030,28 @@ struct global_memory_tag global_memory_data = { 0x10000 * 0x08, 1, 1
 #ifndef NO_LOGGING
 #  define ODSEx(s,pFile,nLine) SystemLogFL( s DBG_RELAY )
 //#define ODSEx(s,pFile,nLine) SystemLog( s )
-#  define ODS(s)  SystemLog(s)
+#  define ODS(s)  SystemLogFL(s FILELINE_SRC )
 #else
 #  define ODSEx(s,file,line)
 #  define ODS(s)
 #endif
 #define MAGIC_SIZE sizeof( void* )
+#define PRI64_COMPAT_SUFFIX L
+#ifndef __PRI64_PREFIX
+#  ifdef _MSC_VER
+#    define __PRI64_PREFIX "ll"
+#  endif
+#endif
 #ifdef __64__
-#define BLOCK_TAG(pc)  (*(uint64_t*)((pc)->byData + (pc)->dwSize - (pc)->info.dwPad ))
+#  define BLOCK_TAG(pc)  (*(uint64_t*)((pc)->byData + (pc)->dwSize - (pc)->info.dwPad ))
 // so when we look at memory this stamp is 0123456789ABCDEF
-#define TAG_FORMAT_MODIFIER "ll"
-#define BLOCK_TAG_ID 0xefcdab8967452301LL
+#  define TAG_FORMAT_MODIFIER __PRI64_PREFIX
+#  define BLOCK_TAG_ID pastejunk( 0xefcdab8967452301, PRI64_COMPAT_SUFFIX )
 #else
-#define BLOCK_TAG(pc)  (*(uint32_t*)((pc)->byData + (pc)->dwSize - (pc)->info.dwPad ))
+#  define BLOCK_TAG(pc)  (*(uint32_t*)((pc)->byData + (pc)->dwSize - (pc)->info.dwPad ))
 // so when we look at memory this stamp is 12345678
-#define TAG_FORMAT_MODIFIER "l"
-#define BLOCK_TAG_ID 0x78563412L
+#  define TAG_FORMAT_MODIFIER __PRI32_PREFIX
+#  define BLOCK_TAG_ID 0x78563412L
 #endif
 // file/line info are at the very end of the physical block...
 // block_tag is at the start of the padding...
@@ -22180,7 +23068,7 @@ PRIORITY_PRELOAD( InitGlobal, DEFAULT_PRELOAD_PRIORITY )
 {
 #ifndef __NO_OPTIONS__
 	g.bLogCritical = SACK_GetProfileIntEx( GetProgramName(), "SACK/Memory Library/Log critical sections", g.bLogCritical, TRUE );
-	g.bLogAllocate = SACK_GetProfileIntEx( GetProgramName(), "SACK/Memory Library/Enable Logging", g.bLogAllocate, TRUE );
+	g.bDefaultLogAllocate = g.bLogAllocate = SACK_GetProfileIntEx( GetProgramName(), "SACK/Memory Library/Enable Logging", g.bLogAllocate, TRUE );
 	if( g.bLogAllocate )
 		ll_lprintf( "Memory allocate logging enabled." );
 	g.bLogAllocateWithHold = SACK_GetProfileIntEx( GetProgramName(), "SACK/Memory Library/Enable Logging Holds", g.bLogAllocateWithHold, TRUE );
@@ -22193,7 +23081,7 @@ PRIORITY_PRELOAD( InitGlobal, DEFAULT_PRELOAD_PRIORITY )
 	g.allowLogging = 1;
 }
 #if __GNUC__
-//#  pragma message( "GNUC COMPILER")
+#pragma GCC warning "C Preprocessor got here!"
 #  ifndef __ATOMIC_RELAXED
 #    define __ATOMIC_RELAXED 0
 #  endif
@@ -22201,11 +23089,14 @@ PRIORITY_PRELOAD( InitGlobal, DEFAULT_PRELOAD_PRIORITY )
 #    define __GNUC_VERSION ( __GNUC__ * 10000 ) + ( __GNUC_MINOR__ * 100 )
 #  endif
 #  if  ( __GNUC_VERSION >= 40800 ) || defined(__MAC__) || defined( __EMSCRIPTEN__ )
+#    pragma GCC warning "gcc is going to use __atomic_exchange_n"
 #    define XCHG(p,val)  __atomic_exchange_n(p,val,__ATOMIC_RELAXED)
 ///  for some reason __GNUC_VERSION doesn't exist from android ?
 #  elif defined __ARM__ || defined __ANDROID__
+#    pragma GCC warning "gcc is going to use __atomic_exchange_n(2)"
 #    define XCHG(p,val)  __atomic_exchange_n(p,val,__ATOMIC_RELAXED)
 #  else
+#    pragma GCC warning "gcc is a version without __atomic_exchange_n"
 inline uint32_t DoXchg( volatile uint32_t* p, uint32_t val ) { __asm__( "lock xchg (%2),%0" :"=a"(val) : "0"(val), "c"(p) ); return val; }
 inline uint64_t DoXchg64( volatile int64_t* p, uint64_t val ) { __asm__( "lock xchg (%2),%0" :"=a"(val) : "0"(val), "c"(p) ); return val; }
 #    define XCHG( p,val) ( ( sizeof( val ) > sizeof( uint32_t ) )?DoXchg64( (volatile int64_t*)p, (uint64_t)val ):DoXchg( (volatile uint32_t*)p, (uint32_t)val ) )
@@ -22347,12 +23238,10 @@ static void DumpSection( PCRITICALSECTION pcs )
 				if( pcs->dwThreadWaiting ) {
 					// someone was waiting for it...
 					if( pcs->dwThreadWaiting != dwCurProc ) {
-						if( prior ) {
-							if( *prior ) {
-								// prior is set, so someone has set their prior to me....
-								pcs->dwUpdating = 0;
-								return 0;
-							}
+						if( prior && (*prior ) ) {
+							// prior is set, so someone has set their prior to me....
+							pcs->dwUpdating = 0;
+							return 0;
 						}
 					}
  //  waiting is me
@@ -22374,6 +23263,19 @@ static void DumpSection( PCRITICALSECTION pcs )
 					}
 					//ll_lprintf( "Claimed critical section." );
 				}
+#ifdef DEBUG_CRITICAL_SECTIONS
+#  ifdef _DEBUG
+		pcs->pFile[pcs->nPrior] = pFile;
+		pcs->nLine[pcs->nPrior] = nLine;
+#  else
+		pcs->pFile[pcs->nPrior] = __FILE__;
+		pcs->nLine[pcs->nPrior] = __LINE__;
+#  endif
+		pcs->nLineCS[pcs->nPrior] = __LINE__;
+		pcs->isLock[pcs->nPrior] = 11;
+		pcs->dwThreadPrior[pcs->nPrior] = dwCurProc;
+		pcs->nPrior = (pcs->nPrior + 1) % MAX_SECTION_LOG_QUEUE;
+#endif
  // claim the section and return success
 				pcs->dwThreadID = dwCurProc;
 				pcs->dwLocks = 1;
@@ -22383,6 +23285,19 @@ static void DumpSection( PCRITICALSECTION pcs )
 			else if( dwCurProc == pcs->dwThreadID )
 			{
 				// otherwise 1) I won the thread already... (threadID == me )
+#ifdef DEBUG_CRITICAL_SECTIONS
+#  ifdef _DEBUG
+		pcs->pFile[pcs->nPrior] = pFile;
+		pcs->nLine[pcs->nPrior] = nLine;
+#  else
+		pcs->pFile[pcs->nPrior] = __FILE__;
+		pcs->nLine[pcs->nPrior] = __LINE__;
+#  endif
+		pcs->nLineCS[pcs->nPrior] = __LINE__;
+		pcs->isLock[pcs->nPrior] = 11;
+		pcs->dwThreadPrior[pcs->nPrior] = dwCurProc;
+		pcs->nPrior = (pcs->nPrior + 1) % MAX_SECTION_LOG_QUEUE;
+#endif
 				pcs->dwLocks++;
 				pcs->dwUpdating = 0;
 				return 1;
@@ -22447,6 +23362,19 @@ static void DumpSection( PCRITICALSECTION pcs )
 			}
 			if( pcs->dwThreadID == dwCurProc )
 			{
+#ifdef DEBUG_CRITICAL_SECTIONS
+#  ifdef _DEBUG
+		pcs->pFile[pcs->nPrior] = pFile;
+		pcs->nLine[pcs->nPrior] = nLine;
+#  else
+		pcs->pFile[pcs->nPrior] = __FILE__;
+		pcs->nLine[pcs->nPrior] = __LINE__;
+#  endif
+		pcs->nLineCS[pcs->nPrior] = __LINE__;
+		pcs->isLock[pcs->nPrior] = 10;
+		pcs->dwThreadPrior[pcs->nPrior] = dwCurProc;
+		pcs->nPrior = (pcs->nPrior + 1) % MAX_SECTION_LOG_QUEUE;
+#endif
 				pcs->dwLocks--;
 				if( !pcs->dwLocks )
 				{
@@ -22599,6 +23527,11 @@ void InitSharedMemory( void )
 #ifndef __NO_MMAP__
 	if( !g.bInit )
 	{
+#ifdef _WIN32
+		GetSystemInfo( &g.si );
+#else
+		g.pagesize = sysconf( _SC_PAGESIZE );
+#endif
 	// this would be really slick to do
 	// especially in the case where files have been used
 	// to back storage...
@@ -22606,11 +23539,6 @@ void InitSharedMemory( void )
 	// only with closing those regions which have a file
 		// backing, espcecially those that are temporary chickens.
 		//atexit( ReleaseAllMemory );
-#ifdef _WIN32
-		GetSystemInfo( &g.si );
-#else
-		g.pagesize = sysconf(_SC_PAGESIZE);
-#endif
 #ifdef VERBOSE_LOGGING
 		if( !g.bDisableDebug )
 			Log2( "CHUNK: %d  MEM:%d", CHUNK_SIZE(0), MEM_SIZE );
@@ -22735,9 +23663,14 @@ PSPACE FindSpace( POINTER pMem )
 	PSPACEPOOL psp;
 	INDEX idx;
 	for( psp = g.pSpacePool;psp; psp = psp->next)
-		for( idx = 0; idx < MAX_PER_BLOCK; idx++ )
+		for( idx = 0; idx < MAX_PER_BLOCK; idx++ ) {
+			//if( g.bLogAllocate)
+			//	lprintf( "Finding space %p %p", pMem, psp->spaces[idx].pMem);
 			if( psp->spaces[idx].pMem == pMem )
 				return psp->spaces + idx;
+		}
+	//if( g.bLogAllocate)
+	//	lprintf( "Failed to find space %p", pMem );
 	return NULL;
 }
 //------------------------------------------------------------------------------------------------------
@@ -22853,6 +23786,8 @@ uintptr_t GetFileSize( int fd )
 							0
 #endif
 						  , 0 );
+ // anonymous spaces are always created
+			if( bCreated) bCreated[0] = TRUE;
 			if( pMem == (POINTER)-1 )
 			{
 				if( errno == ENODEV ) {
@@ -22979,9 +23914,11 @@ uintptr_t GetFileSize( int fd )
 				}
 				if( fd == -1 )
 				{
+#ifdef DEBUG_OPEN_SPACE
 					Log2( "Sorry - failed to open: %d %s"
 						, errno
 						, filename );
+#endif
 #ifndef USE_SIMPLE_LOCK_ON_OPEN
 					if( g.deadstart_finished )
 					{
@@ -23035,6 +23972,8 @@ uintptr_t GetFileSize( int fd )
 			          , PROT_READ|(readonly?(0):PROT_WRITE)
 			          , MAP_SHARED|((fd<0)?MAP_ANONYMOUS:0)
 			          , fd, 0 );
+ // anonymous spaces are always created
+			if( bCreated) bCreated[0] = !exists;
 			if( !exists && pMem )
 			{
 				MemSet( pMem, 0, *dwSize );
@@ -23525,8 +24464,9 @@ static PMEM GrabMemEx( PMEM pMem DBG_PASS )
 		// use default heap...
 		if( !XCHG( &g.bMemInstanced, TRUE ) )
 			pMem = InitMemory();
-		else
-			return 0;
+		else {
+			pMem = g.pMemInstance;
+		}
 	}
 	//ll_lprintf( "grabbing memory %p", pMem );
 	{
@@ -23658,13 +24598,15 @@ POINTER HeapAllocateAlignedEx( PMEM pHeap, size_t dwSize, uint16_t alignment DBG
 		pMem = GrabMem( pHeap );
 		dwPad = dwAlignPad;
 #ifdef __64__
-		//dwPad = (uint32_t)( (((dwSize + 7) & 0xFFFFFFFFFFFFFFF8) - dwSize) );
-		//dwSize += 7; // fix size to allocate at least _32s which
-		//dwSize &= 0xFFFFFFFFFFFFFFF8;
+		dwPad += (uint32_t)( (((dwSize + 7) & 0xFFFFFFFFFFFFFFF8) - dwSize) );
+ // fix size to allocate at least _32s which
+		dwSize += 7;
+		dwSize &= 0xFFFFFFFFFFFFFFF8;
 #else
-		//dwPad = (((dwSize + 3) & 0xFFFFFFFC) -dwSize);
-		//dwSize += 3; // fix size to allocate at least _32s which
-		//dwSize &= 0xFFFFFFFC;
+		dwPad += (((dwSize + 3) & 0xFFFFFFFC) -dwSize);
+ // fix size to allocate at least _32s which
+		dwSize += 3;
+		dwSize &= 0xFFFFFFFC;
 #endif
 #ifdef _DEBUG
 		if( pMem && !(pMem->dwFlags & HEAP_FLAG_NO_DEBUG) )
@@ -23753,7 +24695,8 @@ POINTER HeapAllocateAlignedEx( PMEM pHeap, size_t dwSize, uint16_t alignment DBG
 						// copy link...
 						if( ( pNew->next = pc->next ) )
 							pNew->next->me = &pNew->next;
-						*( pNew->me = pc->me ) = pNew;
+						pNew->me = pc->me;
+						pc->me[0] = pNew;
   // set owned block.
 						pc->info.dwOwners = 1;
  // successful allocation....
@@ -23810,12 +24753,25 @@ POINTER HeapAllocateAlignedEx( PMEM pHeap, size_t dwSize, uint16_t alignment DBG
 #endif
 		DropMem( pCurMem );
 		DropMem( pMem );
+/*
+		if( pCurMem->cs.dwLocks ) {
+			fprintf( stderr, "(pcurmem) Memory block %p has %d locks on it.", pCurMem, pCurMem->cs.dwLocks );
+			//DebugBreak();
+		}
+		if( pMem->cs.dwLocks ) {
+			fprintf( stderr, "(pmem) Memory block %p has %d locks on it.", pMem, pMem->cs.dwLocks );
+			//DebugBreak();
+		}
+*/
 		//#if DBG_AVAILABLE
 #ifndef NO_LOGGING
 #  ifdef _DEBUG
 		if( g.bLogAllocate && g.allowLogging )
 		{
 			_xlprintf( 2 DBG_RELAY )("Allocate : %p(%p) - %" _PTRSZVALfs " bytes", pc->byData, pc, pc->dwSize);
+		}else
+		{
+			//fprintf(stderr, DBG_FILELINEFMT " (disabled %d)Allocate : %p(%p) - %" _PTRSZVALfs " bytes\n" DBG_RELAY, global_memory_data.last_set_allocate, pc->byData, pc, pc->dwSize);
 		}
 #  endif
 #endif
@@ -23992,7 +24948,17 @@ uint16_t  AlignOfMemBlock( CPOINTER pData )
 //------------------------------------------------------------------------------------------------------
 POINTER ReleaseEx ( POINTER pData DBG_PASS )
 {
-	if( !g.bInit ) return NULL;
+	if( !g.bInit ) {
+#ifndef NO_LOGGING
+#  ifdef _DEBUG
+		if( g.bLogAllocate )
+		{
+			ll__lprintf(DBG_RELAY)( "Skip Release - already shutdown %p", pData );
+		}
+#  endif
+#endif
+		return NULL;
+	}
 	if( pData )
 	{
 #ifndef __NO_MMAP__
@@ -24069,6 +25035,9 @@ POINTER ReleaseEx ( POINTER pData DBG_PASS )
 				else
 					_xlprintf( 2 DBG_RELAY )("Release  : %p(%p) - %" _PTRSZVALfs " bytes", pc->byData, pc, pc->dwSize);
 			}
+			else
+//fprintf(stderr, DBG_FILELINEFMT " (disabled %d)Release  : %p(%p) - %" _PTRSZVALfs " bytes\n" DBG_RELAY,  global_memory_data.last_set_allocate, pc->byData, pc, pc->dwSize);
+				;
 #  endif
 #endif
 			pMem = GrabMem( pc->pRoot );
@@ -24084,6 +25053,8 @@ POINTER ReleaseEx ( POINTER pData DBG_PASS )
 #endif
 			pMemSpace = FindSpace( pMem );
 #ifdef _DEBUG
+			//if( g.bLogAllocate )
+			//	lprintf( "Got space back:%p", pMemSpace );
 			while( pMemSpace && ( ( pCurMem = (PMEM)pMemSpace->pMem ),
 										(	( (uintptr_t)pData < (uintptr_t)pCurMem )
 										||  ( (uintptr_t)pData > ( (uintptr_t)pCurMem + pCurMem->dwSize ) ) )
@@ -24128,6 +25099,7 @@ POINTER ReleaseEx ( POINTER pData DBG_PASS )
 						// CRITICAL ERROR!
 						_xlprintf( 2 DBG_RELAY)( "Block is already Free! %p ", pc );
 #endif
+					DebugBreak();
 					DropMem( pMem );
 					return pData;
 				}
@@ -24248,7 +25220,8 @@ POINTER ReleaseEx ( POINTER pData DBG_PASS )
 								// for this pc...
 								if( (pc->next = next->next) )
 									pc->next->me = &pc->next;
-								*( pc->me = next->me ) = pc;
+								pc->me = next->me;
+								pc->me[0] = pc;
 								bCollapsed = TRUE;
 							}
 #ifdef _DEBUG
@@ -24326,22 +25299,22 @@ POINTER ReleaseEx ( POINTER pData DBG_PASS )
 		{
 			PCHUNK pc = (PCHUNK)(((uintptr_t)pData) - ( ( (uint16_t*)pData)[-1] +
 													offsetof( CHUNK, byData ) ) );
-			PMEM pMem = GrabMem( pc->pRoot );
 #ifndef NO_LOGGING
 			if( g.bLogAllocate )
 			{
 				_xlprintf( 2 DBG_RELAY)( "Hold	 : %p - %" _PTRSZVALfs " bytes",pc, pc->dwSize );
 			}
 #endif
+			PMEM pMem = GrabMem( pc->pRoot );
 			if( !pc->info.dwOwners )
 			{
-				ll_lprintf( "Held block has already been released!  too late to hold it!" );
+				_xlprintf( 2 DBG_RELAY)( "Held block has already been released!  too late to hold it!" );
 				DebugBreak();
-				DropMem( pMem );
+				DropMemEx( pMem DBG_RELAY );
 				return pData;
 			}
 			pc->info.dwOwners++;
-			DropMem(pMem );
+			DropMemEx(pMem DBG_RELAY );
 #ifdef _DEBUG
 			if( !g.bDisableAutoCheck )
 				GetHeapMemStatsEx(pc->pRoot, &dwFree,&dwAllocated,&dwBlocks,&dwFreeBlocks DBG_RELAY);
@@ -24366,6 +25339,7 @@ void  DebugDumpHeapMemEx ( PMEM pHeap, LOGICAL bVerbose )
 		uintptr_t nChunks = 0;
 		uintptr_t nTotalUsed = 0;
 		PSPACE pMemSpace;
+		if( !pHeap ) pHeap = g.pMemInstance;
 		PMEM pMem = GrabMem( pHeap ), pCurMem;
 		pc = pMem->pRoot;
 		ll_lprintf(" ------ Memory Dump ------- " );
@@ -24400,7 +25374,7 @@ void  DebugDumpHeapMemEx ( PMEM pHeap, LOGICAL bVerbose )
 #endif
 						_xlprintf(LOG_ALWAYS DBG_RELAY)( "Free at %p size: %" _PTRSZVALfs "(%" _PTRSZVALfx ") Prior:%p NF:%p",
 																 pc, pc->dwSize, pc->dwSize,
-																 pc->pPrior,
+																 (POINTER)pc->pPrior,
 																 pc->next );
 					}
 #endif
@@ -24417,9 +25391,9 @@ void  DebugDumpHeapMemEx ( PMEM pHeap, LOGICAL bVerbose )
 							:"Unknown";
 						uint32_t nLine = BLOCK_LINE(pc);
 #endif
-						_xlprintf(LOG_ALWAYS DBG_RELAY)( "Used at %p size: %" _PTRSZVALfs "(%" _PTRSZVALfx ") Prior:%p",
-																 pc, pc->dwSize, pc->dwSize,
-																 pc->pPrior );
+						_xlprintf(LOG_ALWAYS DBG_RELAY)( "Used at %p(%zx) size: %" _PTRSZVALfs "(%" _PTRSZVALfx ") Prior:%p",
+																 pc, ((uintptr_t)pc)+pc->info.to_chunk_start + offsetof( CHUNK, byData ), pc->dwSize, pc->dwSize,
+																 (POINTER)pc->pPrior );
 					}
 #endif
 				}
@@ -24467,6 +25441,7 @@ void  DebugDumpHeapMemEx ( PMEM pHeap, LOGICAL bVerbose )
 		size_t nChunks = 0;
 		size_t nTotalUsed = 0;
 		char byDebug[256];
+		if( !pHeap ) pHeap = g.pMemInstance;
 		pMem = GrabMem( pHeap );
 		fprintf( file, " ------ Memory Dump ------- \n" );
 		{
@@ -24633,7 +25608,8 @@ void  DebugDumpHeapMemEx ( PMEM pHeap, LOGICAL bVerbose )
 					// consolidate...
 					if( (pNew->next = next->next) )
 						pNew->next->me = &pNew->next;
-					*( pNew->me = next->me ) = pNew;
+					pNew->me = next->me;
+					pNew->me[0] = pNew;
 					pNew->dwSize += next->dwSize + CHUNK_SIZE;
 					next = (PCHUNK)( pNew->byData + pNew->dwSize );
 					if( (uint32_t)(((char *)next) - ((char *)pMem)) < pMem->dwSize )
@@ -24658,7 +25634,8 @@ void  DebugDumpHeapMemEx ( PMEM pHeap, LOGICAL bVerbose )
  void  GetHeapMemStatsEx ( PMEM pHeap, uint32_t *pFree, uint32_t *pUsed, uint32_t *pChunks, uint32_t *pFreeChunks DBG_PASS )
 {
 #if USE_CUSTOM_ALLOCER
-	int nChunks = 0, nFreeChunks = 0, nSpaces = 0;
+	int nChunks = 0, nFreeChunks = 0;
+	//int nSpaces = 0;
 	uintptr_t nFree = 0, nUsed = 0;
 	PCHUNK pc, _pc;
 	PMEM pMem;
@@ -24669,7 +25646,9 @@ void  DebugDumpHeapMemEx ( PMEM pHeap, LOGICAL bVerbose )
 #if USE_CUSTOM_ALLOCER
 	if( !pHeap )
 		pHeap = g.pMemInstance;
+	//fprintf( stderr, "Grab Heap: %d %p\n", nLine, pHeap );
 	pMem = GrabMem( pHeap );
+	//fprintf( stderr, "Grabbed Heap: %p\n", pMem );
 	pMemSpace = FindSpace( pMem );
 	while( pMemSpace )
 	{
@@ -24712,7 +25691,10 @@ void  DebugDumpHeapMemEx ( PMEM pHeap, LOGICAL bVerbose )
 								if( IsBadReadPtr( file, 4 ) )
 									file = "(corrupt)";
 #  endif
-								_xlprintf( 2, file, BLOCK_LINE(pc) )( "Application overflowed allocated memory." );
+								if( g.deadstart_finished )
+									_xlprintf( 2, file, BLOCK_LINE(pc) )( "Application overflowed allocated memory." );
+								else
+									ODS( "Application overflowed allocated memory." );
 							}
 							else
 								ODS( "Application overflowed allocated memory." );
@@ -24763,11 +25745,16 @@ void  DebugDumpHeapMemEx ( PMEM pHeap, LOGICAL bVerbose )
 			_pc = pc;
 			pc = pc->next;
 		}
-		nSpaces++;
+		//nSpaces++;
 		pMemSpace = pMemSpace->next;
-		DropMem( pMemCheck );
+		DropMemEx( pMemCheck DBG_RELAY );
 	}
-	DropMem( pMem );
+	DropMemEx( pMem DBG_RELAY );
+	//if( pMem->cs.dwLocks) {
+	//	fprintf( stderr, "Locks is still set?\n");
+	//	//DebugBreak();
+	//}
+	//fprintf( stderr, "Dropped Mem: %d %p\n", nLine, pMem );
 	if( pFree )
 		*pFree = (uint32_t)nFree;
 	if( pUsed )
@@ -24784,10 +25771,37 @@ void  DebugDumpHeapMemEx ( PMEM pHeap, LOGICAL bVerbose )
 	GetHeapMemStats( g.pMemInstance, pFree, pUsed, pChunks, pFreeChunks );
 }
 //------------------------------------------------------------------------------------------------------
- int  SetAllocateLogging ( LOGICAL bTrueFalse )
+ int  SetAllocateLoggingEx ( LOGICAL bTrueFalse DBG_PASS )
 {
 	LOGICAL prior = g.bLogAllocate;
-	g.bLogAllocate = bTrueFalse;
+#ifdef _DEBUG
+	g.last_set_allocate = nLine;
+#endif
+	g.bDefaultLogAllocate = g.bLogAllocate = bTrueFalse;
+	_lprintf(DBG_RELAY)( "--------- USE CLEAR OR RESET LOGGING!" );
+	return prior;
+}
+//------------------------------------------------------------------------------------------------------
+int  ClearAllocateLoggingEx ( LOGICAL bTrueFalse DBG_PASS )
+{
+	LOGICAL prior = g.bLogAllocate;
+	g.nLogAllocateClears++;
+#ifdef _DEBUG
+	g.last_set_allocate = nLine;
+#endif
+	g.bLogAllocate = 0;
+	return prior;
+}
+//------------------------------------------------------------------------------------------------------
+int  ResetAllocateLoggingEx ( LOGICAL bTrueFalse DBG_PASS )
+{
+	LOGICAL prior = g.bLogAllocate;
+#ifdef _DEBUG
+	g.last_set_allocate = nLine;
+#endif
+	g.nLogAllocateClears--;
+	if( !g.nLogAllocateClears )
+		g.bLogAllocate = g.bDefaultLogAllocate;
 	return prior;
 }
 //------------------------------------------------------------------------------------------------------
@@ -25070,13 +26084,32 @@ CTEXTSTR StrChr( CTEXTSTR s1, TEXTCHAR c )
 		return p1;
 	return NULL;
 }
-CTEXTSTR StrRChr( CTEXTSTR s1, TEXTCHAR c )
+CTEXTSTR StrRChr( CTEXTSTR s1, TEXTRUNE c )
 {
+	TEXTRUNE c1;
 	CTEXTSTR  p1 = s1;
 	if( !p1 ) return NULL;
-	while( p1[0] ) p1++;
-	while( p1 != s1 && p1[0] != c ) p1--;
-	if( p1[0] == c )
+	while( GetUtfChar( &p1 ) )
+		;
+ // go back to \0
+	p1--;
+ // not a string, can't have a char in it.
+	if( s1 == p1 ) return NULL;
+	while( p1 != s1 && ( c1 = GetPriorUtfChar( s1, &p1 ) ) != c );
+	if( c1 == c )
+		return p1;
+	return NULL;
+}
+const wchar_t* StrRChrW( const wchar_t* s1, TEXTRUNE c ) {
+	TEXTRUNE c1;
+	const wchar_t* p1 = s1;
+	if( !p1 ) return NULL;
+	while( GetUtfCharW( &p1 ) )
+		;
+ // go back to \0
+	p1--;
+	while( p1 != s1 && ( c1 = GetPriorUtfCharW( s1, &p1 ) ) != c );
+	if( c1 == c )
 		return p1;
 	return NULL;
 }
@@ -25097,6 +26130,19 @@ TEXTSTR StrRChr( TEXTSTR s1, TEXTCHAR c )
 	while( p1[0] ) p1++;
 	while( p1 != s1 && p1[0] != c ) p1--;
 	if( p1[0] == c )
+		return p1;
+	return NULL;
+}
+wchar_t* StrRChrW( wchar_t* s1, TEXTRUNE c ) {
+	TEXTRUNE c1;
+	wchar_t* p1 = s1;
+	if( !p1 ) return NULL;
+	while( GetUtfCharW( (const wchar_t**)&p1 ) )
+		;
+ // go back to \0
+	p1--;
+	while( p1 != s1 && ( c1 = GetPriorUtfCharW( s1, (const wchar_t**) & p1) ) != c );
+	if( c1 == c )
 		return p1;
 	return NULL;
 }
@@ -25286,6 +26332,26 @@ size_t StrLen( CTEXTSTR s )
 	for( l = 0; s[0];l++, s++);
 	return l;
 }
+size_t StrBytesW( wchar_t const* s ) {
+	size_t l;
+	if( !s )
+		return 0;
+	for( l = 0; s[0]; s++ ) {
+		l += 2;
+	}
+	return l+2;
+}
+size_t StrBytesWu8( wchar_t const* s ) {
+	size_t l;
+	char ch[4];
+	TEXTRUNE r;
+	if( !s )
+		return 0;
+	for( l = 0; r = GetUtfCharW( &s ); s++ ) {
+		l += ConvertToUTF8( ch, r );
+	}
+	return l + 1;
+}
 size_t CStrLen( char const* s )
 {
 	size_t l;
@@ -25330,8 +26396,8 @@ TEXTSTR  DupCStrLenEx( const char * original, size_t chars DBG_PASS )
 	TEXTSTR result, _result;
 	if( !original )
 		return NULL;
-// (TEXTSTR)AllocateEx( (len + 1) * sizeof( result[0] )  DBG_RELAY );
-	_result = result = NewArray( TEXTCHAR, chars + 1 );
+ /*NewArray( TEXTCHAR, chars + 1 );//*/
+	_result = result = (TEXTSTR)AllocateEx( (chars + 1) * sizeof( result[0] )  DBG_RELAY );
 	len = 0;
 	while( len < chars ) ((*result++) = (*original++)), len++;
 	result[0] = 0;
@@ -25414,6 +26480,66 @@ TEXTSTR     DupCharToTextEx( const char * original DBG_PASS )
 		  s1++, s2++ );
 	return tolower(s1[0]) - tolower(s2[0]);
 }
+int  StrCaseCmp_u8u16( const char* s1, const wchar_t* s2 ) {
+	TEXTRUNE c1;
+	TEXTRUNE c2;
+	if( !s1 )
+		 if( s2 )
+			 return -1;
+		 else
+			 return 0;
+	 else
+		 if( !s2 )
+			 return 1;
+	 //if( s1 == s2 )
+	//	 return 0; // ==0 is success.
+	 while( s1[0] && s2[0] ) {
+		 c1 = GetUtfChar( &s1 );
+		 c2 = GetUtfCharW( &s2 );
+		 if( c1 >= 'a' && c1 <= 'z' ) c1 -= ( 'a' - 'A' );
+		 if( c2 >= 'a' && c2 <= 'z' ) c2 -= ( 'a' - 'A' );
+		 if( c1 != c2 ) break;
+	 }
+	 return c1-c2;
+ }
+int  StrCaseCmpEx_u8u16( const char* s1, const wchar_t* s2, size_t maxLen ) {
+	TEXTRUNE c1;
+	TEXTRUNE c2;
+	if( !s1 )
+		if( s2 ) return -1;
+		else return 0;
+	else
+		if( !s2 ) return 1;
+	while( maxLen-- && (c1 = GetUtfChar( &s1 )) && (c2 = GetUtfCharW( &s2 )) ) {
+		if( c1 >= 'a' && c1 <= 'z' ) c1 -= ( 'a' - 'A' );
+		if( c2 >= 'a' && c2 <= 'z' ) c2 -= ( 'a' - 'A' );
+		if( c1 != c2 ) break;
+	}
+	return c1-c2;
+ }
+int  StrCaseCmpW( const wchar_t* s1, const wchar_t* s2 ) {
+	TEXTRUNE c1;
+	TEXTRUNE c2;
+	if( !s1 )
+		if( s2 )
+			return -1;
+		else
+			return 0;
+	else
+		if( !s2 )
+			return 1;
+	if( s1 == s2 )
+ // ==0 is success.
+		return 0;
+	while( s1[0] && s2[0] ) {
+		c1 = GetUtfCharW( &s1 );
+		c2 = GetUtfCharW( &s2 );
+		if( c1 >= 'a' && c1 <= 'z' ) c1 -= ( 'a' - 'A' );
+		if( c2 >= 'a' && c2 <= 'z' ) c2 -= ( 'a' - 'A' );
+		if( c1 != c2 ) break;
+	}
+	return c1 - c2;
+}
  int  StrCmpEx ( CTEXTSTR s1, CTEXTSTR s2, INDEX maxlen )
 {
 	if( !s1 )
@@ -25479,6 +26605,7 @@ SACK_MEMORY_NAMESPACE_END
 //#undef UNICODE
 #define MEMORY_STRUCT_DEFINED
 #define DEFINE_MEMORY_STRUCT
+//#define DEBUG_TIMER_RESCHEDULE
 #define THREAD_STRUCTURE_DEFINED
  // Sleep()
  // SimpleRegisterAndCreateGlobal
@@ -25491,6 +26618,12 @@ SACK_MEMORY_NAMESPACE_END
 // process.h redefines exit
 #include <process.h>
 #endif
+/* Provide a mechanism to register idle() callbacks. These are
+   callbacks that might need to be called when a application is
+   waiting for a result. This is utilized by code that wants to
+   block its state, but requires other events on its own thread
+   to still be dispatched. This will only dispatch events to
+   proper threads to handle the idle callback.                  */
 #ifndef IDLE_FUNCTIONS_DEFINED
 #define IDLE_FUNCTIONS_DEFINED
 # ifdef IDLE_SOURCE
@@ -25500,7 +26633,7 @@ SACK_MEMORY_NAMESPACE_END
 # endif
 #ifdef __cplusplus
 namespace sack {
-	namespace timers {
+	_TIMER_NAMESPACE
 #endif
 // return -1 if not the correct thread
 // return 0 if no events processed
@@ -25511,9 +26644,8 @@ IDLE_PROC( int, RemoveIdleProc )( IdleProc Proc );
 IDLE_PROC( int, Idle )( void );
 IDLE_PROC( int, IdleFor )( uint32_t dwMilliseconds );
 #ifdef __cplusplus
-//	namespace timers {
-	}
-//namespace sack {
+	_TIMER_NAMESPACE_END
+ //SACK_NAMESPACE_END
 }
 using namespace sack::timers;
 #endif
@@ -25616,14 +26748,17 @@ using namespace sack::timers;
 #define RENDER_NAMESPACE namespace sack { namespace image { namespace render { namespace d3d {
 #define _RENDER_NAMESPACE namespace render { namespace d3d {
 #define RENDER_NAMESPACE_END }}}}
+#define RENDER_EXTRA_CLOSE
 #elif defined( _D3D10_DRIVER )
 #define RENDER_NAMESPACE namespace sack { namespace image { namespace render { namespace d3d10 {
 #define _RENDER_NAMESPACE namespace render { namespace d3d10 {
 #define RENDER_NAMESPACE_END }}}}
+#define RENDER_EXTRA_CLOSE
 #elif defined( _D3D11_DRIVER )
 #define RENDER_NAMESPACE namespace sack { namespace image { namespace render { namespace d3d11 {
 #define _RENDER_NAMESPACE namespace render { namespace d3d11 {
 #define RENDER_NAMESPACE_END }}}}
+#define RENDER_EXTRA_CLOSE
 #else
 #define RENDER_NAMESPACE namespace sack { namespace image { namespace render {
 /* <copy render.h>
@@ -25636,6 +26771,7 @@ using namespace sack::timers;
 #define _RENDER_NAMESPACE
 #define RENDER_NAMESPACE_END
 #endif
+/* Define symbols for keyboard inputs on various systems. */
 #ifndef KEYBOARD_DEFINITION
 #  define KEYBOARD_DEFINITION
 #  ifdef __cplusplus
@@ -25700,8 +26836,9 @@ RENDER_NAMESPACE_END
 #define KEY_MOD_RELEASE  8
  // application wants both press and release events.
 #define KEY_MOD_ALL_CHANGES  16
+//#define KEY_MOD_EXTENDED 32 // key match must be extended also... (extra arrow keys for instance.. what about SDL)
  // key match must be extended also... (extra arrow keys for instance.. what about SDL)
-#define KEY_MOD_EXTENDED 32
+#define KEY_MOD_EXTENDED 256
 #define KEY_PRESSED         0x80000000
 #define IsKeyPressed( keycode ) ( (keycode) & 0x80000000 )
 #define KEY_ALT_DOWN        0x40000000
@@ -26289,7 +27426,7 @@ Double quote	"""	222
 #    define KEY_X   AKEYCODE_X
 #    define KEY_Y   AKEYCODE_Y
 #    define KEY_Z   AKEYCODE_Z
-#  elif defined( __LINUX__ ) && !defined( __MAC__ ) && !defined( __ANDROID__ )
+#  elif defined( __LINUX__ ) && !defined( __MAC__ ) && !defined( __ANDROID__ ) && !defined( USE_WIN32_KEY_DEFINES )
 /* THis is a literal copy of bba013e1ca5e7150b42a1a1a1e852010d772edad / include/uapi/linux/input-event-codes.h
   from github.  Other than this leading comment it is the original copy; this is included as a fallback for linux
   systems (CentOS) which have a linux kernel older than 3.19; otherwise this would have been found in /usr/include/linux
@@ -26346,6 +27483,7 @@ Double quote	"""	222
  */
 #define SYN_REPORT		0
 #define SYN_CONFIG		1
+/* Linux Event Code Synchronization Event */
 #define SYN_MT_REPORT		2
 #define SYN_DROPPED		3
 #define SYN_MAX			0xf
@@ -27173,6 +28311,8 @@ Double quote	"""	222
 #define SND_MAX			0x07
 #define SND_CNT			(SND_MAX+1)
 #endif
+// These definitions resemble keyboard scancodes.
+// for wayland, these are what comes into the key callback.
 #undef BTN_START
 #define KEY_ESCAPE KEY_ESC
 #define KEY_PGDN KEY_PAGEDOWN
@@ -27836,7 +28976,7 @@ Double quote	"""	222
 /* An exclusion symbol for defining CDATA and color operations. */
 #define COLOR_STRUCTURE_DEFINED
 #ifdef __cplusplus
-SACK_NAMESPACE
+namespace sack {
 	namespace image {
 #endif
 		// byte index values for colors on the video buffer...
@@ -27994,8 +29134,9 @@ SACK_NAMESPACE
 #define BASE_COLOR_PURPLE        Color( 0x7A, 0x11, 0x7C )
 #ifdef __cplusplus
  //	 namespace image {
+	}
+ //SACK_NAMESPACE_END
 }
-SACK_NAMESPACE_END
 using namespace sack::image;
 #endif
 #endif
@@ -28053,6 +29194,7 @@ using namespace sack::image;
 /* Define the namespace of image routines, when building under
    C++. This ends a namespace.                                 */
 #  define IMAGE_NAMESPACE_END }}}
+#define IMAGE_EXTRA_CLOSE
 #elif defined( _D3D10_DRIVER )
 #  define IMAGE_NAMESPACE namespace sack { namespace image { namespace d3d10 {
 #  define _IMAGE_NAMESPACE namespace image { namespace d3d10 {
@@ -28060,6 +29202,7 @@ using namespace sack::image;
 /* Define the namespace of image routines, when building under
    C++. This ends a namespace.                                 */
 #  define IMAGE_NAMESPACE_END }}}
+#define IMAGE_EXTRA_CLOSE
 #elif defined( _D3D11_DRIVER )
 #  define IMAGE_NAMESPACE namespace sack { namespace image { namespace d3d11 {
 #  define _IMAGE_NAMESPACE namespace image { namespace d3d11 {
@@ -28067,6 +29210,7 @@ using namespace sack::image;
 /* Define the namespace of image routines, when building under
    C++. This ends a namespace.                                 */
 #  define IMAGE_NAMESPACE_END }}}
+#define IMAGE_EXTRA_CLOSE
 #else
 #  define BASE_IMAGE_NAMESPACE namespace image {
 #  define IMAGE_NAMESPACE namespace sack { namespace image {
@@ -28106,13 +29250,17 @@ using namespace sack::image;
 #else
 #  define IMGVER(n)   n
 #endif
-SACK_NAMESPACE
+#ifdef __cplusplus
+namespace sack {
+#endif
 /* Deals with images and image processing.
    Image is the primary type of this.
    SFTFont is a secondary type for putting text on images.
    render namespace is contained in image, because without
    image, there could be no render. see PRENDERER.         */
-	_IMAGE_NAMESPACE
+#ifdef __cplusplus
+    namespace image {
+#endif
 /* A fixed point decimal number (for freetype font rendering) */
 typedef int64_t fixed;
 //#ifndef IMAGE_STRUCTURE_DEFINED
@@ -28208,6 +29356,11 @@ IMAGE_PROC  PCDATA IMAGE_API ImageAddress( Image image, int32_t x, int32_t y );
 #if defined( __cplusplus )
 IMAGE_NAMESPACE_END
 #endif
+/* \Internal Image structure. Tracks an image, but can also have
+   sub-images allocated on the image. Performing image
+   operations to sub images are clipped to the region of the
+   board, and go directly to the image memory the sub image is
+   on. A image only has one data buffer.                         */
 #ifndef IMAGE_STRUCTURE_DEFINED
 #ifdef _D3D_DRIVER
 #include <d3d9.h>
@@ -28241,7 +29394,7 @@ IMAGE_NAMESPACE_END
 #if !defined(__STATIC__) && !defined(__LINUX__)
 #  ifdef VECTOR_LIBRARY_SOURCE
 #    define MATHLIB_EXPORT EXPORT_METHOD
-#    if defined( __WATCOMC__ ) || defined( _MSC_VER )
+#    if defined( __WATCOMC__ ) || defined( _MSC_VER ) && !defined( __clang__ )
 // data requires an extra extern to generate the correct code *boggle*
 #      define MATHLIB_DEXPORT extern EXPORT_METHOD
 #    else
@@ -28334,6 +29487,11 @@ IMAGE_NAMESPACE_END
 #  define VECTOR_METHOD(r,n,args) MATHLIB_EXPORT r n##d args
 #  define EXTERNAL_NAME(n)  n##d
 #endif
+/* Describes Vector types for Vector Library. Bases vectors on a
+   type RCOORD which is a real coordiante, that is either float
+   or double. This optimizes the vector libarary for a specific
+   type of value at a time, and compiles both. Functions of
+   specific types are indiciated with a suffix and/or namespace. */
 #ifndef VECTOR_TYPES_DEFINED
 #define VECTOR_TYPES_DEFINED
 // this file merely defines the basic calculation unit...
@@ -28366,12 +29524,14 @@ typedef float RCOORD;
    \ \                                  */
 typedef float *PRCOORD;
 #endif
-// these SHOULD be dimension relative, but we lack much code for that...
+ // these SHOULD be dimension relative, but we lack much code for that...
 typedef RCOORD MATRIX[4][4];
+  // pointer to a matrix type, rather than the nestes arrays that look very similar
 typedef MATRIX *PMatrix;
-/* Describes the rotation matrix for a PTRANSFORM. */
 typedef RCOORD PMATRIX[][4];
+ // RCOORD 4 vector quaternion.
 typedef RCOORD RQUATERNION[4];
+ // P RCOORD 4 vector quaternion.
 typedef RCOORD PRQUATERNION[4];
 #ifdef RCOORD_IS_DOUBLE
 #define RCOORDBITS(v)  (*(uint64_t*)&(v))
@@ -28998,12 +30158,12 @@ VECTOR_METHOD( LOGICAL, Move, ( PTRANSFORM pt ) );
 #if 0
 	VECTOR_METHOD( void, Unmove, ( PTRANSFORM pt ) );
 #endif
-VECTOR_METHOD( void, showstdEx, ( PTRANSFORM pt, char *header ) );
-VECTOR_METHOD( void, ShowTransformEx, ( PTRANSFORM pt, char *header DBG_PASS ) );
+VECTOR_METHOD( void, showstdEx, ( PTRANSFORM pt, const char *header ) );
+VECTOR_METHOD( void, ShowTransformEx, ( PTRANSFORM pt, const char *header DBG_PASS ) );
 /* <combine sack::math::vector::ShowTransformEx@PTRANSFORM@char *header>
    \ \                                                                   */
 #define ShowTransform( n ) ShowTransformEx( n, #n DBG_SRC )
-VECTOR_METHOD( void, showstd, ( PTRANSFORM pt, char *header ) );
+VECTOR_METHOD( void, showstd, ( PTRANSFORM pt, const char *header ) );
 VECTOR_METHOD( void, GetOriginV, ( PTRANSFORM pt, P_POINT o ) );
 VECTOR_METHOD( PC_POINT, GetOrigin, ( PTRANSFORM pt ) );
 VECTOR_METHOD( void, GetAxisV, ( PTRANSFORM pt, P_POINT a, int n ) );
@@ -29388,71 +30548,9 @@ typedef struct sprite_tag SPRITE;
 #else
 #define IMG_ADDRESS(i,x,y)    ((CDATA*)	                             ((i)->image + (( (x) - (i)->eff_x )	 +(((i)->flags&IF_FLAG_INVERTED)?(INVERTY_INVERTED( (i), (y) ) * (i)->pwidth ):(INVERTY_NON_INVERTED( (i), (y) ) * (i)->pwidth ))	                             ))										   )
 #endif
-#if 0
-#if defined( __arm__ ) && defined( IMAGE_LIBRARY_SOURCE ) && !defined( DISPLAY_SOURCE )
-extern unsigned char AlphaTable[256][256];
-static CDATA DOALPHA( CDATA over, CDATA in, uint8_t a )
-{
-	int r, g, b, aout;
-	if( !a )
-		return over;
-	if( a > 255 )
-		a = 255;
-	if( a == 255 )
- // force alpha full on.
-		return (in | 0xFF000000);
-	aout = AlphaTable[a][AlphaVal( over )] << 24;
-	r = ((((RedVal(in))  *(a+1)) + ((RedVal(over))  *(256-(a)))) >> 8 );
-	if( r > (255) ) r = (255);
-	g = (((GreenVal(in))*(a+1)) + ((GreenVal(over))*(256-(a)))) >> 8;
-	if( g > (255) ) g = (255);
-	b = ((((BlueVal(in)) *(a+1)) + ((BlueVal(over)) *(256-(a)))) >> 8 );
-	if( b > 255 ) b = 255;
-	return aout|(r<<16)|(g<<8)|b;
-	//return AColor( r, g, b, aout );
-}
-#endif
-#endif
 IMAGE_NAMESPACE_END
 // end if_not_included
 #endif
-// $Log: imagestruct.h,v $
-// Revision 1.2  2005/04/05 11:56:04  panther
-// Adding sprite support - might have added an extra draw callback...
-//
-// Revision 1.1  2004/06/21 07:38:39  d3x0r
-// Move structures into common...
-//
-// Revision 1.20  2003/10/14 20:48:55  panther
-// Tweak mmx a bit - no improvement visible but shorter
-//
-// Revision 1.19  2003/10/14 16:36:45  panther
-// Oops doalpha was outside of known inclusion frame
-//
-// Revision 1.18  2003/10/14 00:43:03  panther
-// Arm optimizations.  Looks like I'm about maxed.
-//
-// Revision 1.17  2003/09/15 17:06:37  panther
-// Fixed to image, display, controls, support user defined clipping , nearly clearing correct portions of frame when clearing hotspots...
-//
-// Revision 1.16  2003/04/25 08:33:09  panther
-// Okay move the -1's back out of IMG_ADDRESS
-//
-// Revision 1.15  2003/04/21 23:33:09  panther
-// fix certain image ops - should check blot direct...
-//
-// Revision 1.14  2003/03/30 18:39:03  panther
-// Update image blotters to use IMG_ADDRESS
-//
-// Revision 1.13  2003/03/30 16:11:03  panther
-// Clipping images works now... blat image untested
-//
-// Revision 1.12  2003/03/30 06:24:56  panther
-// Turns out I had badly implemented clipping...
-//
-// Revision 1.11  2003/03/25 08:45:51  panther
-// Added CVS logging tag
-//
 #if defined( __cplusplus )
 IMAGE_NAMESPACE
 #endif
@@ -29526,9 +30624,13 @@ enum BlotOperation {
    /* copy the pixels from one image to another with simple color inversion transform*/
  BLOT_INVERTED = 3,
  /* orientation blots for fonts to 3D and external displays */
+ // no orientation difference - 0 value.
  BLOT_ORIENT_NORMAL = 0x00,
+   // flip image on blot.
  BLOT_ORIENT_INVERT = 0x04,
+// when outputing image, put image vertical inverted (rotated 90 degrees)
  BLOT_ORIENT_VERTICAL = 0x08,
+ // when outputing image, put image vertical inverted (rotated 90 degrees)
  BLOT_ORIENT_VERTICAL_INVERT = 0x0C,
  BLOT_ORIENTATTION = 0x0C,
 };
@@ -30084,7 +31186,7 @@ ALPHA_TRANSPARENT_MAX = 0x2FF
 // background of color 0,0,0 is transparent - alpha component does not
 // matter....
    IMAGE_PROC  void IMAGE_API IMGVER(PutCharacterFont              )( Image pImage
-                                                  , int32_t x, int32_t y
+                                                  , int32_t x, int32_t y, int32_t height
                                                   , CDATA color, CDATA background,
                                                    TEXTCHAR c, SFTFont font );
    /* Outputs a string in the specified font, from the specified
@@ -30100,7 +31202,7 @@ ALPHA_TRANSPARENT_MAX = 0x2FF
       c :           the character to output
       font :        the font to use. NULL use an internal default
                     font.                                          */
-   IMAGE_PROC  void IMAGE_API IMGVER(PutCharacterVerticalFont      )( Image pImage, int32_t x, int32_t y, CDATA color, CDATA background, TEXTCHAR c, SFTFont font );
+   IMAGE_PROC  void IMAGE_API IMGVER(PutCharacterVerticalFont      )( Image pImage, int32_t x, int32_t y, int32_t height, CDATA color, CDATA background, TEXTCHAR c, SFTFont font );
    /* Outputs a string in the specified font, from the specified
       point, text is drawn from the point to the left, with the
       characters aligned with the top to the left; it goes up from
@@ -30116,14 +31218,14 @@ ALPHA_TRANSPARENT_MAX = 0x2FF
       nLen :        length of text to output
       font :        the font to use. NULL use an internal default
                     font.                                           */
-   IMAGE_PROC  void IMAGE_API IMGVER(PutCharacterInvertFont        )( Image pImage, int32_t x, int32_t y, CDATA color, CDATA background, TEXTCHAR c, SFTFont font );
+   IMAGE_PROC  void IMAGE_API IMGVER(PutCharacterInvertFont        )( Image pImage, int32_t x, int32_t y, int32_t height, CDATA color, CDATA background, TEXTCHAR c, SFTFont font );
    /* Outputs a character in the specified font, from the specified
       point, text is drawn from the point up, with the characters
       aligned with the top to the left; it goes up from the point. the
       point becomes the bottom left of the rectangle output.
       Parameters
                                                                        */
-   IMAGE_PROC  void IMAGE_API IMGVER(PutCharacterVerticalInvertFont)( Image pImage, int32_t x, int32_t y, CDATA color, CDATA background, TEXTCHAR c, SFTFont font );
+   IMAGE_PROC  void IMAGE_API IMGVER(PutCharacterVerticalInvertFont)( Image pImage, int32_t x, int32_t y, int32_t height, CDATA color, CDATA background, TEXTCHAR c, SFTFont font );
    /* Outputs a string in the specified font, from the specified
       point, text is drawn right side up and godes from left to
       right. The point becomes the top left of the rectangle
@@ -30138,9 +31240,9 @@ ALPHA_TRANSPARENT_MAX = 0x2FF
       nLen :        length of text to output
       font :        the font to use. NULL use an internal default
                     font.                                         */
-   IMAGE_PROC  void IMAGE_API IMGVER(PutStringFontEx              )( Image pImage, int32_t x, int32_t y, CDATA color, CDATA background, CTEXTSTR pc, size_t nLen, SFTFont font );
+   IMAGE_PROC  void IMAGE_API IMGVER(PutStringFontEx              )( Image pImage, int32_t x, int32_t y, int32_t height, CDATA color, CDATA background, CTEXTSTR pc, size_t nLen, SFTFont font );
    /* justification 0 is left, 1 is right, 2 is center */
-   IMAGE_PROC  void IMAGE_API IMGVER(PutStringFontExx              )( Image pImage, int32_t x, int32_t y, CDATA color, CDATA background, CTEXTSTR pc, size_t nLen, SFTFont font, int justication, uint32_t _width );
+   IMAGE_PROC  void IMAGE_API IMGVER(PutStringFontExx              )( Image pImage, int32_t x, int32_t y, int32_t height, CDATA color, CDATA background, CTEXTSTR pc, size_t nLen, SFTFont font, int justication, uint32_t _width );
    /* Outputs a string in the specified font, from the specified
       point, text is drawn from the point down, with the characters
       aligned with the top to the right; it goes down from the
@@ -30156,7 +31258,7 @@ ALPHA_TRANSPARENT_MAX = 0x2FF
       nLen :        length of text to output
       font :        the font to use. NULL use an internal default
                     font.                                           */
-   IMAGE_PROC  void IMAGE_API IMGVER(PutStringVerticalFontEx      )( Image pImage, int32_t x, int32_t y, CDATA color, CDATA background, CTEXTSTR pc, size_t nLen, SFTFont font );
+   IMAGE_PROC  void IMAGE_API IMGVER(PutStringVerticalFontEx      )( Image pImage, int32_t x, int32_t y, int32_t height, CDATA color, CDATA background, CTEXTSTR pc, size_t nLen, SFTFont font );
    /* Outputs a string in the specified font, from the specified
       point, text is drawn upside down, and goes to the left from
       the point. the point becomes the bottom right of the
@@ -30171,7 +31273,7 @@ ALPHA_TRANSPARENT_MAX = 0x2FF
       nLen :        length of text to output
       font :        the font to use. NULL use an internal default
                     font.                                         */
-   IMAGE_PROC  void IMAGE_API IMGVER(PutStringInvertFontEx        )( Image pImage, int32_t x, int32_t y, CDATA color, CDATA background, CTEXTSTR pc, size_t nLen, SFTFont font );
+   IMAGE_PROC  void IMAGE_API IMGVER(PutStringInvertFontEx        )( Image pImage, int32_t x, int32_t y, int32_t height, CDATA color, CDATA background, CTEXTSTR pc, size_t nLen, SFTFont font );
    /* Outputs a string in the specified font, from the specified
       point, text is drawn from the point up, with the characters
       aligned with the top to the left; it goes up from the point. the
@@ -30186,7 +31288,7 @@ ALPHA_TRANSPARENT_MAX = 0x2FF
       nLen :        length of text to output
       font :        the font to use. NULL use an internal default
                     font.                                              */
-   IMAGE_PROC  void IMAGE_API IMGVER(PutStringInvertVerticalFontEx)( Image pImage, int32_t x, int32_t y, CDATA color, CDATA background, CTEXTSTR pc, size_t nLen, SFTFont font );
+   IMAGE_PROC  void IMAGE_API IMGVER(PutStringInvertVerticalFontEx)( Image pImage, int32_t x, int32_t y, int32_t height, CDATA color, CDATA background, CTEXTSTR pc, size_t nLen, SFTFont font );
    //uint32_t (*PutMenuStringFontEx)            ( Image pImage, int32_t x, int32_t y, CDATA color, CDATA background, CTEXTSTR pc, uint32_t nLen, SFTFont font );
    //uint32_t (*PutCStringFontEx)               ( Image pImage, int32_t x, int32_t y, CDATA color, CDATA background, CTEXTSTR pc, uint32_t nLen, SFTFont font );
    IMAGE_PROC  uint32_t IMAGE_API IMGVER(GetMaxStringLengthFont  )( uint32_t width, SFTFont UseFont );
@@ -30585,6 +31687,7 @@ IMAGE_PROC void IMAGE_API IMGVER(SetImageRotation)( Image pImage, int edge_flag,
    \See Also <link sack::image::image_rotation_flags, image_rotation_flags Enumeration> */
 IMAGE_PROC void IMAGE_API IMGVER(RotateImageAbout)( Image pImage, int edge_flag, RCOORD offset_x, RCOORD offset_y, PVECTOR vAxis, RCOORD angle );
 IMAGE_PROC void IMAGE_API IMGVER(MarkImageDirty)( Image pImage );
+/* Defines the function interface for an image module. */
 _INTERFACE_NAMESPACE
 /* Defines a pointer member of the interface structure. */
 #define IMAGE_PROC_PTR(type,name) type (CPROC*_##name)
@@ -30712,35 +31815,35 @@ typedef struct image_interface_tag
 /* <combine sack::image::PutCharacterFont@Image@int32_t@int32_t@CDATA@CDATA@uint32_t@SFTFont>
    Internal
    Interface index 33                                                           */
-   IMAGE_PROC_PTR( void,PutCharacterFont)              ( Image pImage, int32_t x, int32_t y, CDATA color, CDATA background, TEXTCHAR c, SFTFont font );
+   IMAGE_PROC_PTR( void,PutCharacterFont)              ( Image pImage, int32_t x, int32_t y, int32_t height, CDATA color, CDATA background, TEXTCHAR c, SFTFont font );
 /* <combine sack::image::PutCharacterVerticalFont@Image@int32_t@int32_t@CDATA@CDATA@TEXTCHAR@SFTFont>
    Internal
    Interface index 34                                                                                        */
-   IMAGE_PROC_PTR( void,PutCharacterVerticalFont)      ( Image pImage, int32_t x, int32_t y, CDATA color, CDATA background, TEXTCHAR c, SFTFont font );
+   IMAGE_PROC_PTR( void,PutCharacterVerticalFont)      ( Image pImage, int32_t x, int32_t y, int32_t height, CDATA color, CDATA background, TEXTCHAR c, SFTFont font );
 /* <combine sack::image::PutCharacterInvertFont@Image@int32_t@int32_t@CDATA@CDATA@TEXTCHAR@SFTFont>
    Internal
    Interface index 35                                                                                      */
-   IMAGE_PROC_PTR( void,PutCharacterInvertFont)        ( Image pImage, int32_t x, int32_t y, CDATA color, CDATA background, TEXTCHAR c, SFTFont font );
+   IMAGE_PROC_PTR( void,PutCharacterInvertFont)        ( Image pImage, int32_t x, int32_t y, int32_t height, CDATA color, CDATA background, TEXTCHAR c, SFTFont font );
 /* <combine sack::image::PutCharacterVerticalInvertFont@Image@int32_t@int32_t@CDATA@CDATA@TEXTCHAR@SFTFont>
    Internal
    Interface index 36                                                                                              */
-   IMAGE_PROC_PTR( void,PutCharacterVerticalInvertFont)( Image pImage, int32_t x, int32_t y, CDATA color, CDATA background, TEXTCHAR c, SFTFont font );
+   IMAGE_PROC_PTR( void,PutCharacterVerticalInvertFont)( Image pImage, int32_t x, int32_t y, int32_t height, CDATA color, CDATA background, TEXTCHAR c, SFTFont font );
 /* <combine sack::image::PutStringFontEx@Image@int32_t@int32_t@CDATA@CDATA@CTEXTSTR@uint32_t@SFTFont>
    Internal
    Interface index 37                                                                                   */
-   IMAGE_PROC_PTR( void,PutStringFontEx)              ( Image pImage, int32_t x, int32_t y, CDATA color, CDATA background, CTEXTSTR pc, size_t nLen, SFTFont font );
+   IMAGE_PROC_PTR( void,PutStringFontEx)              ( Image pImage, int32_t x, int32_t y, int32_t height, CDATA color, CDATA background, CTEXTSTR pc, size_t nLen, SFTFont font );
 /* <combine sack::image::PutStringVerticalFontEx@Image@int32_t@int32_t@CDATA@CDATA@CTEXTSTR@uint32_t@SFTFont>
    Internal
    Interface index 38                                                                                           */
-   IMAGE_PROC_PTR( void,PutStringVerticalFontEx)      ( Image pImage, int32_t x, int32_t y, CDATA color, CDATA background, CTEXTSTR pc, size_t nLen, SFTFont font );
+   IMAGE_PROC_PTR( void,PutStringVerticalFontEx)      ( Image pImage, int32_t x, int32_t y, int32_t height, CDATA color, CDATA background, CTEXTSTR pc, size_t nLen, SFTFont font );
 /* <combine sack::image::PutStringInvertFontEx@Image@int32_t@int32_t@CDATA@CDATA@CTEXTSTR@uint32_t@SFTFont>
    Internal
    Interface index 39                                                                                         */
-   IMAGE_PROC_PTR( void,PutStringInvertFontEx)        ( Image pImage, int32_t x, int32_t y, CDATA color, CDATA background, CTEXTSTR pc, size_t nLen, SFTFont font );
+   IMAGE_PROC_PTR( void,PutStringInvertFontEx)        ( Image pImage, int32_t x, int32_t y, int32_t height, CDATA color, CDATA background, CTEXTSTR pc, size_t nLen, SFTFont font );
 /* <combine sack::image::PutStringInvertVerticalFontEx@Image@int32_t@int32_t@CDATA@CDATA@CTEXTSTR@uint32_t@SFTFont>
    Internal
    Interface index 40                                                                                                 */
-   IMAGE_PROC_PTR( void,PutStringInvertVerticalFontEx)( Image pImage, int32_t x, int32_t y, CDATA color, CDATA background, CTEXTSTR pc, size_t nLen, SFTFont font );
+   IMAGE_PROC_PTR( void,PutStringInvertVerticalFontEx)( Image pImage, int32_t x, int32_t y, int32_t height, CDATA color, CDATA background, CTEXTSTR pc, size_t nLen, SFTFont font );
 /* <combine sack::image::GetMaxStringLengthFont@uint32_t@SFTFont>
    Internal
    Interface index 41                                     */
@@ -30922,7 +32025,7 @@ IMAGE_PROC_PTR( LOGICAL, IsImageTargetFinal )( Image image );
 // it is a new image instance that should be used for future app references...
 IMAGE_PROC_PTR( Image, ReuseImage )( Image image );
 IMAGE_PROC_PTR( void, PutStringFontExx )( Image pImage
-											 , int32_t x, int32_t y
+											 , int32_t x, int32_t y, int32_t height
 											 , CDATA color, CDATA background
 											 , CTEXTSTR pc, size_t nLen, SFTFont font, int justification, uint32_t _width );
 // sometimes it's not possible to use blatcolor to clear an imate...
@@ -31447,55 +32550,55 @@ IMAGE_PROC  void IMAGE_API IMGVER(FlipImageEx )( Image pif DBG_PASS );
 #define do_inv_line(pb,x,y,xto,yto,d) do_line( pb,y,x,yto,xto,d)
 /* <combine sack::image::PutCharacterFont@Image@int32_t@int32_t@CDATA@CDATA@TEXTCHAR@SFTFont>
    \ \                                                                               */
-#define PutCharacter(i,x,y,fore,back,c)               PutCharacterFont(i,x,y,fore,back,c,NULL )
+#define PutCharacter(i,x,y,h,fore,back,c)               PutCharacterFont(i,x,y,h,fore,back,c,NULL )
 /* <combine sack::image::PutCharacterVerticalFont@Image@int32_t@int32_t@CDATA@CDATA@TEXTCHAR@SFTFont>
    Passes default font if not specified.                                                     */
-#define PutCharacterVertical(i,x,y,fore,back,c)       PutCharacterVerticalFont(i,x,y,fore,back,c,NULL )
+#define PutCharacterVertical(i,x,y,h,fore,back,c)       PutCharacterVerticalFont(i,x,y,h,fore,back,c,NULL )
 /* <combine sack::image::PutCharacterInvertFont@Image@int32_t@int32_t@CDATA@CDATA@TEXTCHAR@SFTFont>
    \ \                                                                                     */
-#define PutCharacterInvert(i,x,y,fore,back,c)         PutCharacterInvertFont(i,x,y,fore,back,c,NULL )
+#define PutCharacterInvert(i,x,y,h,fore,back,c)         PutCharacterInvertFont(i,x,y,h,fore,back,c,NULL )
 /* <combine sack::image::PutCharacterVerticalInvertFont@Image@int32_t@int32_t@CDATA@CDATA@TEXTCHAR@SFTFont>
    \ \                                                                                             */
-#define PutCharacterInvertVertical(i,x,y,fore,back,c) PutCharacterInvertVerticalFont(i,x,y,fore,back,c,NULL )
+#define PutCharacterInvertVertical(i,x,y,h,fore,back,c) PutCharacterInvertVerticalFont(i,x,y,h,fore,back,c,NULL )
 /* <combine sack::image::PutCharacterVerticalInvertFont@Image@int32_t@int32_t@CDATA@CDATA@TEXTCHAR@SFTFont>
    \ \                                                                                             */
-#define PutCharacterInvertVerticalFont(i,x,y,fore,back,c,f) PutCharacterVerticalInvertFont(i,x,y,fore,back,c,f )
+#define PutCharacterInvertVerticalFont(i,x,y,h,fore,back,c,f) PutCharacterVerticalInvertFont(i,x,y,h,fore,back,c,f )
 /* <combine sack::image::PutStringFontEx@Image@int32_t@int32_t@CDATA@CDATA@CTEXTSTR@uint32_t@SFTFont>
    \ \                                                                                  */
-#define PutString(pi,x,y,fore,back,pc) PutStringFontEx( pi, x, y, fore, back, pc, StrLen(pc), NULL )
+#define PutString(pi,x,y,h,fore,back,pc) PutStringFontEx( pi, x, y, h,fore, back, pc, StrLen(pc), NULL )
 /* <combine sack::image::PutStringFontEx@Image@int32_t@int32_t@CDATA@CDATA@CTEXTSTR@uint32_t@SFTFont>
    \ \                                                                                  */
-#define PutStringEx(pi,x,y,color,back,pc,len) PutStringFontEx( pi, x, y, color,back,pc,len,NULL )
+#define PutStringEx(pi,x,y,h,color,back,pc,len) PutStringFontEx( pi, x, y, h,color,back,pc,len,NULL )
 /* <combine sack::image::PutStringFontEx@Image@int32_t@int32_t@CDATA@CDATA@CTEXTSTR@uint32_t@SFTFont>
    \ \                                                                                  */
-#define PutStringFont(pi,x,y,fore,back,pc,font) PutStringFontEx(pi,x,y,fore,back,pc,StrLen(pc), font )
+#define PutStringFont(pi,x,y,h,fore,back,pc,font) PutStringFontEx(pi,x,y,h,fore,back,pc,StrLen(pc), font )
 /* <combine sack::image::PutStringVerticalFontEx@Image@int32_t@int32_t@CDATA@CDATA@CTEXTSTR@uint32_t@SFTFont>
    \ \                                                                                          */
-#define PutStringVertical(pi,x,y,fore,back,pc) PutStringVerticalFontEx( pi, x, y, fore, back, pc, StrLen(pc), NULL )
+#define PutStringVertical(pi,x,y,h,fore,back,pc) PutStringVerticalFontEx( pi, x, y, h,fore, back, pc, StrLen(pc), NULL )
 /* <combine sack::image::PutStringVerticalFontEx@Image@int32_t@int32_t@CDATA@CDATA@CTEXTSTR@uint32_t@SFTFont>
    \ \                                                                                          */
-#define PutStringVerticalEx(pi,x,y,color,back,pc,len) PutStringVerticalFontEx( pi, x, y, color,back,pc,len,NULL )
+#define PutStringVerticalEx(pi,x,y,h,color,back,pc,len) PutStringVerticalFontEx( pi, x, y, h,color,back,pc,len,NULL )
 /* <combine sack::image::PutStringVerticalFontEx@Image@int32_t@int32_t@CDATA@CDATA@CTEXTSTR@uint32_t@SFTFont>
    \ \                                                                                          */
-#define PutStringVerticalFont(pi,x,y,fore,back,pc,font) PutStringVerticalFontEx(pi,x,y,fore,back,pc,StrLen(pc), font )
+#define PutStringVerticalFont(pi,x,y,h,fore,back,pc,font) PutStringVerticalFontEx(pi,x,y,h,fore,back,pc,StrLen(pc), font )
 /* <combine sack::image::PutStringInvertFontEx@Image@int32_t@int32_t@CDATA@CDATA@CTEXTSTR@uint32_t@SFTFont>
    \ \                                                                                        */
-#define PutStringInvert( pi, x, y, fore, back, pc ) PutStringInvertFontEx( pi, x, y, fore, back, pc,StrLen(pc), NULL )
+#define PutStringInvert( pi, x, y,h, fore, back, pc ) PutStringInvertFontEx( pi, x, y,h, fore, back, pc,StrLen(pc), NULL )
 /* <combine sack::image::PutStringInvertFontEx@Image@int32_t@int32_t@CDATA@CDATA@CTEXTSTR@uint32_t@SFTFont>
    \ \                                                                                        */
-#define PutStringInvertEx( pi, x, y, fore, back, pc, nLen ) PutStringInvertFontEx( pi, x, y, fore, back, pc, nLen, NULL )
+#define PutStringInvertEx( pi, x, y,h, fore, back, pc, nLen ) PutStringInvertFontEx( pi, x, y,h, fore, back, pc, nLen, NULL )
 /* <combine sack::image::PutStringInvertFontEx@Image@int32_t@int32_t@CDATA@CDATA@CTEXTSTR@uint32_t@SFTFont>
    The non Ex Version doesn't pass the string length.                                         */
-#define PutStringInvertFont( pi, x, y, fore, back, pc, nLen ) PutStringInvertFontEx( pi, x, y, fore, back, pc, StrLen(pc), font )
+#define PutStringInvertFont( pi, x, y, h,fore, back, pc, nLen ) PutStringInvertFontEx( pi, x, y, h,fore, back, pc, StrLen(pc), font )
 /* <combine sack::image::PutStringInvertVerticalFontEx@Image@int32_t@int32_t@CDATA@CDATA@CTEXTSTR@uint32_t@SFTFont>
    \ \                                                                                                */
-#define PutStringInvertVertical( pi, x, y, fore, back, pc ) PutStringInvertVerticalFontEx( pi, x, y, fore, back, pc, StrLen(pc), NULL )
+#define PutStringInvertVertical( pi, x, y,h, fore, back, pc ) PutStringInvertVerticalFontEx( pi, x, y,h, fore, back, pc, StrLen(pc), NULL )
 /* <combine sack::image::PutStringInvertVerticalFontEx@Image@int32_t@int32_t@CDATA@CDATA@CTEXTSTR@uint32_t@SFTFont>
    \ \                                                                                                */
-#define PutStringInvertVerticalEx( pi, x, y, fore, back, pc, nLen ) PutStringInvertVerticalFontEx( pi, x, y, fore, back, pc, nLen, NULL )
+#define PutStringInvertVerticalEx( pi, x, y, h,fore, back, pc, nLen ) PutStringInvertVerticalFontEx( pi, x, y, h,fore, back, pc, nLen, NULL )
 /* <combine sack::image::PutStringInvertVerticalFontEx@Image@int32_t@int32_t@CDATA@CDATA@CTEXTSTR@uint32_t@SFTFont>
    \ \                                                                                                */
-#define PutStringInvertVerticalFont( pi, x, y, fore, back, pc, font ) PutStringInvertVerticalFontEx( pi, x, y, fore, back, pc, StrLen(pc), font )
+#define PutStringInvertVerticalFont( pi, x, y, h,fore, back, pc, font ) PutStringInvertVerticalFontEx( pi, x, y, h,fore, back, pc, StrLen(pc), font )
 //IMG_PROC uint32_t PutMenuStringFontEx        ( ImageFile *pImage, int32_t x, int32_t y, CDATA color, CDATA background, CTEXTSTR pc, uint32_t nLen, PFONT font );
 //#define PutMenuStringFont(img,x,y,fore,back,string,font) PutMenuStringFontEx( img,x,y,fore,back,string,StrLen(string),font)
 //#define PutMenuString(img,x,y,fore,back,str)           PutMenuStringFont(img,x,y,fore,back,str,NULL)
@@ -31513,7 +32616,11 @@ IMAGE_PROC  void IMAGE_API IMGVER(FlipImageEx )( Image pif DBG_PASS );
    \ \                                                                      */
 #define GetStringSizeFont(s,pw,ph,f) GetStringSizeFontEx( (s),StrLen(s),pw,ph,f )
 #ifdef __cplusplus
-IMAGE_NAMESPACE_END
+#ifdef IMAGE_EXTRA_CLOSE
+    }
+#endif
+ // IMAGE_NAMESPACE_END
+} }
 #ifdef _D3D_DRIVER
 using namespace sack::image::d3d;
 #elif defined( _D3D10_DRIVER )
@@ -31531,6 +32638,8 @@ using namespace sack::image;
 #endif
 #ifndef __NO_MSGSVR__
   // for interface across the message service
+/* Common SYSVIPC Message Queue protocol for hosting shared
+   services over a few global pipes.                        */
 #ifndef MESSAGE_SERVICE_PROTOCOL
 #define MESSAGE_SERVICE_PROTOCOL
 #ifdef __cplusplus
@@ -31547,7 +32656,9 @@ using namespace sack;
 #define MSGPROTOCOL_NAMESPACE
 #define MSGPROTOCOL_NAMESPACE_END
 #endif
-SACK_NAMESPACE
+#ifdef __cplusplus
+namespace sack {
+#endif
 	/* This namespace contains an implmentation of inter process
 	   communications using a set of message queues which result
 	   from 'msgget' 'msgsnd' and 'msgrcv'. This are services
@@ -31560,11 +32671,15 @@ SACK_NAMESPACE
 	   See Also
 	   RegisterService
 	   LoadService                                                         */
-	_MSG_NAMESPACE
+#ifdef __cplusplus
+	namespace msg {
+#endif
 /* Defines structures and methods for receiving and sending
 	   messages. Also defines some utility macros for referencing
 		message ID from a user interface structure.                */
-	_PROTOCOL_NAMESPACE
+#ifdef __cplusplus
+		namespace protocol {
+#endif
 #define MSGQ_ID_BASE "Srvr"
 // this is a fun thing, in order to use it,
 // undefine MyInterface, and define your own to your
@@ -31695,8 +32810,14 @@ enum service_messages {
                       , IM_TARDY
 };
 #define LOWEST_BASE_MESSAGE 0x100
+/* Service route object that manages connection between service and client.
+*/
 typedef struct ServiceRoute_tag SERVICE_ROUTE;
+/* pointer to a service route, which is a pair of endpoints.
+*/
 typedef struct ServiceRoute_tag *PSERVICE_ROUTE;
+/*  This is a unique service address
+*/
 typedef struct ServiceEndPoint_tag SERVICE_ENDPOINT, *PSERVICE_ENDPOINT;
 // this is part of the message structure
 //
@@ -31795,8 +32916,9 @@ PREFIX_PACKED struct MsgSrv_ReplyServiceLoad_msg
 #ifdef _MSC_VER
 #pragma pack (pop)
 #endif
-MSGPROTOCOL_NAMESPACE_END
 #ifdef __cplusplus
+ //MSGPROTOCOL_NAMESPACE_END
+} } }
 using namespace sack::msg::protocol;
 #endif
 #endif
@@ -31818,87 +32940,25 @@ using namespace sack::msg::protocol;
 #        else
 #           define RENDER_PROC(type,name) IMPORT_METHOD type CPROC PASTE(SECOND_RENDER_LEVEL,RVER(name))
 #        endif
-SACK_NAMESPACE
+#ifdef __cplusplus
+namespace sack {
+   #endif
 /* <copy render.h>
    \ \             */
-BASE_IMAGE_NAMESPACE
+#ifdef __cplusplus
+namespace image {
+   #endif
 /* PRENDERER is the primary object this namespace deals with.
    See Also
    <link render.h>                                            */
-_RENDER_NAMESPACE
+#ifdef __cplusplus
+namespace render {
+   #endif
 /* Application layer abstract structure to handle displays. This
  is the type returned by OpenDisplay.                          */
 typedef struct HVIDEO_tag *PRENDERER;
 typedef struct key_function  KEY_FUNCTION;
 typedef struct key_function *PKEY_FUNCTION;
-// disable this functionality, it was never fully implemented, and is a lot to document.
-#if ACTIVE_MESSAGE_IMPLEMENTED
-// Message IDs 0-99 are reserved for
-// very core level messages.
-// Message IDs 100-999 are for general purpose window input/output
-// Message ID 1000+ Usable by applications to transport messages via
-//                  the image's default message loop.
-enum active_msg_id {
-    // Message ID 0 - contains a active image to respond to
-   ACTIVE_MSG_PING
-    // Message ID 0 - contains a active image to respond to
-   , ACTIVE_MSG_PONG
-   , ACTIVE_MSG_MOUSE = 100
-   , ACTIVE_MSG_GAIN_FOCUS
-   , ACTIVE_MSG_LOSE_FOCUS
-   , ACTIVE_MSG_DRAG
-   , ACTIVE_MSG_KEY
-   , ACTIVE_MSG_DRAW
-   , ACTIVE_MSG_CREATE
-   , ACTIVE_MSG_DESTROY
-   , ACTIVE_MSG_USER = 1000
-};
-typedef struct {
-   enum active_msg_id ID;
- // the size of the cargo potion of the message. (mostly data.raw)
-   uint32_t  size;
-   union {
-  //--------------------
-      struct {
-         PRENDERER respondto;
-      } ping;
-  //--------------------
-      struct {
-         int x, y, b;
-      } mouse;
-  //--------------------
-      struct {
-         PRENDERER lose;
-      } gain_focus;
-  //--------------------
-      struct {
-         PRENDERER gain;
-      } lose_focus;
-  //--------------------
-      struct {
-         uint8_t no_informaiton;
-      } draw;
-  //--------------------
-      struct {
-         uint8_t no_informaiton;
-      } close;
-  //--------------------
-      struct {
-         uint8_t no_informaiton;
-      } create;
-  //--------------------
-      struct {
-         uint8_t no_informaiton;
-      } destroy;
-  //--------------------
-      struct {
-         uint32_t key;
-      } key;
-  //--------------------
-      uint8_t raw[1];
-   } data;
-} ACTIVEMESSAGE, *PACTIVEMESSAGE;
-#endif
 // Event Message ID's CANNOT be 0
 // Message Event ID (base+0) is when the
 // server teriminates, and ALL client resources
@@ -31963,7 +33023,7 @@ typedef void (CPROC*CloseCallback)( uintptr_t psvUser );
 /* function signature to define hide/restore callback, it just gets the user data of the callback... */
 typedef void (CPROC*HideAndRestoreCallback)( uintptr_t psvUser );
 /* function signature for the redraw callback  which can be specified to handle events to redraw the display.  see SetRedrawHandler. */
-typedef void (CPROC*RedrawCallback)( uintptr_t psvUser, PRENDERER self );
+typedef int (CPROC*RedrawCallback)( uintptr_t psvUser, PRENDERER self );
 /* function signature for the mouse callback  which can be specified to handle events from mouse motion on the display.  see SetMouseHandler.
   would be 'wise' to retun 0 if ignored, 1 if observed (perhaps not used), but NOT ignored.*/
 typedef uintptr_t  (CPROC*MouseCallback)( uintptr_t psvUser, int32_t x, int32_t y, uint32_t b );
@@ -32006,17 +33066,13 @@ typedef HANDLE HTOUCHINPUT;
 typedef int  (CPROC*TouchCallback)( uintptr_t psvUser, PINPUT_POINT pTouches, int nTouches );
 #endif
 /* function signature for the close callback  which can be specified to handle events to redraw the display.  see SetLoseFocusHandler. */
-typedef void (CPROC*LoseFocusCallback)( uintptr_t dwUser, PRENDERER pGain );
+typedef void (CPROC*LoseFocusCallback)(
+uintptr_t dwUser, PRENDERER pGain );
 // without a keyproc, you will still get key notification in the mousecallback
 // if KeyProc returns 0 or is NULL, then bound keys are checked... otherwise
 // priority is given to controls with focus that handle keys.
 typedef int (CPROC*KeyProc)( uintptr_t dwUser, uint32_t keycode );
 // without any other proc, you will get a general callback message.
-#if ACTIVE_MESSAGE_IMPLEMENTED
-typedef void (CPROC*GeneralCallback)( uintptr_t psvUser
-                                     , PRENDERER image
-												, PACTIVEMESSAGE msg );
-#endif
 typedef void (CPROC*RenderReadCallback)(uintptr_t psvUser, PRENDERER pRenderer, TEXTSTR buffer, INDEX len );
 // called before redraw callback to update the background on the scene...
 typedef void (CPROC*_3DUpdateCallback)( uintptr_t psvUser );
@@ -32032,35 +33088,43 @@ typedef void (CPROC*ClipboardCallback)(uintptr_t psvUser);
 enum ButtonFlags {
 #ifndef MK_LBUTTON
  // left mouse button  MouseKey_ ?
-	MK_LBUTTON = 0x01,
+	MK_LBUTTON  = 0x01,
 #endif
 #ifndef MK_MBUTTON
   // right mouse button MouseKey_ ?
-	MK_RBUTTON = 0x02,
-#endif
-#ifndef MK_RBUTTON
-  // middle mouse button MouseKey_ ?
-	MK_MBUTTON = 0x10,
-#endif
-#ifndef MK_CONTROL
-  // the control key on the keyboard
-  MK_CONTROL = 0x08,
-#endif
-#ifndef MK_ALT
-   // the alt key on the keyboard
-  MK_ALT = 0x20,
+	MK_RBUTTON  = 0x02,
 #endif
 #ifndef MK_SHIFT
    // the shift key on the keyboard
-  MK_SHIFT = 0x40,
+  MK_SHIFT     = 0x04,
 #endif
-  // scroll wheel click down
+#ifndef MK_CONTROL
+  // the control key on the keyboard
+  MK_CONTROL   = 0x08,
+#endif
+#ifndef MK_RBUTTON
+  // middle mouse button MouseKey_ ?
+	MK_MBUTTON  = 0x10,
+#endif
+#ifndef MK_XBUTTON1
+  // middle mouse button MouseKey_ ?
+	MK_XBUTTON1 = 0x20,
+#endif
+#ifndef MK_XBUTTON2
+  // middle mouse button MouseKey_ ?
+	MK_XBUTTON2 = 0x40,
+#endif
+#ifndef MK_ALT
+   // the alt key on the keyboard (not normally defined in Windows)
+  MK_ALT       = 0x80,
+#endif
+  // scroll wheel click down  (not normally defined in Windows)
   MK_SCROLL_DOWN  = 0x100,
-  // scroll wheel click up
+  // scroll wheel click up    (not normally defined in Windows)
   MK_SCROLL_UP    = 0x200,
-  // scroll wheel click left
+  // scroll wheel click left  (not normally defined in Windows)
   MK_SCROLL_LEFT  = 0x400,
-  // scroll wheel click right
+  // scroll wheel click right (not normally defined in Windows)
   MK_SCROLL_RIGHT = 0x800,
 #ifndef MK_NO_BUTTON
 // used to indicate that there is
@@ -32076,13 +33140,13 @@ enum ButtonFlags {
 // One or more other buttons were pressed.  These
 // buttons are available by querying the keyboard state.
  // any other button (keyboard)
-  MK_OBUTTON = 0x80,
+  MK_OBUTTON       = 0x1000,
  // any other button (keyboard) went up
-  MK_OBUTTON_UP = 0x1000
+  MK_OBUTTON_UP    = 0x2000
 };
 // mask to test to see if some button (physical mouse, not logical)
 // is currently pressed...
-#define MK_SOMEBUTTON       (MK_LBUTTON|MK_RBUTTON|MK_MBUTTON)
+#define MK_SOMEBUTTON       (MK_LBUTTON|MK_RBUTTON|MK_MBUTTON|MK_XBUTTON1|MK_XBUTTON2)
 // test to see if any button is clicked */
 #define MAKE_SOMEBUTTONS(b)     ((b)&(MK_SOMEBUTTON))
 // test to see if a specific button is clicked
@@ -32124,12 +33188,12 @@ enum DisplayAttributes {
   PANEL_ATTRIBUTE_ALPHA    = 0x10000,
    /* when used by the Display Lib manager, this describes how to manage the subsurface */
   PANEL_ATTRIBUTE_HOLEY    = 0x20000,
-// when used by the Display Lib manager, this describes how to manage the subsurface
-// focus on this window excludes any of it's parent/sibling panels
-// from being able to focus.
+  /* when used by the Display Lib manager, this describes how to manage the subsurface
+    focus on this window excludes any of it's parent/sibling panels
+    from being able to focus. */
   PANEL_ATTRIBUTE_EXCLUSIVE = 0x40000,
-// when used by the Display Lib manager, this describes how to manage the subsurface
-// child attribute affects the child is contained within this parent
+  /* when used by the Display Lib manager, this describes how to manage the subsurface
+    child attribute affects the child is contained within this parent */
   PANEL_ATTRIBUTE_INTERNAL  = 0x88000,
     // open the window as layered - allowing full transparency.
   DISPLAY_ATTRIBUTE_LAYERED = 0x0100,
@@ -33104,6 +34168,7 @@ struct render_interface_tag
 	// where ever the current mouse is, lock the mouse to the window, and allow the mouse to move it.
 	//
 	RENDER_PROC_PTR( void, BeginSizeDisplay )(PRENDERER pRenderer, enum sizeDisplayValues sizeFrom );
+   RENDER_PROC_PTR( void, WillUpdatePortions)( PRENDERER pRenderer, LOGICAL disableAutoDraw );
 };
 #ifdef DEFINE_DEFAULT_RENDER_INTERFACE
 #define USE_RENDER_INTERFACE GetDisplayInterface()
@@ -33224,6 +34289,7 @@ typedef int check_this_variable;
 #define IsDisplayRedrawForced(r)    ((USE_RENDER_INTERFACE)?((USE_RENDER_INTERFACE)->_IsDisplayRedrawForced)?(USE_RENDER_INTERFACE)->_IsDisplayRedrawForced(r):0:0)
 #define BeginMoveDisplay(r)   ((USE_RENDER_INTERFACE)?((USE_RENDER_INTERFACE)->_BeginMoveDisplay)?((USE_RENDER_INTERFACE)->_BeginMoveDisplay(r),1):0:0)
 #define BeginSizeDisplay(r,m)   ((USE_RENDER_INTERFACE)?((USE_RENDER_INTERFACE)->_BeginSizeDisplay)?((USE_RENDER_INTERFACE)->_BeginSizeDisplay(r,m),1):0:0)
+#define WillUpdatePortions(r,v) ((USE_RENDER_INTERFACE)?((USE_RENDER_INTERFACE)->_WillUpdatePortions)?((USE_RENDER_INTERFACE)->_WillUpdatePortions(r,v),1):0:0)
 #endif
 	_INTERFACE_NAMESPACE_END
 #ifdef __cplusplus
@@ -33328,8 +34394,12 @@ typedef int check_this_variable;
 #define OnDisplayConnect(name)	 DefineRegistryMethod("/sack/render/remote display",OnDisplayConnect,"connect",name,"new_display_connect",void,(struct display_app*app, struct display_app_local ***),__LINE__)
 	// unimplemented.
 #define OnDisplayConnected(name)	 DefineRegistryMethod("/sack/render/remote display",OnDisplayConnect,"connect",name,"new_display_connected",void,(struct display_app*app),__LINE__)
-RENDER_NAMESPACE_END
 #ifdef __cplusplus
+#ifdef RENDER_EXTRA_CLOSE
+}
+#endif
+ //RENDER_NAMESPACE_END
+} } }
 #ifdef _D3D_DRIVER
 	using namespace sack::image::render::d3d;
 #elif defined( _D3D10_DRIVER )
@@ -33379,29 +34449,6 @@ namespace sack {
 #define SECTION_LOGGED_WAIT 0
 #define AND_NOT_SECTION_LOGGED_WAIT(n) (n)
 #define AND_SECTION_LOGGED_WAIT(n) (0)
-#endif
-// If you change this structure please change the public
-// reference of this structure, and please, do hand-count
-// the bytes to set there... so not include this file
-// to get the size.  The size there should be the worst
-// case - debug or release mode.
-#ifdef NO_PRIVATE_DEF
-struct critical_section_tag {
- // this is set when entering or leaving (updating)...
-	volatile uint32_t dwUpdating;
-	volatile uint32_t dwLocks;
- // windows upper 16 is process ID, lower is thread ID
-	THREAD_ID dwThreadID;
- // ID of thread waiting for this..
-	THREAD_ID dwThreadWaiting;
-	//PDATAQUEUE pPriorWaiters;
-#ifdef DEBUG_CRITICAL_SECTIONS
-	uint32_t bCollisions ;
-	CTEXTSTR pFile;
-	uint32_t  nLine;
-#endif
-};
-typedef struct critical_section_tag CRITICALSECTION;
 #endif
 #ifdef __cplusplus
 	}
@@ -33514,6 +34561,7 @@ namespace sack {
 //#define LOG_INSERTS
 //#define LOG_DISPATCH
 //#define DEBUG_PIPE_USAGE
+const char *default_thread_name = "ThreadSignal";
 typedef struct thread_event THREAD_EVENT;
 typedef struct thread_event *PTHREAD_EVENT;
 struct timer_tag
@@ -33527,6 +34575,7 @@ struct timer_tag
 	};
 	struct {
 		BIT_FIELD bRescheduled : 1;
+		BIT_FIELD bRemoved : 1;
 	} flags;
 	uint32_t frequency;
 	int32_t delta;
@@ -33550,7 +34599,7 @@ struct threads_tag
 	uintptr_t (CPROC*proc)( struct threads_tag * );
 	uintptr_t (CPROC*simple_proc)( POINTER );
  // might be not a real thread.
-	TEXTSTR thread_event_name;
+	CTEXTSTR thread_event_name;
 	volatile THREAD_ID thread_ident;
 	PTHREAD_EVENT thread_event;
 #ifdef _WIN32
@@ -33561,8 +34610,8 @@ struct threads_tag
  // file handles that are the pipe's ends. 0=read 1=write
 	int pipe_ends[2];
 #endif
- // use this as a status of pipes if USE_PIPE_SEMS is used...; otherwise it's a ipcsem
-	int semaphore;
+	//int semaphore; // use this as a status of pipes if USE_PIPE_SEMS is used...; otherwise it's a ipcsem
+  // uses mutex now instead of semaphore to sleep
 	pthread_mutex_t mutex;
 	pthread_t hThread;
 #endif
@@ -33570,10 +34619,10 @@ struct threads_tag
 		//BIT_FIELD bLock : 1;
 		//BIT_FIELD bSleeping : 1;
 		//BIT_FIELD bWakeWhileRunning : 1;
-		BIT_FIELD bRemovedWhileRunning : 1;
-		BIT_FIELD bLocal : 1;
-		BIT_FIELD bReady : 1;
-		BIT_FIELD bStarted : 1;
+		BIT_FIELD bRemovedWhileRunning;
+		BIT_FIELD bLocal;
+		volatile BIT_FIELD bReady;
+		volatile BIT_FIELD bStarted;
 	} flags;
 	//struct threads_tag *next, **me;
 	CTEXTSTR pFile;
@@ -33591,6 +34640,7 @@ struct thread_event
 };
 struct timer_local_data {
 	uint32_t timerID;
+	LOGICAL wrappedTimerID;
 	PTIMERSET timer_pool;
 	PTIMER timers;
  // this timer is scheduled to be added...
@@ -33609,13 +34659,13 @@ struct timer_local_data {
 		BIT_FIELD bHaltTimers : 1;
 	} flags;
  // this timer is scheduled to be removed...
-	uint32_t del_timer;
+	volatile uint32_t del_timer;
  // should somehow end up equating to sleep overhead...
 	uint32_t tick_bias;
  // last known time that a timer could have fired...
-	uint32_t last_tick;
+	uint64_t last_tick;
  // the current moment up to which we fire all timers.
-	uint32_t this_tick;
+	uint64_t this_tick;
 	PTHREAD pTimerThread;
 	PTHREADSET threadset;
 	PTHREAD threads;
@@ -33623,9 +34673,10 @@ struct timer_local_data {
 	CRITICALSECTION cs_timer_change;
 	//uint32_t pending_timer_change;
 	uint32_t remove_timer;
-	uint32_t CurrentTimerID;
+	volatile uint32_t CurrentTimerID;
 	int32_t last_sleep;
 	PLIST onThreadCreate;
+	PLIST onThreadExit;
 #define globalTimerData (*global_timer_structure)
 	volatile uint64_t lock_thread_create;
 	// should be a short list... 10 maybe 15...
@@ -33661,6 +34712,7 @@ DeclareThreadLocal  struct my_thread_info _MyThreadInfo;
 #endif
 #ifdef _WIN32
 #else
+//https://godbolt.org/z/Kx8cP68E8
 //#include <sys/ipc.h>
 	 // hmm wonder why this has to be defined....
 	 // semtimedop is a wonderful wonderful thing...
@@ -33687,9 +34739,9 @@ static struct my_thread_info* GetThreadTLS( void )
 #  if defined( WIN32 )
 	if( !( _MyThreadInfo = (struct my_thread_info*)TlsGetValue( global_timer_structure->my_thread_info_tls ) ) )
 	{
-		int old = SetAllocateLogging( FALSE );
+		int old = ClearAllocateLogging( FALSE );
 		TlsSetValue( global_timer_structure->my_thread_info_tls, _MyThreadInfo = New( struct my_thread_info ) );
-		SetAllocateLogging( old );
+		ResetAllocateLogging( old );
 		_MyThreadInfo->nThread = 0;
 		_MyThreadInfo->pThread = 0;
 	}
@@ -33776,7 +34828,7 @@ uintptr_t closesem( POINTER p, uintptr_t psv )
 	close( thread->pipe_ends[1] );
 	thread->pipe_ends[0] = -1;
 	thread->pipe_ends[1] = -1;
-	thread->semaphore = -1;
+	//thread->semaphore = -1;
 #else
 	pthread_mutex_destroy( &thread->mutex );
 #endif
@@ -33830,11 +34882,12 @@ static void InitWakeup( PTHREAD thread, CTEXTSTR event_name )
 {
 #ifdef _DEBUG
 	int prior;
-	prior = SetAllocateLogging( FALSE );
+	prior = ClearAllocateLogging( FALSE );
 #endif
 	if( !event_name )
-		event_name = "ThreadSignal";
-	thread->thread_event_name = StrDup( event_name );
+		thread->thread_event_name = event_name = default_thread_name;
+	else
+		thread->thread_event_name = (TEXTSTR)StrDup( event_name );
 #ifdef _WIN32
 	if( !thread->thread_event )
 	{
@@ -33857,8 +34910,8 @@ static void InitWakeup( PTHREAD thread, CTEXTSTR event_name )
 	// store status of pipe() in semaphore... it's not really a semaphore..
 #  ifdef DEBUG_PIPE_USAGE
 	lprintf( "Init wakeup %p %s", thread, event_name );
+	lprintf( "OPENING A PIPE END SEMAPHORE:%d", thread->semaphore );
 #  endif
-	lprintf( "OPENING A PIPE END SEMAPHRE:%d", thread->semaphore );
 	if( pipe( thread->pipe_ends ) == -1 )
 	{
 		lprintf( "Failed to get pipe! %d:%s", errno, strerror( errno ) );
@@ -33908,11 +34961,11 @@ static void InitWakeup( PTHREAD thread, CTEXTSTR event_name )
 #else
 	pthread_mutex_init( &thread->mutex, NULL );
 	pthread_mutex_lock( &thread->mutex );
-	thread->semaphore = -1;
+	//thread->semaphore = -1;
 #endif
 #endif
 #ifdef _DEBUG
-	SetAllocateLogging( prior );
+	ResetAllocateLogging( prior );
 #endif
 }
 //--------------------------------------------------------------------------
@@ -34016,7 +35069,7 @@ uintptr_t CPROC check_thread( POINTER p, uintptr_t psv )
 	THREAD_ID ID = *((THREAD_ID*)psv);
 	//lprintf( "Check thread %016llx %016llx %s", thread->thread_ident, ID, thread->thread_event_name );
 	if( ( thread->thread_ident == ID )
-		&& ( StrCmp( thread->thread_event_name, "ThreadSignal" ) == 0 ) )
+		&& ( StrCmp( thread->thread_event_name, default_thread_name ) == 0 ) )
 		return (uintptr_t)p;
 	return 0;
 }
@@ -34196,44 +35249,44 @@ static void  InternalWakeableNamedSleepEx( CTEXTSTR name, uint32_t n, LOGICAL th
 	if( pThread )
 	{
 #ifdef _WIN32
-#ifndef NO_LOGGING
+#  ifndef NO_LOGGING
 		if( globalTimerData.flags.bLogSleeps )
 			_xlprintf(1 DBG_RELAY )( "About to sleep on %d Thread event created...%s:%016llx"
 			                         , pThread->thread_event->hEvent
 			                         , pThread->thread_event_name
 			                         , pThread->thread_ident );
-#endif
+#  endif
 		if( WaitForSingleObject( pThread->thread_event->hEvent
 		                       , n==SLEEP_FOREVER?INFINITE:(n) ) != WAIT_TIMEOUT )
 		{
-#ifdef LOG_LATENCY
+#  ifdef LOG_LATENCY
 			_lprintf(DBG_RELAY)( "Woke up- reset event" );
-#endif
+#  endif
 			ResetEvent( pThread->thread_event->hEvent );
 			//if( n == SLEEP_FOREVER )
 			//   DebugBreak();
 		}
-#ifdef LOG_LATENCY
+#  ifdef LOG_LATENCY
 		else
 			_lprintf(DBG_RELAY)( "Timed out from %d", n );
-#endif
+#  endif
 #else
 		{
-#ifndef USE_PIPE_SEMS
-#ifdef _NO_SEMTIMEDOP_
+#  ifndef USE_PIPE_SEMS
+#    ifdef _NO_SEMTIMEDOP_
 			int nTimer = 0;
 			if( n != SLEEP_FOREVER )
 			{
 				//lprintf( "Wakeable sleep in %ld (oneshot, no frequency)", n );
 				nTimer = AddTimerExx( n, 0, TimerWake, (uintptr_t)pThread DBG_RELAY );
 			}
-#endif
-#endif
-			if( pThread->semaphore == -1 )
+#    endif
+			if( !pThread->thread_event_name )
 			{
 				//lprintf( "Invalid semaphore...fixing?" );
 				InitWakeup( pThread, name );
 			}
+#  endif
 			//if( pThread->semaphore != -1 )
 			{
 				while(1)
@@ -34332,16 +35385,15 @@ static void  InternalWakeableNamedSleepEx( CTEXTSTR name, uint32_t n, LOGICAL th
 						}
 						if( errno == EIDRM )
 						{
-							lprintf( "Semaphore has been removed on us!?" );
-							pThread->semaphore = -1;
+							lprintf( "pthread_mutex has been removed on us!?" );
+							//pThread->semaphore = -1;
 							break;
 						}
 						if( errno == EINVAL )
 						{
-							lprintf( "Semaphore is no longer valid on this thread object... %d"
-							       , pThread->semaphore );
+							lprintf( "pthread_mutex is no longer valid on this thread object..." );
 							// this probably means that it has gone away..
-							pThread->semaphore = -1;
+							//pThread->semaphore = -1;
 							break;
 						}
 						lprintf( "stat from sempop on thread semaphore %p = %d (%d)"
@@ -34494,10 +35546,11 @@ static void  UnmakeThread( void )
 		//if( ( (*pThread->me)=pThread->next ) )
 		//	pThread->next->me = pThread->me;
 		{
-			int tmp = SetAllocateLogging( FALSE );
+			int tmp = ClearAllocateLogging( FALSE );
 #ifdef _WIN32
 			//lprintf( "Unmaking thread event! on thread %016" _64fx"x", pThread->thread_ident );
 			CloseHandle( pThread->thread_event->hEvent );
+			CloseHandle( pThread->hThread );
 			{
 #  if !HAS_TLS
 				struct my_thread_info* _MyThreadInfo = GetThreadTLS();
@@ -34511,7 +35564,8 @@ static void  UnmakeThread( void )
 #else
 			closesem( (POINTER)pThread, 0 );
 #endif
-			Deallocate( TEXTSTR, pThread->thread_event_name );
+			if( pThread->thread_event_name != default_thread_name )
+				Deallocate( CTEXTSTR, pThread->thread_event_name );
 #ifdef _WIN32
 			Deallocate( TEXTSTR, pThread->thread_event->name );
 			if( global_timer_structure )
@@ -34521,7 +35575,7 @@ static void  UnmakeThread( void )
 			if( global_timer_structure )
  /*Release( pThread )*/
 				DeleteFromSet( THREAD, globalTimerData.threadset, pThread );
-			SetAllocateLogging( tmp );
+			ResetAllocateLogging( tmp );
 		}
 	}
 	globalTimerData.lock_thread_create = 0;
@@ -34578,6 +35632,13 @@ static uintptr_t CPROC ThreadWrapper( PTHREAD pThread )
 #else
 	pThread->hThread = NULL;
 #endif
+	{
+		INDEX idx;
+		void ( *f )( void );
+		LIST_FORALL( globalTimerData.onThreadExit, idx, void( * )( void ), f ) {
+			f();
+		}
+	}
 	//lprintf( "%s(%d):Thread is exiting... ", pThread->pFile, pThread->nLine );
 #ifdef __WATCOMC__
 	return (void*)result;
@@ -34639,14 +35700,14 @@ PTHREAD  MakeThread( void )
 		if( !(pThread = FindThread( thread_ident ) ) )
 		{
 			THREAD_ID oldval;
-			LOGICAL dontUnlock = FALSE;
+			//LOGICAL dontUnlock = FALSE;
  /*&& ( oldval != thread_ident )*/
 			while( ( oldval = LockedExchange64( &globalTimerData.lock_thread_create, 1 ) ) )
 			{
 				//globalTimerData.lock_thread_create = oldval;
 				Relinquish();
 			}
-			dontUnlock = TRUE;
+			//dontUnlock = TRUE;
  /*Allocate( sizeof( THREAD ) )*/
 			pThread = GetFromSet( THREAD, &globalTimerData.threadset );;
 			//lprintf( "Get Thread %p", pThread );
@@ -34915,6 +35976,10 @@ static void DoInsertTimer( PTIMER timer )
 	globalTimerData.flags.bLogCriticalSections = bLock;
 	SetCriticalLogging( bLock );
 #endif
+//GetTickCount();
+	uint64_t newtick = timeGetTime64();
+//	lprintf("Add to timer %d delta %d %lld", timer->ID, timer->delta, newtick - globalTimerData.last_tick);
+	timer->delta += newtick - globalTimerData.last_tick;
 	if( !(check = globalTimerData.timers) )
 	{
 #ifdef LOG_INSERTS
@@ -34953,6 +36018,7 @@ static void DoInsertTimer( PTIMER timer )
 			timer->next = check;
 			(*(timer->me = check->me))=timer;
 			check->me = &timer->next;
+			if( timer->next == timer || check->next == check ) DebugBreak();
 			break;
 		}
 		else
@@ -35103,7 +36169,7 @@ static void InsertTimer( PTIMER timer DBG_PASS )
 	}
 }
 //--------------------------------------------------------------------------
-static PTIMER GrabTimer( PTIMER timer )
+static PTIMER GrabTimer( PTIMER timer, LOGICAL toProcess )
 {
 	// if a timer has been grabbed, it won't be grabbed...
 	// but if a timer is being grabbed, it might get grabbed twice.
@@ -35117,6 +36183,8 @@ static PTIMER GrabTimer( PTIMER timer )
 		{
 			// if I had a next - his refernece of thing that points at him is mine.
 			timer->next->me = timer->me;
+			if( !toProcess )
+				timer->next->delta += timer->delta;
 		}
 		timer->next = NULL;
 		timer->me = NULL;
@@ -35140,6 +36208,10 @@ static int CPROC ProcessTimers( uintptr_t psvForce )
 	{
 		//Log( "Unknown thread attempting to process timers..." );
 		return -1;
+	}
+	if (globalTimerData.current_timer) {
+		lprintf(" !!!!!!!!!!!!!!!!!!!! Recursing timer is a bad idea...");
+		return 1;
 	}
 #ifndef _WIN32
 	//nice( -3 ); // allow ourselves a bit more priority...
@@ -35166,7 +36238,7 @@ static int CPROC ProcessTimers( uintptr_t psvForce )
 			Log( "Re-synch first tick..." );
 #endif
 //GetTickCount();
-			globalTimerData.last_tick = timeGetTime();
+			globalTimerData.last_tick = timeGetTime64();
 		}
 		// add and delete new/old timers here...
 		// should be the next event after sleeping (low var-sleep top const-sleep)
@@ -35188,9 +36260,9 @@ static int CPROC ProcessTimers( uintptr_t psvForce )
 		}
 		// get the time now....
 //GetTickCount();
-		newtick = globalTimerData.this_tick = timeGetTime();
+		newtick = globalTimerData.this_tick = timeGetTime64();
 #ifdef LOG_LATENCY
-		Log3( "total - Tick: %u Last: %u  delta: %u", globalTimerData.this_tick, globalTimerData.last_tick, globalTimerData.this_tick-globalTimerData.last_tick );
+		lprintf( "total - %d Tick: %llu Last: %llu  delta: %llu", globalTimerData.timers?globalTimerData.timers->ID:-1, globalTimerData.this_tick, globalTimerData.last_tick, globalTimerData.this_tick-globalTimerData.last_tick );
 #endif
 		//if( globalTimerData.timers )
 		//	 delay_skew = globalTimerData.this_tick-globalTimerData.last_tick - globalTimerData.timers->delta;
@@ -35218,7 +36290,8 @@ static int CPROC ProcessTimers( uintptr_t psvForce )
 #endif
 #endif
 			// also enters csGrab... should be ok.
-			GrabTimer( timer );
+			// grabbing the timer this way does not change the next's delta
+			GrabTimer( timer, TRUE );
 #ifdef ENABLE_CRITICALSEC_LOGGING
 			SetCriticalLogging( 0 );
 			globalTimerData.flags.bLogCriticalSections = 0;
@@ -35285,7 +36358,7 @@ static int CPROC ProcessTimers( uintptr_t psvForce )
 			//  of processing this timer.
 			// this point should be optioned whether the timer is
 			// a guaranteed tick, or whether it's sloppy.
-			if( timer->frequency || timer->flags.bRescheduled )
+			if( !timer->flags.bRemoved && ( timer->frequency || timer->flags.bRescheduled ) )
 			{
 				if( timer->flags.bRescheduled )
 				{
@@ -35391,7 +36464,7 @@ uintptr_t CPROC ThreadProc( PTHREAD pThread )
 	globalTimerData.lock_timers = 1;
 	//Log( "Get first tick" );
 //GetTickCount();
-	globalTimerData.last_tick = timeGetTime();
+	globalTimerData.last_tick = timeGetTime64();
 	while( ProcessTimers( 1 ) > 0 );
 	//Log( "Timer thread is exiting..." );
 	globalTimerData.pTimerThread = NULL;
@@ -35418,11 +36491,30 @@ uint32_t  AddTimerExx( uint32_t start, uint32_t frequency, TimerCallbackProc cal
 	{
 		//"Creating one shot timer %d long", start );
 	}
+	//_lprintf( DBG_RELAY )( "----- First create timer %d %d %d", start, frequency, globalTimerData.timerID );
  // first time for timer to fire... may be 0
 	timer->delta     = (int32_t)start;
 	timer->frequency = frequency;
 	timer->callback  = callback;
-	timer->ID        = globalTimerData.timerID++;
+	uint32_t thisTimer;
+	do {
+		thisTimer = globalTimerData.timerID++;
+		if( globalTimerData.timerID > 0x7FFFFFFF ) {
+			globalTimerData.timerID = 1000;
+			globalTimerData.wrappedTimerID = TRUE;
+		}
+		if( globalTimerData.wrappedTimerID ) {
+			PTIMER chk = globalTimerData.timers;
+			while( chk ) {
+				if( chk->ID == thisTimer ) {
+					thisTimer = 0;
+					break;
+				}
+				chk = chk->next;
+			}
+		}
+	} while( thisTimer == 0 );
+	timer->ID        = thisTimer;
 	timer->userdata  = user;
 #ifdef _DEBUG
 	timer->pFile = pFile;
@@ -35462,13 +36554,19 @@ void  RemoveTimerEx( uint32_t ID DBG_PASS )
 {
 	// Lockout multiple changes at a time...
  // IS timer thread..
-	if( !NotTimerThread() &&
+	if( !NotTimerThread() ){
  // and not in THIS timer...
-		( ID != globalTimerData.CurrentTimerID ) )
-	{
-		// is timer thread itself... safe to remove the timer....
-		DoRemoveTimer( ID DBG_SRC );
-		return;
+		if( ID != globalTimerData.CurrentTimerID )
+		{
+			// is timer thread itself... safe to remove the timer....
+			DoRemoveTimer( ID DBG_SRC );
+			return;
+		}
+ // current timer is trying to remove itself while it is running; the timer will be removed after the callback.
+		else {
+			globalTimerData.current_timer->flags.bRemoved = 1;
+			return;
+		}
 	}
 	EnterCriticalSec( &globalTimerData.cs_timer_change );
 	// only allow one delete at a time...
@@ -35526,12 +36624,21 @@ void  RemoveTimer( uint32_t ID )
 //--------------------------------------------------------------------------
 static void InternalRescheduleTimerEx( PTIMER timer, uint32_t delay )
 {
+	//lprintf( "Reschedule timer %p %p %d", timer, timer->userdata, delay);
 	if( timer )
 	{
-		PTIMER bGrabbed = GrabTimer( timer );
-		timer->flags.bRescheduled = 1;
+		// grabbing the timer this way should put its delta into the next.
+		PTIMER bGrabbed = GrabTimer( timer, FALSE );
+		if (globalTimerData.flags.away_in_timer && globalTimerData.CurrentTimerID == timer->ID) {
+#ifdef DEBUG_TIMER_RESCHEDULE
+			lprintf("Timer is dispatched/close to being dispatched. %d", timer->ID);
+#endif
+ // tracks reschedule during callback
+			timer->flags.bRescheduled = 1;
+		}
   // should never pass a negative value here, but delta can be negative.
 		timer->delta = (int32_t)delay;
+//		lprintf( "Set timer delta %d %d", timer->delta, timer->ID );
 #ifdef LOG_SLEEPS
 		lprintf( "Reschedule at %d  %p", timer->delta, bGrabbed );
 #endif
@@ -35558,6 +36665,9 @@ void  RescheduleTimerEx( uint32_t ID, uint32_t delay )
 	if( !ID )
 	{
 		timer =globalTimerData.current_timer;
+#ifdef DEBUG_TIMER_RESCHEDULE
+		lprintf("timer 0 specified - use current timer (if there is one?) %d", timer ? timer->ID : -1);
+#endif
 	}
 	else
 	{
@@ -35570,7 +36680,15 @@ void  RescheduleTimerEx( uint32_t ID, uint32_t delay )
 			// dispatched and we get here (timer itself rescheduling itself)
 			if( globalTimerData.current_timer && globalTimerData.current_timer->ID == ID )
 				timer = globalTimerData.current_timer;
+#ifdef DEBUG_TIMER_RESCHEDULE
+			lprintf("timer is processing? %d %d", ID, timer ? timer->ID : -1);
+#endif
 		}
+#ifdef DEBUG_TIMER_RESCHEDULE
+		else {
+			lprintf("timer found to reschedule %d", timer ? timer->ID : -1);
+		}
+#endif
 	}
 	InternalRescheduleTimerEx( timer, delay );
 	LeaveCriticalSec( &globalTimerData.csGrab );
@@ -35589,7 +36707,7 @@ void  RescheduleTimer( uint32_t ID )
 	}
 	if( timer )
 	{
-		InternalRescheduleTimerEx( timer, timer->frequency );
+		InternalRescheduleTimerEx( timer, timer->frequency?timer->frequency:timer->delta );
 	}
 	LeaveCriticalSec( &globalTimerData.csGrab );
 }
@@ -35628,7 +36746,7 @@ void  ChangeTimerEx( uint32_t ID, uint32_t initial, uint32_t frequency )
 }
 //--------------------------------------------------------------------------
 #ifndef USE_NATIVE_CRITICAL_SECTION
-#ifdef _MSC_VER
+#if defined( _MSC_VER ) && !defined( __clang__ )
 // reordering instructions in this is not allowed...
 // since MSVC ends up reversing unlocks before other code that should run first.
 #  pragma optimize( "st", off )
@@ -35697,18 +36815,18 @@ LOGICAL  EnterCriticalSecEx( PCRITICALSECTION pcs DBG_PASS )
 #endif
 //-------------------------------------------------------------------------
 #ifndef USE_NATIVE_CRITICAL_SECTION
-#ifdef _MSC_VER
+#if defined( _MSC_VER ) && !defined( __clang__ )
 #  pragma optimize( "st", off )
 #endif
 LOGICAL  LeaveCriticalSecEx( PCRITICALSECTION pcs DBG_PASS )
 {
 	THREAD_ID dwCurProc;
 #ifdef _DEBUG
-	uint32_t curtick;
+	uint64_t curtick;
 #endif
 	while( 1 ) {
 #ifdef _DEBUG
-		curtick = timeGetTime();
+		curtick = timeGetTime64();
 #endif
 #ifdef ENABLE_CRITICALSEC_LOGGING
 		if( global_timer_structure && globalTimerData.flags.bLogCriticalSections )
@@ -35717,7 +36835,7 @@ LOGICAL  LeaveCriticalSecEx( PCRITICALSECTION pcs DBG_PASS )
 		while( LockedExchange( &pcs->dwUpdating, 1 )
 #ifdef _DEBUG
 			//GetTickCount() )
-			&& ( ( curtick + 2000 ) > timeGetTime() )
+			&& ( ( curtick + 2000 ) > timeGetTime64() )
 #endif
 			) {
 #ifdef ENABLE_CRITICALSEC_LOGGING
@@ -35729,7 +36847,7 @@ LOGICAL  LeaveCriticalSecEx( PCRITICALSECTION pcs DBG_PASS )
 		dwCurProc = GetThisThreadID();
 #ifdef _DEBUG
 		//GetTickCount() )
-		if( ( curtick + 2000 ) <= timeGetTime() ) {
+		if( ( curtick + 2000 ) <= timeGetTime64() ) {
 #ifdef DEBUG_CRITICAL_SECTIONS
 			lprintf( "FROM: %s(%d)  %s(%d) %s(%d)"
 					  , pcs->pFile[(pcs->nPrior+(MAX_SECTION_LOG_QUEUE-1))%MAX_SECTION_LOG_QUEUE]
@@ -35782,7 +36900,7 @@ LOGICAL  LeaveCriticalSecEx( PCRITICALSECTION pcs DBG_PASS )
 			THREAD_ID dwWaiting = pcs->dwThreadWaiting;
 			pcs->dwThreadID = 0;
 			pcs->dwLocks = 0;
-			pcs->dwUpdating = pcs->dwLocks;
+			pcs->dwUpdating = 0;
 			// wake the prior (if there is one sleeping)
 			if( dwWaiting )
 			{
@@ -35842,6 +36960,13 @@ void OnThreadCreate( void (*f)(void) ) {
 		SimpleRegisterAndCreateGlobal( global_timer_structure );
 #endif
 	AddLink( &globalTimerData.onThreadCreate, f );
+}
+void OnThreadExit( void ( *f )( void ) ) {
+#ifndef __STATIC_GLOBALS__
+	if( !global_timer_structure )
+		SimpleRegisterAndCreateGlobal( global_timer_structure );
+#endif
+	AddLink( &globalTimerData.onThreadExit, f );
 }
 #undef GetThreadTLS
 #undef MyThreadInfo
@@ -35994,16 +37119,18 @@ IDLE_PROC( int, IdleEx )( DBG_VOIDPASS )
 	for( proc = procs; proc;  )
 	{
 		PIDLEPROC check;
+		int result;
 		for( check = proc; check; check = check->similar )
 		{
 			check->flags.bDispatched = 1;
 			//lprintf( "attempt proc %p in %Lx  procthread=%Lx", check, GetThreadID( MakeThread() ), check->thread );
 			//if( !check->thread || ( check->thread == me ) )
 			// sometimes... a function belongs to multiple threads...
-			if( check->function( check->data ) != -1 )
+			if( ( result = check->function( check->data ) ) != -1 )
 			{
 				check->thread = me;
-				success = 1;
+				// the thread indicated it wants to sleep
+				success = result;
 			}
 			check->flags.bDispatched = 0;
 			if( check->flags.bRemove )
@@ -36077,6 +37204,7 @@ IDLE_PROC( int, IdleFor )( uint32_t dwMilliseconds )
 //
 //  DEBUG FLAGS IN netstruc.h
 //
+//#define LOCK_GLOBAL_WHEN_LOCKING_CLIENT
 #ifndef _DEFAULT_SOURCE
   // for features.h
 #define _DEFAULT_SOURCE
@@ -36088,6 +37216,31 @@ IDLE_PROC( int, IdleFor )( uint32_t dwMilliseconds )
 #define NO_UNICODE_C
 #define MAIN_PROGRAM
  // critical section
+#ifdef __LINUX__
+#endif
+#ifdef _WIN32
+#include <wincrypt.h>
+#endif
+#ifndef OPENSSL_API_COMPAT
+#  define OPENSSL_API_COMPAT 10101
+#endif
+#ifndef NO_SSL
+#  define LIBRESSL_DISABLE_OVERRIDE_WINCRYPT_DEFINES_WARNING
+#  define _LIB
+#    if NODE_MAJOR_VERSION >= 17
+// this can't work?
+#      include <openssl/configuration.h>
+#    endif
+#  include <openssl/ssl.h>
+#  include <openssl/tls1.h>
+#  include <openssl/err.h>
+#  include <openssl/rsa.h>
+#  include <openssl/pem.h>
+#  include <openssl/pkcs12.h>
+#  if OPENSSL_VERSION_MAJOR >= 3
+#    include <openssl/core_names.h>
+#  endif
+#endif
 //#include "../contrib/MatrixSSL/3.7.1/matrixssl/matrixsslApi.h"
 // debugging flag for socket creation/closing
 //#define LOG_SOCKET_CREATION
@@ -36103,6 +37256,9 @@ IDLE_PROC( int, IdleFor )( uint32_t dwMilliseconds )
 //#define LOG_PENDING
 // for windows - this will log all FD_XXXX notifications processed...
 //#define LOG_NOTICES
+//#define LOG_WRITE_AGGREGATION
+//#define LOG_WRITE_NOTICES
+//#define LOG_PENDING_WRITES // lasst bit of logging around wakeOnUnlock and pending writes.
 //#define LOG_CLIENT_LISTS
 //#define LOG_NETWORK_LOCKING
 /// for windows - this logs detailed info about the new threaded events
@@ -36115,15 +37271,7 @@ IDLE_PROC( int, IdleFor )( uint32_t dwMilliseconds )
 #define CLIENT_DEFINED
 SACK_NETWORK_NAMESPACE
 #define MAGIC_SOCKADDR_LENGTH ( sizeof(SOCKADDR_IN)< 256?256:sizeof( SOCKADDR_IN) )
-#define IN_SOCKADDR_LENGTH sizeof(struct sockaddr_in)
-#define IN6_SOCKADDR_LENGTH sizeof(struct sockaddr_in6)
-// this might have to be like sock_addr_len_t
-#define SOCKADDR_LENGTH(sa) ( (int)*(uintptr_t*)( ( (uintptr_t)(sa) ) - 2*sizeof(uintptr_t) ) )
-#ifdef __MAC__
-#  define SET_SOCKADDR_LENGTH(sa,size) ( ( ( *(uintptr_t*)( ( (uintptr_t)(sa) ) - 2*sizeof(uintptr_t) ) ) = size ), ( sa->sa_len = size ) )
-#else
-#  define SET_SOCKADDR_LENGTH(sa,size) ( ( *(uintptr_t*)( ( (uintptr_t)(sa) ) - 2*sizeof(uintptr_t) ) ) = size )
-#endif
+#  define SOCKADDR_NAME(sa) (( ((TEXTSTR*)( ( (uintptr_t)(sa) ) - 1*sizeof(uintptr_t) ))[0] ))
 // used by the network thread dispatched network layer messages...
   // messages for UDP use this window Message
 #define SOCKMSG_UDP (WM_USER+1)
@@ -36134,6 +37282,13 @@ SACK_NETWORK_NAMESPACE
 // not sure if this is used anywhere....
       // maximum length of a host's text name...
 #define HOSTNAME_LEN 50
+typedef struct PendingWrite {
+	PCLIENT pc;
+	POINTER buffer;
+	size_t len;
+	int bLong;
+	int failpending;
+} PendingWrite;
 typedef struct PendingBuffer
 {
                 // number of bytes to be read yet
@@ -36143,10 +37298,10 @@ typedef struct PendingBuffer
              // number of bytes received on last read.
    size_t dwLastRead;
    struct {
-    // is a stream request...
-      int  bStream:1;
+    // is a(read) stream request...
+      BIT_FIELD bStream:1;
  // lpBuffer was malloced...
-      int  bDynBuffer:1;
+      BIT_FIELD bDynBuffer:1;
 	}s;
 	union {
               // Buffer Pointer.
@@ -36173,8 +37328,10 @@ enum NetworkConnectionFlags {
 	, CF_CONNECTED       = 0x00000020
 	, CF_CONNECTERROR    = 0x00000040
 	, CF_CONNECTING      = 0x00000080
-	, CF_CONNECT_WAITING = 0x00008000
+	, CF_CONNECT_WAITING = 0x00400000
 	, CF_CONNECT_CLOSED  = 0x00100000
+  // connection to socket callback for server connect was issued.
+	, CF_CONNECT_ISSUED  = 0x00800000
   // wants to close at the next opportunity.
 	, CF_TOCLOSE         = 0x00000100
   // this flag is unused at this time
@@ -36202,6 +37359,7 @@ enum NetworkConnectionFlags {
 	, CF_STATEFLAGS      = 0x1000 | 0x2000 | 0x4000
 	//, CF_WANTS_GLOBAL_LOCK = 0x10000000
 	, CF_PROCESSING      = 0x20000000
+	, CF_WRITEREADY	 = 0x00200000
 };
 #ifdef __cplusplus
 #  ifndef DEFINE_ENUM_FLAG_OPERATORS
@@ -36264,6 +37422,63 @@ struct peer_thread_info
 		BIT_FIELD bBuildingList : 1;
 	} flags;
 };
+typedef struct {
+  int verbose_mode;
+  int verify_depth;
+  int always_continue;
+} verify_mydata_t;
+#define verify_mydata_index 0
+#ifndef NO_SSL
+struct ssl_session {
+	PLIST hosts;
+	SSL_CTX        *ctx;
+	struct internalCert* cert;
+	LOGICAL ignoreVerification;
+	LOGICAL firstPacket;
+	LOGICAL noHost;
+	LOGICAL closed;
+	BIO *rbio;
+	BIO *wbio;
+	//EVP_PKEY *privkey;
+ // sockets being accepted so we can find the proper SSL*
+	PLIST          accepting;
+  // accepted client's hostname request (NULL if none)
+	TEXTSTR	       hostname;
+ // protocol select from TLS
+	PLIST          protocols;
+	SSL*           ssl;
+ // CF_CPPREAD
+	uint32_t       dwOriginalFlags;
+	cppReadComplete  recv_callback;
+	cppWriteComplete  send_callback;
+	uintptr_t	 psvSendRecv;
+	cReadComplete  user_read;
+	cppReadComplete  cpp_user_read;
+	uintptr_t psvRead;
+	cNotifyCallback user_connected;
+	cppNotifyCallback cpp_user_connected;
+	// ssl uses C callbacks which get socket, and can save psvConnect in original socket.
+	cCloseCallback user_close;
+	cppCloseCallback cpp_user_close;
+	// ssl uses C callbacks which get socket, and can save psvClose in original socket.
+	cErrorCallback errorCallback;
+	uintptr_t psvErrorCallback;
+	uint8_t *obuffer;
+	size_t obuflen;
+	uint8_t *ibuffer;
+	size_t ibuflen;
+	uint8_t *dbuffer;
+	size_t dbuflen;
+	CRITICALSECTION csReadWrite;
+	verify_mydata_t verify_data;
+	uint32_t inUse;
+	uint32_t deleteInUse;
+ // for the rare case that we only have session and no socket.
+	PCLIENT pc;
+	//CRITICALSECTION csReadWrite;
+	//CRITICALSECTION csWrite;
+};
+#endif
 struct NetworkClient
 {
   //Dest Address
@@ -36272,8 +37487,8 @@ struct NetworkClient
 	SOCKADDR *saSource;
  // use this for UDP recvfrom
 	SOCKADDR *saLastClient;
-	uint8_t     hwClient[6];
-	uint8_t     hwSource[6];
+	//uint8_t     hwClient[6];
+	//uint8_t     hwSource[6];
 	//  ServeUDP( "SourceIP", SourcePort );
 	//		 saSource w/ no Dest - read is a connect...
 	//  ConnectUDP( "DestIP", DestPort );
@@ -36286,8 +37501,12 @@ struct NetworkClient
  // okay keep both...
 	SOCKET      SocketBroadcast;
 	struct interfaceAddress* interfaceAddress;
+	#ifdef MSVC
+	[Flags]
+	#endif
+/*enum NetworkConnectionFlags*/
  // CF_
-	enum NetworkConnectionFlags dwFlags;
+	volatile int dwFlags;
 	uintptr_t        *lpUserData;
 	union {
  // new incoming client.
@@ -36336,13 +37555,15 @@ struct NetworkClient
  // current incoming buffer
 	PendingBuffer RecvPending, FirstWritePending;
  // outgoing buffers
-	PendingBuffer *lpFirstPending,*lpLastPending;
+	PendingBuffer *volatile lpFirstPending,*volatile lpLastPending;
  // GetTickCount() of last event...
 	uint32_t    LastEvent;
 	DeclareLink( struct NetworkClient );
- // listeners opened with port only have two connections, one IPV4 one IPV6
+ // server this listen socket came from - because connect callback has to be delayed until after handshake of TLS.
+	PCLIENT pcServer;
+ // listeners opened(was deprecated since most connections to v4 can be seen on v6) with port only have two connections, one IPV4 one IPV6
 	PCLIENT pcOther;
-	struct network_client_flags {
+	volatile struct network_client_flags {
 		BIT_FIELD bAddedToEvents : 1;
 		BIT_FIELD bRemoveFromEvents : 1;
 		BIT_FIELD bSecure : 1;
@@ -36353,13 +37574,18 @@ struct NetworkClient
 		BIT_FIELD bWriteOnUnlock : 1;
  // has work outstanding; wait for close until release
 		BIT_FIELD bInUse : 1;
+		BIT_FIELD bAggregateOutput : 1;
 	} flags;
+	PTHREAD wakeOnUnlock;
+	volatile uint32_t writeTimer;
  // we have the ability to save outstatnding UID locks...
 	PLIST psvInUse;
 	// this is set to what the thread that's waiting for this event is.
 	struct peer_thread_info * volatile this_thread;
-	int tcp_delay_count;
+	//int tcp_delay_count;
+#ifndef NO_SSL
 	struct ssl_session *ssl_session;
+#endif
 };
 typedef struct NetworkClient CLIENT;
 #ifdef MAIN_PROGRAM
@@ -36375,6 +37601,9 @@ typedef struct client_slab_tag {
 	CLIENT client[1];
 } CLIENT_SLAB, *PCLIENT_SLAB;
 // global network data goes here...
+#if !defined( MAIN_PROGRAM ) && defined( __STATIC_GLOBALS__ )
+extern
+#endif
 struct network_global_data{
 	uint32_t     nMaxClients;
      // number of longs.
@@ -36384,7 +37613,7 @@ struct network_global_data{
 	LOGICAL bLog;
 	LOGICAL bQuit;
  // list of all threads - needed because of limit of 64 sockets per multiplewait
-	volatile PLIST   pThreads;
+	PLIST   pThreads;
 	PCLIENT AvailableClients;
 	PCLIENT ActiveClients;
 	PCLIENT ClosedClients;
@@ -36426,6 +37655,7 @@ struct network_global_data{
  // how many peer threads do we have
 	int nPeers;
 	struct peer_thread_info *root_thread;
+	int lastAddressError;
 #if !defined( USE_WSA_EVENTS ) && defined( WIN32 )
 	WNDCLASS wc;
 #endif
@@ -36435,7 +37665,7 @@ struct network_global_data{
 #endif
 ;
 LOCATION struct network_global_data *global_network_data
-#ifdef __STATIC_GLOBALS__
+#if defined( __STATIC_GLOBALS__ ) && defined( MAIN_PROGRAM )
    = &global_network_data__;
 #endif
  // aka 'globalNetworkData'
@@ -36469,8 +37699,6 @@ void InternalRemoveClientExx(PCLIENT lpClient, LOGICAL bBlockNofity, LOGICAL bLi
 #define InternalRemoveClientEx(c,b,l) InternalRemoveClientExx(c,b,l DBG_SRC)
 #define InternalRemoveClient(c) InternalRemoveClientEx(c, FALSE, FALSE )
 struct peer_thread_info *IsNetworkThread( void );
-SOCKADDR *AllocAddrEx( DBG_VOIDPASS );
-#define AllocAddr() AllocAddrEx( DBG_VOIDSRC )
 PCLIENT AddActive( PCLIENT pClient );
 void RemoveThreadEvent( PCLIENT pc );
 void AddThreadEvent( PCLIENT pc, int broadcast );
@@ -36483,6 +37711,7 @@ int TCPWriteEx( PCLIENT pc DBG_PASS );
 #define TCPWrite(pc) TCPWriteEx(pc DBG_SRC)
 int FinishPendingRead( PCLIENT lpClient DBG_PASS );
 LOGICAL TCPDrainRead( PCLIENT pClient );
+void clearPending( PCLIENT pc );
 _TCP_NAMESPACE_END
 //----------------------------
 // System Handling Event Interface
@@ -36492,6 +37721,7 @@ void CPROC NetworkPauseTimer( uintptr_t psv );
 int CPROC ProcessNetworkMessages( struct peer_thread_info* thread, uintptr_t unused );
 uintptr_t CPROC NetworkThreadProc( PTHREAD thread );
 int CPROC IdleProcessNetworkMessages( uintptr_t quick_check );
+char *NetworkExpandFlags( PCLIENT pc );
 //----------------------------
 // ssl_close - redirected removeClient from network..
 void ssl_CloseSession( PCLIENT pc );
@@ -36582,7 +37812,6 @@ __END_DECLS
 #include <mingw/tchar.h>
 #else
 #endif
-#include <wincrypt.h>
 #include <iphlpapi.h>
 #endif
 SACK_NETWORK_NAMESPACE
@@ -36597,8 +37826,8 @@ PRELOAD( InitNetworkGlobalOptions )
 		globalNetworkData.flags.bShortLogReceivedData = SACK_GetProfileIntEx( "SACK", "Network/Log Network Received Data(64 byte max)", 0, TRUE );
 		globalNetworkData.flags.bLogReceivedData = SACK_GetProfileIntEx( "SACK", "Network/Log Network Received Data", 0, TRUE );
 		globalNetworkData.flags.bLogSentData = SACK_GetProfileIntEx( "SACK", "Network/Log Network Sent Data", globalNetworkData.flags.bLogReceivedData, TRUE );
-#  ifdef LOG_NOTICES
-		globalNetworkData.flags.bLogNotices = SACK_GetProfileIntEx( "SACK", "Network/Log Network Notifications", 0, TRUE );
+#  if defined( LOG_NOTICES ) || defined( LOG_WRITE_NOTICES )
+		globalNetworkData.flags.bLogNotices = 1 || SACK_GetProfileIntEx( "SACK", "Network/Log Network Notifications", 0, TRUE );
 #  endif
 		globalNetworkData.dwReadTimeout = SACK_GetProfileIntEx( "SACK", "Network/Read wait timeout", 5000, TRUE );
 		globalNetworkData.dwConnectTimeout = SACK_GetProfileIntEx( "SACK", "Network/Connect timeout", 10000, TRUE );
@@ -36673,6 +37902,42 @@ void DumpLists( void )
 }
 #endif
 //----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
+static char flag_buf[16][1024];
+static int flag_bufidx;
+#define NETWORK_FLAG_DEF(a,b)		   if (pc->dwFlags&b) { if( f ) { out[0] = ' '; out++; f = 0; } strcpy( out, #b ); out += sizeof(#b)-1; f = 1; }
+char *NetworkExpandFlags( PCLIENT pc ) {
+	char *buf = flag_buf[flag_bufidx++];
+	char *out = buf;
+	uint32_t f = 0;
+	if( flag_bufidx >= 16 ) flag_bufidx = 0;
+		NETWORK_FLAG_DEF( 0, CF_UDP )
+		NETWORK_FLAG_DEF( CF_UDP, CF_TCP )
+		NETWORK_FLAG_DEF( CF_TCP, CF_LISTEN )
+		NETWORK_FLAG_DEF( CF_LISTEN, CF_WRITEPENDING )
+		NETWORK_FLAG_DEF( CF_WRITEPENDING, CF_READPENDING )
+		NETWORK_FLAG_DEF( CF_READPENDING, CF_READREADY )
+		NETWORK_FLAG_DEF( CF_READREADY, CF_READWAITING )
+		NETWORK_FLAG_DEF( CF_READWAITING, CF_CONNECTED )
+		NETWORK_FLAG_DEF( CF_CONNECTED, CF_CONNECTERROR )
+		NETWORK_FLAG_DEF( CF_CONNECTERROR, CF_CONNECTING )
+		NETWORK_FLAG_DEF( CF_CONNECTING, CF_CONNECT_WAITING )
+		NETWORK_FLAG_DEF( CF_CONNECT_WAITING, CF_CONNECT_CLOSED )
+		NETWORK_FLAG_DEF( CF_CONNECT_CLOSED, CF_TOCLOSE )
+		NETWORK_FLAG_DEF( CF_TOCLOSE, CF_WANTCLOSE )
+		NETWORK_FLAG_DEF( CF_WANTCLOSE, CF_CLOSING )
+		NETWORK_FLAG_DEF( CF_CLOSING, CF_DRAINING )
+		NETWORK_FLAG_DEF( CF_DRAINING, CF_CLOSED )
+		NETWORK_FLAG_DEF( CF_CLOSED, CF_ACTIVE )
+		NETWORK_FLAG_DEF( CF_ACTIVE, CF_AVAILABLE )
+		NETWORK_FLAG_DEF( CF_AVAILABLE, CF_CPPCONNECT )
+		NETWORK_FLAG_DEF( CF_CPPCONNECT, CF_CPPREAD )
+		NETWORK_FLAG_DEF( CF_CPPREAD, CF_CPPCLOSE )
+		NETWORK_FLAG_DEF( CF_CPPCLOSE, CF_CPPWRITE )
+		NETWORK_FLAG_DEF( CF_CPPWRITE, CF_PROCESSING )
+		NETWORK_FLAG_DEF( CF_PROCESSING, CF_WRITEREADY )
+	return buf;
+}
 //----------------------------------------------------------------------------
 PCLIENT GrabClientEx( PCLIENT pClient DBG_PASS )
 #define GrabClient(pc) GrabClientEx( pc DBG_SRC )
@@ -36766,15 +38031,19 @@ static void ClearClient( PCLIENT pc DBG_PASS )
 	CRITICALSECTION csr;
 	CRITICALSECTION csw;
 	// keep the closing flag until it's really been closed. (getfreeclient will try to nab it)
-	enum NetworkConnectionFlags  dwFlags = pc->dwFlags & (CF_STATEFLAGS | CF_CLOSING | CF_CONNECT_WAITING | CF_CONNECT_CLOSED);
+ /*enum NetworkConnectionFlags*/
+	int  dwFlags = pc->dwFlags & (CF_STATEFLAGS | CF_CLOSING | CF_CONNECT_WAITING | CF_CONNECT_CLOSED);
 #ifdef VERBOSE_DEBUG
 	lprintf( "CLEAR CLIENT!" );
 #endif
 	me = pc->me;
 	next = pc->next;
+	// these states are saved to be restored.
 	pbtemp = pc->lpUserData;
 	csr = pc->csLockRead;
 	csw = pc->csLockWrite;
+	DeleteListEx( &pc->psvInUse DBG_SRC );
+	// these are memset to 0 afterward...
 	ReleaseAddress( pc->saClient );
 	ReleaseAddress( pc->saSource );
 #if _WIN32
@@ -36784,14 +38053,9 @@ static void ClearClient( PCLIENT pc DBG_PASS )
 		WSACloseEvent( pc->event );
 	}
 #endif
-	// sets socket to 0 - so it's not quite == INVALID_SOCKET
-#ifdef LOG_NETWORK_EVENT_THREAD
-	if( globalNetworkData.flags.bLogNotices )
-		_lprintf(DBG_RELAY)( "Clear Client %p  %08x   %08x", pc, pc->dwFlags, dwFlags );
-#endif
  // clear all information...
 	MemSet( pc, 0, sizeof( CLIENT ) );
-	// Socket is now 0; which for linux is a valid handle... which is what I get for events...
+	pc->Socket = INVALID_SOCKET;
 	pc->csLockRead = csr;
 	pc->csLockWrite = csw;
 	pc->lpUserData = pbtemp;
@@ -36802,31 +38066,8 @@ static void ClearClient( PCLIENT pc DBG_PASS )
 	pc->dwFlags = dwFlags;
 }
 //----------------------------------------------------------------------------
-#if 0
-static void NetworkGlobalLock( DBG_VOIDPASS ) {
-	LOGICAL locked = FALSE;
-	do {
-#ifdef USE_NATIVE_CRITICAL_SECTION
-		if( TryEnterCriticalSection( &globalNetworkData.csNetwork ) < 1 )
-#else
-		if( EnterCriticalSecNoWaitEx( &globalNetworkData.csNetwork, NULL DBG_RELAY ) < 1 )
-#endif
-		{
-#ifdef LOG_NETWORK_LOCKING
-			_lprintf( DBG_RELAY )("Failed enter global? %lld", globalNetworkData.csNetwork.dwThreadID );
-#endif
-			Relinquish();
-		}
-		else
-			locked = TRUE;
-#ifdef LOG_NETWORK_LOCKING
-		_lprintf( DBG_RELAY )("Got global lock");
-#endif
-	} while( !locked );
-}
-#endif
+// used in network_linux during close...
 LOGICAL TryNetworkGlobalLock( DBG_VOIDPASS ) {
-	LOGICAL locked = FALSE;
 #ifdef USE_NATIVE_CRITICAL_SECTION
 	if( TryEnterCriticalSection( &globalNetworkData.csNetwork ) < 1 )
 #else
@@ -36838,8 +38079,6 @@ LOGICAL TryNetworkGlobalLock( DBG_VOIDPASS ) {
 #endif
 		return FALSE;
 	}
-	else
-		locked = TRUE;
 #ifdef LOG_NETWORK_LOCKING
 	_lprintf( DBG_RELAY )("Got global lock");
 #endif
@@ -36868,11 +38107,12 @@ void TerminateClosedClientEx( PCLIENT pc DBG_PASS )
 #ifdef VERBOSE_DEBUG
 		lprintf( "REMOVED EVENT...." );
 #endif
+		clearPending( pc );
 		//lprintf( "Terminating closed client..." );
 		if( IsValid( pc->Socket ) )
 		{
 #ifdef VERBOSE_DEBUG
-			lprintf( "close soekcet." );
+			lprintf( "close socket: %p", pc );
 #endif
 #if !defined( SHUT_WR ) && defined( _WIN32 )
 #  define SHUT_WR SD_SEND
@@ -36883,6 +38123,7 @@ void TerminateClosedClientEx( PCLIENT pc DBG_PASS )
 #endif
 			//lprintf( "Win32:ShutdownWR+closesocket %p", pc );
 			closesocket( pc->Socket );
+			pc->Socket = INVALID_SOCKET;
 			while( pc->lpFirstPending )
 			{
 				lpNext = pc->lpFirstPending -> lpNext;
@@ -36926,6 +38167,7 @@ void SetNetworkWriteComplete( PCLIENT pClient
 	if( pClient && IsValid( pClient->Socket ) )
 	{
 		pClient->write.WriteComplete = WriteComplete;
+		pClient->dwFlags &= ~CF_CPPWRITE;
 	}
 }
 //----------------------------------------------------------------------------
@@ -36944,6 +38186,13 @@ void SetCPPNetworkWriteComplete( PCLIENT pClient
 void SetNetworkCloseCallback( PCLIENT pClient
                             , cCloseCallback CloseCallback )
 {
+#ifndef NO_SSL
+	if( pClient->ssl_session ) {
+		pClient->ssl_session->user_close = CloseCallback;
+		pClient->ssl_session->dwOriginalFlags &= ~CF_CPPCLOSE;
+		return;
+	}
+#endif
 	if( pClient && IsValid(pClient->Socket) )
 	{
 		pClient->close.CloseCallback = CloseCallback;
@@ -36954,6 +38203,14 @@ void SetCPPNetworkCloseCallback( PCLIENT pClient
                                , cppCloseCallback CloseCallback
                                , uintptr_t psv)
 {
+#ifndef NO_SSL
+	if( pClient->ssl_session ) {
+		pClient->ssl_session->cpp_user_close = CloseCallback;
+		pClient->psvClose = psv;
+		pClient->ssl_session->dwOriginalFlags |= CF_CPPCLOSE;
+		return;
+	}
+#endif
 	if( pClient && IsValid(pClient->Socket) )
 	{
 		pClient->close.CPPCloseCallback = CloseCallback;
@@ -36965,9 +38222,22 @@ void SetCPPNetworkCloseCallback( PCLIENT pClient
 void SetNetworkReadComplete( PCLIENT pClient
                            , cReadComplete pReadComplete )
 {
+#ifndef NO_SSL
+	if( pClient->ssl_session ) {
+		pClient->ssl_session->user_read = pReadComplete;
+		pClient->ssl_session->dwOriginalFlags &= ~CF_CPPREAD;
+		return;
+	}
+#endif
 	if( pClient && IsValid(pClient->Socket) )
 	{
 		pClient->read.ReadComplete = pReadComplete;
+	}
+	if( !( pClient->RecvPending.buffer.p ) ) {
+ // may be... at least we can fail sooner...
+		pClient->dwFlags |= CF_READREADY;
+		if( pClient->read.ReadComplete )
+			pClient->read.ReadComplete( pClient, NULL, 0 );
 	}
 }
 //----------------------------------------------------------------------------
@@ -36975,22 +38245,39 @@ void SetCPPNetworkReadComplete( PCLIENT pClient
                               , cppReadComplete pReadComplete
                               , uintptr_t psv)
 {
+#ifndef NO_SSL
+	if( pClient->ssl_session ) {
+		//lprintf( "is an ssl connection - set new cpp_user_read %p %p", pClient->ssl_session->cpp_user_read, pClient->ssl_session->user_read);
+		pClient->ssl_session->cpp_user_read = pReadComplete;
+		pClient->ssl_session->psvRead = psv;
+		//lprintf( "maybe psv Read needs to be reset? %p %p", pClient->psvRead, psv );
+		pClient->psvRead = psv;
+		pClient->ssl_session->dwOriginalFlags |= CF_CPPREAD;
+		//lprintf( "Session original flags set? %x", pClient->ssl_session->dwOriginalFlags);
+		return;
+	}
+#endif
 	if( pClient && IsValid(pClient->Socket) )
 	{
 		pClient->read.CPPReadComplete = pReadComplete;
 		pClient->psvRead = psv;
 		pClient->dwFlags |= CF_CPPREAD;
 	}
-}
-//----------------------------------------------------------------------------
-void SetNetworkErrorCallback( PCLIENT pc, cErrorCallback callback, uintptr_t psvUser ) {
-	if( pc ) {
-		pc->errorCallback = callback;
-		pc->psvErrorCallback = psvUser;
+	if( !( pClient->RecvPending.buffer.p ) ) {
+ // may be... at least we can fail sooner...
+		pClient->dwFlags |= CF_READREADY;
+		if( pClient->read.ReadComplete )
+			pClient->read.CPPReadComplete( pClient->psvRead, NULL, 0 );
 	}
 }
 //----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
 void TriggerNetworkErrorCallback( PCLIENT pc, enum SackNetworkErrorIdentifier error ) {
+	/*
+	if( pc && pc->ssl_session && pc->ssl_session->errorCallback )
+		pc->ssl_session->errorCallback( pc->ssl_session->psvErrorCallback, pc, error );
+	else
+	*/
 	if( pc && pc->errorCallback )
 		pc->errorCallback( pc->psvErrorCallback, pc, error );
 }
@@ -37252,12 +38539,11 @@ static void AddClients( void ) {
 static void ReallocClients( uint32_t wClients, int nUserData )
 {
 	// protect all structures.
-	EnterCriticalSec( &globalNetworkData.csNetwork );
 	if( !wClients )
   // default 32 clients per slab...
 		wClients = 32;
 	if( !nUserData )
-  // defualt to 4 pointer words per socket; most applications only use 1.
+  // default to 4 pointer words per socket; most applications only use 1.
 		nUserData = 4;
 	// keep the max of specified data..
 	if( nUserData < globalNetworkData.nUserData )
@@ -37267,32 +38553,35 @@ static void ReallocClients( uint32_t wClients, int nUserData )
 		wClients = MAX_NETCLIENTS;
 	// if the client slab size increases, new slabs will be the new size; old slabs will still be the old size.
  // have to reallocate the user data for all sockets
-	if( nUserData > globalNetworkData.nUserData )
+	if( wClients > MAX_NETCLIENTS || nUserData > globalNetworkData.nUserData )
 	{
 		INDEX idx;
 		PCLIENT_SLAB slab;
 		uint32_t n;
+		EnterCriticalSec( &globalNetworkData.csNetwork );
 		// for all existing client slabs...
-		LIST_FORALL( globalNetworkData.ClientSlabs, idx, PCLIENT_SLAB, slab )
-		{
-			uintptr_t* pUserData;
-// slab->pUserData;
-			pUserData = NewArray( uintptr_t, nUserData * sizeof( uintptr_t ) * slab->count );
-			for( n = 0; n < slab->count; n++ )
+ // have to reallocate the user data for all sockets
+		if( nUserData > globalNetworkData.nUserData )
+			LIST_FORALL( globalNetworkData.ClientSlabs, idx, PCLIENT_SLAB, slab )
 			{
-				if( slab->client[n].lpUserData )
-					MemCpy( (char*)pUserData + (n * (nUserData * sizeof( uintptr_t )))
-					      , slab->client[n].lpUserData
-					      , globalNetworkData.nUserData * sizeof( uintptr_t ) );
-				slab->client[n].lpUserData = pUserData + (n * nUserData);
+				uintptr_t* pUserData;
+// slab->pUserData;
+				pUserData = NewArray( uintptr_t, nUserData * sizeof( uintptr_t ) * slab->count );
+				for( n = 0; n < slab->count; n++ )
+				{
+					if( slab->client[n].lpUserData )
+						MemCpy( (char*)pUserData + (n * (nUserData * sizeof( uintptr_t )))
+							, slab->client[n].lpUserData
+							, globalNetworkData.nUserData * sizeof( uintptr_t ) );
+					slab->client[n].lpUserData = pUserData + (n * nUserData);
+				}
+				Deallocate( uintptr_t*, slab->pUserData );
+				slab->pUserData = pUserData;
 			}
-			Deallocate( uintptr_t*, slab->pUserData );
-			slab->pUserData = pUserData;
-		}
+		MAX_NETCLIENTS = wClients;
+		globalNetworkData.nUserData = nUserData;
+		LeaveCriticalSec( &globalNetworkData.csNetwork );
 	}
-	MAX_NETCLIENTS = wClients;
-	globalNetworkData.nUserData = nUserData;
-	LeaveCriticalSec( &globalNetworkData.csNetwork );
 }
 #ifdef __LINUX__
 NETWORK_PROC( LOGICAL, NetworkWait )(POINTER unused,uint32_t wClients,int wUserData)
@@ -37413,8 +38702,7 @@ get_client:
 //----------------------------------------------------------------------------
 NETWORK_PROC( void, SetNetworkLong )(PCLIENT lpClient, int nLong, uintptr_t dwValue)
 {
-	if( lpClient && ( nLong < globalNetworkData.nUserData ) )
-	{
+	if( lpClient && ( nLong < globalNetworkData.nUserData ) ) {
 		lpClient->lpUserData[nLong] = dwValue;
 	}
 	return;
@@ -37423,9 +38711,7 @@ NETWORK_PROC( void, SetNetworkLong )(PCLIENT lpClient, int nLong, uintptr_t dwVa
 NETWORK_PROC( uintptr_t, GetNetworkLong )(PCLIENT lpClient,int nLong)
 {
 	if( !lpClient )
-	{
 		return (uintptr_t)-1;
-	}
 	if( nLong < 0 )
 	{
 		switch( nLong )
@@ -37462,9 +38748,7 @@ NETWORK_PROC( uintptr_t, GetNetworkLong )(PCLIENT lpClient,int nLong)
 		}
 	}
 	else if( nLong < globalNetworkData.nUserData )
-	{
 		return lpClient->lpUserData[nLong];
-	}
    //spv:980303
 	return (uintptr_t)-1;
 }
@@ -37472,54 +38756,75 @@ NETWORK_PROC( uintptr_t, GetNetworkLong )(PCLIENT lpClient,int nLong)
 //----------------------------------------------------------------------------
 NETWORK_PROC( PCLIENT, NetworkLockEx)( PCLIENT lpClient, int readWrite DBG_PASS )
 {
+	int tries = 0;
 	if( lpClient )
 	{
+		//uint64_t start = timeGetTime64ns();
 		//if( lpClient->flags.bWriteOnUnlock ) {
 		//	lprintf( "Still need to do that write..." );
 		//}
 		//lpClient->dwFlags |= CF_WANTS_GLOBAL_LOCK;
-		//_lprintf(DBG_RELAY)( "Lock %p", lpClient );
+		//_lprintf(DBG_RELAY)( "Lock %p %d", lpClient, readWrite );
+		//fprintf( stderr, DBG_FILELINEFMT "Lock %p %d\n" DBG_RELAY, lpClient, readWrite );
+#ifdef LOCK_GLOBAL_WHEN_LOCKING_CLIENT
 #ifdef USE_NATIVE_CRITICAL_SECTION
-		if( EnterCriticalSecNoWait( &globalNetworkData.csNetwork, NULL ) < 1 )
+		while( EnterCriticalSecNoWait( &globalNetworkData.csNetwork, NULL ) < 1 )
 #else
-		if( EnterCriticalSecNoWaitEx( &globalNetworkData.csNetwork, NULL DBG_RELAY ) < 1 )
+		while( EnterCriticalSecNoWaitEx( &globalNetworkData.csNetwork, NULL DBG_RELAY ) < 1 )
 #endif
 		{
 			//lpClient->dwFlags &= ~CF_WANTS_GLOBAL_LOCK;
-#ifdef LOG_NETWORK_LOCKING
-			_lprintf(DBG_RELAY)( "Failed enter global? %llx", globalNetworkData.csNetwork.dwThreadID  );
-#endif
-			Relinquish();
-			return NULL;
+			if( ++tries > 9 ) {
+				//uint64_t wait = timeGetTime64ns() - start;
+				//lprintf( "A wait for global lock... %lld", wait );
+//#ifdef LOG_NETWORK_LOCKING
+				_lprintf(DBG_RELAY)( "Failed enter global? %llx", globalNetworkData.csNetwork.dwThreadID  );
+//#endif
+				return NULL;
+			} else {
+				Relinquish();
+			}
 			//DebugBreak();
 		}
 #ifdef LOG_NETWORK_LOCKING
 		_lprintf( DBG_RELAY )( "Got global lock %p %d", lpClient, readWrite );
 #endif
+#endif
 		//lpClient->dwFlags &= ~CF_WANTS_GLOBAL_LOCK;
+		tries = 0;
 #ifdef USE_NATIVE_CRITICAL_SECTION
-		if( !EnterCriticalSecNoWait( (readWrite? &lpClient->csLockRead:&lpClient->csLockWrite), NULL ) )
+		while( !EnterCriticalSecNoWait( (readWrite? &lpClient->csLockRead:&lpClient->csLockWrite), NULL ) )
 #else
-		if( EnterCriticalSecNoWaitEx( ( readWrite ?&lpClient->csLockRead : &lpClient->csLockWrite ), NULL DBG_RELAY ) < 1 )
+		while( EnterCriticalSecNoWaitEx( ( readWrite ?&lpClient->csLockRead : &lpClient->csLockWrite ), NULL DBG_RELAY ) < 1 )
 #endif
 		{
 			// unlock the global section for a moment..
 			// client may be requiring both local and global locks (already has local lock)
+			if( ++tries < 10 ) {
+				Relinquish();
+				continue;
+			}
+			//uint64_t wait = timeGetTime64ns() - start;
+			//lprintf( "A wait for client lock... %lld", wait );
+			//fprintf( stderr, DBG_FILELINEFMT "Failed Lock:%p %d\n" DBG_RELAY, lpClient, readWrite );
+#ifdef LOCK_GLOBAL_WHEN_LOCKING_CLIENT
 #ifdef USE_NATIVE_CRITICAL_SECTION
 			LeaveCriticalSec( &globalNetworkData.csNetwork);
 #else
 			LeaveCriticalSecEx( &globalNetworkData.csNetwork  DBG_RELAY);
 #endif
+#endif
 			//lprintf( "Idle... socket lock failed, had global though..." );
-			Relinquish();
+			//Relinquish();
 			return NULL;
 			//goto start_lock;
 		}
-		//EnterCriticalSec( readWrite ? &lpClient->csLockRead : &lpClient->csLockWrite );
+#ifdef LOCK_GLOBAL_WHEN_LOCKING_CLIENT
 #ifdef USE_NATIVE_CRITICAL_SECTION
 		LeaveCriticalSec( &globalNetworkData.csNetwork );
 #else
 		LeaveCriticalSecEx( &globalNetworkData.csNetwork  DBG_RELAY);
+#endif
 #endif
 		if( !(lpClient->dwFlags & (CF_ACTIVE|CF_CLOSED) ) )
 		{
@@ -37529,32 +38834,36 @@ NETWORK_PROC( PCLIENT, NetworkLockEx)( PCLIENT lpClient, int readWrite DBG_PASS 
 #else
 			LeaveCriticalSecEx( readWrite?&lpClient->csLockRead:&lpClient->csLockWrite DBG_RELAY );
 #endif
-#ifdef LOG_NETWORK_LOCKING
+//#ifdef LOG_NETWORK_LOCKING
 			_lprintf( DBG_RELAY )( "Failed lock: %p  %08x %08x inactive, cannot lock.", lpClient, lpClient->dwFlags, CF_ACTIVE );
-#endif
+//#endif
 			// this client is not available for client use!
 			return NULL;
 		}
 	}
 #ifdef LOG_NETWORK_LOCKING
-		_lprintf( DBG_RELAY )( "Got private lock %p %d", lpClient, readWrite );
+	_lprintf( DBG_RELAY )( "Got private lock %p %d", lpClient, readWrite );
 #endif
 	return lpClient;
 }
 //----------------------------------------------------------------------------
 NETWORK_PROC( void, NetworkUnlockEx)( PCLIENT lpClient, int readWrite DBG_PASS )
 {
-	//_lprintf(DBG_RELAY)( "Unlock %p", lpClient );
+	//_lprintf(DBG_RELAY)( "Unlock %p %d", lpClient, readWrite );
+	//fprintf( stderr, DBG_FILELINEFMT "Unlock %p %d\n" DBG_RELAY, lpClient, readWrite );
+	int const inWakeOnUnlock = readWrite & 0x10;
+	readWrite &= 3;
 	// simple unlock.
 	if( lpClient )
 	{
  // is write and not read
 		if( !readWrite )
 		{
+			//lprintf( "Unlocking write... %p (WOU?)%d", lpClient, lpClient->flags.bWriteOnUnlock );
 			if( lpClient->flags.bWriteOnUnlock ) {
 				lpClient->flags.bWriteOnUnlock = 0;
 				//lprintf( "Caught unlock..." );
-				TCPWrite( lpClient );
+				TCPWriteEx( lpClient DBG_RELAY );
 			}
 		}
 #ifdef LOG_NETWORK_LOCKING
@@ -37565,18 +38874,20 @@ NETWORK_PROC( void, NetworkUnlockEx)( PCLIENT lpClient, int readWrite DBG_PASS )
 #else
 		LeaveCriticalSecEx( readWrite?&lpClient->csLockRead:&lpClient->csLockWrite DBG_RELAY );
 #endif
+ // is write and not read
+		if( !readWrite && !inWakeOnUnlock )
+		{
+			PTHREAD wakeOnUnlock;
+			if( wakeOnUnlock = lpClient->wakeOnUnlock ){
+#ifdef LOG_PENDING_WRITES
+				_lprintf(DBG_RELAY)( "Wake on Unlock was set");
+#endif
+				lpClient->wakeOnUnlock = NULL;
+				WakeThread( wakeOnUnlock );
+				//lprintf( "Woke writer..");
+			}
+		}
 	}
-}
-//----------------------------------------------------------------------------
-#undef NetworkLock
-#undef NetworkUnlock
-NETWORK_PROC( PCLIENT, NetworkLock )(PCLIENT lpClient, int readWrite)
-{
-	return NetworkLockEx( lpClient, readWrite DBG_SRC );
-}
-NETWORK_PROC( void, NetworkUnlock )(PCLIENT lpClient, int readWrite)
-{
-	NetworkUnlockEx( lpClient, readWrite DBG_SRC );
 }
 //----------------------------------------------------------------------------
 void InternalRemoveClientExx(PCLIENT lpClient, LOGICAL bBlockNotify, LOGICAL bLinger DBG_PASS )
@@ -37664,9 +38975,9 @@ void InternalRemoveClientExx(PCLIENT lpClient, LOGICAL bBlockNotify, LOGICAL bLi
 			return;
 		}
 		if( bLinger && ( lpClient->lpFirstPending || ( lpClient->dwFlags & CF_WRITEPENDING ) ) ) {
-//#ifdef LOG_DEBUG_CLOSING
-			lprintf( "GRACEFUL CLOSE WHILE WAITING FOR WRITE TO FINISH..." );
-//#endif
+#ifdef LOG_DEBUG_CLOSING
+			lprintf( "GRACEFUL CLOSE WHILE WAITING FOR WRITE TO FINISH... %p", lpClient );
+#endif
 			lpClient->dwFlags |= CF_TOCLOSE;
 			return;
 			// continue on; otherwise the close event gets lost...
@@ -37716,9 +39027,10 @@ void InternalRemoveClientExx(PCLIENT lpClient, LOGICAL bBlockNotify, LOGICAL bLi
 			if( !(lpClient->dwFlags & CF_CLOSING) )
 			{
 #ifdef LOG_DEBUG_CLOSING
-				lprintf( "Marked closing first, and dispatching callback?" );
+				lprintf( "Marked closing first, and dispatching callback? %p", lpClient );
 #endif
 				lpClient->dwFlags |= CF_CLOSING;
+				LeaveCriticalSec( &globalNetworkData.csNetwork );
 				if( lpClient->close.CloseCallback )
 				{
 					// during thisi if it wants a lock... and the application
@@ -37733,6 +39045,7 @@ void InternalRemoveClientExx(PCLIENT lpClient, LOGICAL bBlockNotify, LOGICAL bLi
 				else
 					lprintf( "no close callback!? (or duplicate close?)" );
 #endif
+				EnterCriticalSec( &globalNetworkData.csNetwork );
 				// leave the flag closing set... we'll use that later
 				// to avoid the double-lock;
 				//lpClient->dwFlags &= ~CF_CLOSING;
@@ -37774,22 +39087,25 @@ void RemoveClientExx(PCLIENT lpClient, LOGICAL bBlockNotify, LOGICAL bLinger DBG
 #  define SHUT_WR SD_SEND
 #endif
 	if( !lpClient ) return;
+	//_lprintf(DBG_RELAY)( "RemoveClient: %p %d %d", lpClient, bBlockNotify, bLinger );
 	if( !( lpClient->dwFlags & CF_UDP )
-		&& ( lpClient->dwFlags & ( CF_CONNECTED ) ) ) {
+		&& ( lpClient->dwFlags & ( CF_CONNECTED ) )
+		&& !( lpClient->dwFlags & CF_CONNECTERROR ) ) {
 		// not linger
 		// OR  nothing to write allow shutdown.
 #ifndef NO_SSL
 		if( ssl_IsClientSecure( lpClient ) ) {
 			if( !ssl_IsClosed( lpClient ) ) {
 				// let client notify_close actually close this...
+				//lprintf( "secure client, not closed, just close session... (no shutdown?)");
 				ssl_CloseSession( lpClient );
 				return;
 			}
 		}
 #endif
-		if( !bLinger || !(lpClient->lpFirstPending || ( lpClient->dwFlags & CF_WRITEPENDING ) ) )
+		if( !bLinger || !(lpClient->lpFirstPending || ( lpClient->dwFlags & CF_WRITEPENDING ) ) ) {
 			shutdown( lpClient->Socket, SHUT_WR );
-		else {
+		} else {
 			lprintf( "linger and still pending write data..." );
 			lpClient->dwFlags |= CF_TOCLOSE;
 		}
@@ -38349,8 +39665,14 @@ int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t unu
 #endif
 									WakeThread( event_data->pc->pWaiting );
 								}
-								if( event_data->pc->connect.ThisConnected )
-									event_data->pc->connect.ThisConnected( event_data->pc, error );
+								event_data->pc->dwFlags |= CF_CONNECT_ISSUED;
+								if( event_data->pc->dwFlags & CF_CPPCONNECT ) {
+									if( event_data->pc->connect.CPPThisConnected )
+										event_data->pc->connect.CPPThisConnected( event_data->pc->psvConnect, error );
+								}else {
+									if( event_data->pc->connect.ThisConnected )
+										event_data->pc->connect.ThisConnected( event_data->pc, error );
+								}
 #ifdef LOG_NOTICES
 								if( globalNetworkData.flags.bLogNotices )
 									lprintf( "Connect error was: %d", error );
@@ -38597,7 +39919,6 @@ static void HandleEvent( PCLIENT pClient )
 			}
 			else
 			{
-				THREAD_ID prior = 0;
 #ifdef LOG_CLIENT_LISTS
 				lprintf( "client lists Ac:%p(%p(%d)) Av:%p(%p(%d)) Cl:%p(%p(%d))"
 						 , &globalNetworkData.ActiveClients, globalNetworkData.ActiveClients, globalNetworkData.ActiveClients?globalNetworkData.ActiveClients->Socket:0
@@ -38618,7 +39939,7 @@ static void HandleEvent( PCLIENT pClient )
 				{
 					{
 						uint16_t wError = networkEvents.iErrorCode[FD_CONNECT_BIT];
-#ifdef LOG_NOTICES
+#if defined( LOG_NOTICES ) || defined( LOG_WRITE_NOTICES )
 						if( globalNetworkData.flags.bLogNotices )
 							lprintf( "FD_CONNECT on %p", pClient );
 #endif
@@ -38626,7 +39947,7 @@ static void HandleEvent( PCLIENT pClient )
 							pClient->dwFlags |= CF_CONNECTED;
 						else
 						{
-#ifdef LOG_NOTICES
+#if defined( LOG_NOTICES ) || defined( LOG_WRITE_NOTICES )
 							if( globalNetworkData.flags.bLogNotices )
 								lprintf( "Connect error: %d", wError );
 #endif
@@ -38657,11 +39978,17 @@ static void HandleEvent( PCLIENT pClient )
 								{
 									lprintf( "getsockname errno = %d", errno );
 								}
+								SET_SOCKADDR_LENGTH( pClient->saSource
+										, pClient->saSource->sa_family == AF_INET
+												? IN_SOCKADDR_LENGTH
+												: IN6_SOCKADDR_LENGTH );
 							}
-#ifdef LOG_NOTICES
+#if defined( LOG_NOTICES ) || defined( LOG_WRITE_NOTICES )
 							if( globalNetworkData.flags.bLogNotices )
 								lprintf( "Post connect to application %p  error:%d", pClient, wError );
 #endif
+							// have to allow SSL to clear this... so set it before calling the connect callback.
+							pClient->dwFlags |= CF_CONNECT_ISSUED;
 							if( pClient->dwFlags & CF_CPPCONNECT )
 								pClient->connect.CPPThisConnected( pClient->psvConnect, wError );
 							else
@@ -38681,7 +40008,7 @@ static void HandleEvent( PCLIENT pClient )
 						}
 						if( pClient->pWaiting )
 							WakeThread( pClient->pWaiting );
-#ifdef LOG_NOTICES
+#if defined( LOG_NOTICES ) || defined( LOG_WRITE_NOTICES )
 						if( globalNetworkData.flags.bLogNotices )
 							lprintf( "FD_CONNECT Completed" );
 #endif
@@ -38699,9 +40026,9 @@ static void HandleEvent( PCLIENT pClient )
 						}
 						Relinquish();
 					}
-#ifdef LOG_NOTICES
-					//if( globalNetworkData.flags.bLogNotices )
-					//	lprintf( "FD_READ" );
+#if defined( LOG_NOTICES ) || defined( LOG_READ_NOTICES )
+					if( globalNetworkData.flags.bLogNotices )
+						lprintf( "FD_READ %p %s", pClient, NetworkExpandFlags( pClient ) );
 #endif
 					  if( ( pClient->dwFlags & CF_ACTIVE ) ) {
 #if 0 && !DrainSupportDeprecated
@@ -38714,6 +40041,7 @@ static void HandleEvent( PCLIENT pClient )
 						{
 							// got a network event, and won't get another until recv is called.
 							// mark that the socket has data, then the pend_read code will trigger the finishpendingread.
+							//lprintf( "FD_READ on %p (finishpendingread)", pClient );
 							if( FinishPendingRead( pClient DBG_SRC ) == 0 )
 							{
 								pClient->dwFlags |= CF_READREADY;
@@ -38739,25 +40067,36 @@ static void HandleEvent( PCLIENT pClient )
 						Relinquish();
 					}
 					if( pClient->dwFlags & CF_ACTIVE ) {
-#ifdef LOG_NOTICES
-						//if( globalNetworkData.flags.bLogNotices )
-						//	lprintf( "FD_Write" );
+#if defined( LOG_NOTICES ) || defined( LOG_WRITE_NOTICES )
+						if( globalNetworkData.flags.bLogNotices )
+							lprintf( "FD_Write %p", pClient );
 #endif
 						// returns true while it wrote or there is data to write
-						if( pClient->lpFirstPending )
+						if( pClient->lpFirstPending && !pClient->flags.bAggregateOutput && !pClient->writeTimer ) {
+#if defined( LOG_NOTICES ) || defined( LOG_WRITE_NOTICES )
+							lprintf( "TCPWrite(and pending first pending?) is ready on %p (no timer)", pClient );
+#endif
 							TCPWrite(pClient);
+						} else {
+							pClient->dwFlags |= CF_WRITEREADY;
+						}
 						if( !pClient->lpFirstPending ) {
 							if( pClient->dwFlags & CF_TOCLOSE )
 							{
 								pClient->dwFlags &= ~CF_TOCLOSE;
 								//lprintf( "Pending read failed - and wants to close." );
 								EnterCriticalSec( &globalNetworkData.csNetwork );
-								InternalRemoveClientEx( pClient, FALSE, TRUE );
+								// remote shutdown triggered this... and somehow this shouldn't be the same as a graceful close.
+								InternalRemoveClientEx( pClient, (pClient->dwFlags & CF_CONNECT_ISSUED)?FALSE:TRUE, TRUE );
 								TerminateClosedClient( pClient );
 								LeaveCriticalSec( &globalNetworkData.csNetwork );
 							}
 						}
 						NetworkUnlock( pClient, 0 );
+#if defined( LOG_NOTICES ) || defined( LOG_WRITE_NOTICES )
+						if( globalNetworkData.flags.bLogNotices )
+							lprintf( "FD_Write(done, to unlock) %p", pClient );
+#endif
 					}
 				}
 				if( networkEvents.lNetworkEvents & FD_CLOSE )
@@ -38864,8 +40203,13 @@ void RemoveThreadEvent( PCLIENT pc ) {
 		LIST_FORALL( thread->monitor_list, idx, PCLIENT, previous ) {
 			if( previous != pc )
 			{
-				AddLink( &newList, previous );
-				SetDataItem( &thread->event_list, c++, GetDataItem( &thread->event_list, idx ) );
+				POINTER p = GetDataItem( &thread->event_list, idx );
+				if( p ) {
+					AddLink( &newList, previous );
+					SetDataItem( &thread->event_list, c++, p );
+				} else {
+					lprintf( "Item %d is not found in events.", idx );
+				}
 			}
 		}
 		thread->event_list->Cnt = c;
@@ -38985,8 +40329,6 @@ int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t qui
 	//lprintf( "Check messages." );
 	if( globalNetworkData.bQuit )
 		return -1;
-	if( thread->flags.bProcessing )
-		return 0;
 	// disallow changing of the lists.
 	if( !thread->parent_peer )
 	{
@@ -39042,6 +40384,8 @@ int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t qui
 		while( thread->nEvents == 0 )
 			Relinquish();
 	}
+	if( thread->flags.bProcessing )
+		return 0;
 	while( 1 )
 	{
 		int32_t result;
@@ -39082,10 +40426,12 @@ int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t qui
 			if( dwError == WSA_INVALID_HANDLE )
 			{
 				lprintf( "Rebuild list, have a bad event handle somehow." );
+				thread->flags.bProcessing = 0;
 				break;
 			}
 			lprintf( "error of wait is %d   %p", dwError, thread );
-			LogBinary( thread->event_list->data, 64 );
+			LogBinary( (const uint8_t*)thread->event_list->data, 64 );
+			thread->flags.bProcessing = 0;
 			break;
 		}
 #ifndef UNDER_CE
@@ -39114,14 +40460,11 @@ int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t qui
 				if( !quick_check )
 					continue;
 			}
-			//else
+			else
 			{
-#ifdef LOG_NOTICES
-				if( globalNetworkData.flags.bLogNotices )
-					lprintf( thread->parent_peer?"RESET THREAD EVENT":"RESET GLOBAL EVENT" );
-#endif
 				WSAResetEvent( thread->hThread );
 			}
+			// could maybe have new clients to schedule somewhere
 			return 1;
 		}
 	}
@@ -39344,7 +40687,7 @@ void AddThreadEvent( PCLIENT pc, int broadcast )
 #endif
 	// scheduler thread already awake do not wake him.
 }
-int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t unused )
+int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t non_blocking )
 {
 	int cnt;
 	struct timeval time;
@@ -39359,16 +40702,22 @@ int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t unu
 #    ifdef LOG_NETWORK_EVENT_THREAD
 		lprintf( "Wait on %d   %d", thread->epoll_fd, thread->nEvents );
 #    endif
-		cnt = epoll_wait( thread->epoll_fd, events, 10, -1 );
+		if( non_blocking ) {
+			cnt = epoll_wait( thread->epoll_fd, events, 10, 0 );
+		}else {
+			cnt = epoll_wait( thread->epoll_fd, events, 10, -1 );
+		}
 		if( cnt < 0 )
 		{
 			int err = errno;
 			if( err == EINTR )
 				return 1;
-			Log1( "Sorry epoll_pwait/kevent call failed... %d", err );
+			if( err == EINVAL ) {
+			}
+			lprintf( "Sorry epoll_pwait/kevent call failed... %d %d %m", cnt, err );
 			return 1;
 		}
-		if( cnt > 0 )
+		else if( cnt > 0 )
 		{
 			int closed;
 			int n;
@@ -39383,7 +40732,7 @@ int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t unu
 				event_data = (struct event_data*)events[n].data.ptr;
 #  ifdef LOG_NOTICES
 				if( event_data != (struct event_data*)1 ) {
-					lprintf( "Process %d %x", event_data->broadcast?event_data->pc->SocketBroadcast:event_data->pc->Socket
+					lprintf( "Process %p %d %s %x", event_data->pc, event_data->broadcast?event_data->pc->SocketBroadcast:event_data->pc->Socket, NetworkExpandFlags( event_data->pc )
 							 , events[n].events );
 				}
 #  endif
@@ -39420,10 +40769,13 @@ int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t unu
 #  ifdef LOG_NETWORK_EVENT_THREAD
 						lprintf( "not active but locked? dwFlags : %8x", event_data->pc->dwFlags );
 #  endif
+						if( locked ) NetworkUnlock( event_data->pc, 1 );
 						continue;
 					}
-					if( event_data->pc->dwFlags & CF_AVAILABLE )
+					if( event_data->pc->dwFlags & CF_AVAILABLE ) {
+						if( locked ) NetworkUnlock( event_data->pc, 1 );
 						continue;
+					}
 					if( !IsValid( event_data->pc->Socket ) ) {
 						NetworkUnlock( event_data->pc, 1 );
 						continue;
@@ -39482,12 +40834,12 @@ int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t unu
 						size_t read;
 #ifdef LOG_NOTICES
 						if( globalNetworkData.flags.bLogNotices )
-							lprintf( "TCP Read Event..." );
+							lprintf( "TCP Read Event... %p", event_data->pc );
 #endif
 						// packet oriented things may probably be reading only
 						// partial messages at a time...
 						read = FinishPendingRead( event_data->pc DBG_SRC );
-						//lprintf( "Read %d", read );
+						//lprintf( "FinishPendingRead return %d", read );
 						if( ( read == -1 ) && ( event_data->pc->dwFlags & CF_TOCLOSE ) && !event_data->pc->flags.bInUse )
 						{
 							int locked;
@@ -39581,8 +40933,12 @@ int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t unu
 									}
 									if( !locked ) break;
 								}
+								// finish pending read returned -1 (some sort of error)
 								if( locked ) {
-									InternalRemoveClientEx( event_data->pc, FALSE, FALSE );
+									if( event_data->pc->dwFlags & CF_CONNECT_ISSUED )
+										InternalRemoveClientEx( event_data->pc, FALSE, FALSE );
+									else
+										InternalRemoveClientEx( event_data->pc, TRUE, FALSE );
 									NetworkUnlock( event_data->pc, 0 );
 									TerminateClosedClient( event_data->pc );
 									LeaveCriticalSec( &globalNetworkData.csNetwork );
@@ -39602,23 +40958,25 @@ int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t unu
 						event_data->pc->dwFlags |= CF_READREADY;
 					}
 					if( locked )
-						LeaveCriticalSec( &event_data->pc->csLockRead );
+						NetworkUnlock( event_data->pc, 1 );
 				}
 				// many times a read event can cause the socket to close before write can complete.
 				if( !closed && ( event_data->pc->dwFlags & CF_ACTIVE ) ) {
+					const PCLIENT pc = event_data->pc;
 					int locked;
 					locked = 1;
 					if( events[n].events & EPOLLOUT )
 					{
-#  ifdef LOG_NETWORK_EVENT_THREAD
+#  if defined( LOG_NETWORK_EVENT_THREAD ) || defined( LOG_WRITE_NOTICES )
 						lprintf( "EPOLLOUT %s", ( event_data->pc->dwFlags & CF_CONNECTING ) ? "connecting"
 							: ( !( event_data->pc->dwFlags & CF_ACTIVE ) ) ? "closed" : "writing" );
 #  endif
 						if( !NetworkLock( event_data->pc, 0 ) ) {
+							//lprintf( "Lock failed on %p", event_data->pc );
 							locked = 0;
 						}
 						if( !( event_data->pc->dwFlags & ( CF_ACTIVE | CF_CLOSED ) ) ) {
-#  ifdef LOG_NETWORK_EVENT_THREAD
+#  if defined( LOG_NETWORK_EVENT_THREAD ) || defined( LOG_WRITE_NOTICES )
 							lprintf( "not active but locked? dwFlags : %8x", event_data->pc->dwFlags );
 #  endif
 							continue;
@@ -39633,31 +40991,34 @@ int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t unu
 							//lprintf( "FLAGS IS NOT ACTIVE BUT: %x", event_data->pc->dwFlags );
 							// change to inactive status by the time we got here...
 						} else if( event_data->pc->dwFlags & CF_CONNECTING ) {
-#ifdef LOG_NOTICES
-							if( globalNetworkData.flags.bLogNotices )
+#  if defined( LOG_NETWORK_EVENT_THREAD ) || defined( LOG_WRITE_NOTICES )
+							//if( globalNetworkData.flags.bLogNotices )
 								lprintf( "Connected!" );
 #endif
 							event_data->pc->dwFlags |= CF_CONNECTED;
 							event_data->pc->dwFlags &= ~CF_CONNECTING;
 							{
-								PCLIENT pc = event_data->pc;
 #ifdef __LINUX__
 								socklen_t
 #else
 								int
 #endif
 									nLen = MAGIC_SOCKADDR_LENGTH;
-								if( !pc->saSource )
+								if( !pc->saSource ) {
 									pc->saSource = AllocAddr();
-								if( getsockname( pc->Socket, pc->saSource, &nLen ) ) {
-									lprintf( "getsockname errno = %d", errno );
+									//lprintf( "setup pc->saSource here(network events) %p", pc->saSource );
+									if( getsockname( pc->Socket, pc->saSource, &nLen ) ) {
+										lprintf( "getsockname errno = %d", errno );
+									}
+									if( pc->saSource->sa_family == AF_INET )
+										SET_SOCKADDR_LENGTH( pc->saSource, IN_SOCKADDR_LENGTH );
+									else if( pc->saSource->sa_family == AF_INET6 )
+										SET_SOCKADDR_LENGTH( pc->saSource, IN6_SOCKADDR_LENGTH );
+									else
+										SET_SOCKADDR_LENGTH( pc->saSource, nLen );
+								} else {
+									lprintf( "Socket already had a source address? should be bound then, and address should be the same?");
 								}
-								if( pc->saSource->sa_family == AF_INET )
-									SET_SOCKADDR_LENGTH( pc->saSource, IN_SOCKADDR_LENGTH );
-								else if( pc->saSource->sa_family == AF_INET6 )
-									SET_SOCKADDR_LENGTH( pc->saSource, IN6_SOCKADDR_LENGTH );
-								else
-									SET_SOCKADDR_LENGTH( pc->saSource, nLen );
 							}
 							{
 								int error;
@@ -39665,7 +41026,9 @@ int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t unu
 								getsockopt( event_data->pc->Socket, SOL_SOCKET
 									, SO_ERROR
 									, &error, &errlen );
-								//lprintf( "Error checking for connect is: %s on %d", strerror( error ), event_data->pc->Socket );
+								// errors like EHOSTUNREACH/ENETUNREACH happen in connect()
+								// and result immediately so they do not get delayed until here.
+								//lprintf( "Error checking for connect is: %s on %p", strerror( error ), event_data->pc );
 								if( event_data->pc->pWaiting ) {
 #ifdef LOG_NOTICES
 									if( globalNetworkData.flags.bLogNotices )
@@ -39673,8 +41036,17 @@ int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t unu
 #endif
 									WakeThread( event_data->pc->pWaiting );
 								}
-								if( event_data->pc->connect.ThisConnected )
-									event_data->pc->connect.ThisConnected( event_data->pc, error );
+								if( error ) {
+									event_data->pc->dwFlags |= CF_CONNECTERROR;
+								}
+								// have to allow SSL to clear this... so set it before calling the connect callback.
+								event_data->pc->dwFlags |= CF_CONNECT_ISSUED;
+								if( event_data->pc->dwFlags & CF_CPPCONNECT ) {
+									if( event_data->pc->connect.CPPThisConnected )
+										event_data->pc->connect.CPPThisConnected( event_data->pc->psvConnect, error );
+								} else
+									if( event_data->pc->connect.ThisConnected )
+										event_data->pc->connect.ThisConnected( event_data->pc, error );
 #ifdef LOG_NOTICES
 								if( globalNetworkData.flags.bLogNotices )
 									lprintf( "Connect error was: %d", error );
@@ -39684,29 +41056,37 @@ int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t unu
 #ifdef LOG_NOTICES
 									lprintf( "Read Complete" );
 #endif
-									if( event_data->pc->read.ReadComplete ) {
-#ifdef LOG_NOTICES
+									if( pc->read.ReadComplete ) {
+#  if defined( LOG_NETWORK_EVENT_THREAD ) || defined( LOG_WRITE_NOTICES )
 										lprintf( "Initial Read Complete" );
 #endif
-										event_data->pc->read.ReadComplete( event_data->pc, NULL, 0 );
+										if( pc->dwFlags & CF_CPPREAD )
+											pc->read.CPPReadComplete( pc->psvRead, NULL, 0 );
+										else
+											pc->read.ReadComplete( pc, NULL, 0 );
 									}
-									if( event_data->pc->lpFirstPending ) {
+									else lprintf( "Initial read completed without read callback...");
+									// see if initial read generated any writes...
+									if( pc->lpFirstPending
+											&&( !pc->flags.bAggregateOutput
+											|| !pc->writeTimer ) ) {
 										//lprintf( "Data was pending on a connecting socket, try sending it now" );
-										TCPWrite( event_data->pc );
+										TCPWrite( pc );
+									} else {
+										//lprintf( "No data pending on a connecting socket; setting write ready" );
+										pc->dwFlags |= CF_WRITEREADY;
 									}
-									if( !event_data->pc->lpFirstPending ) {
-										if( event_data->pc->dwFlags & CF_TOCLOSE )
+									if( !pc->lpFirstPending ) {
+										if( pc->dwFlags & CF_TOCLOSE )
 										{
-											event_data->pc->dwFlags &= ~CF_TOCLOSE;
-											lprintf( "Pending write completed - and wants to close." );
+											pc->dwFlags &= ~CF_TOCLOSE;
+											lprintf( "Pending write completed - and wants to close. %s", NetworkExpandFlags( pc ) );
 											EnterCriticalSec( &globalNetworkData.csNetwork );
-											InternalRemoveClientEx( event_data->pc, FALSE, TRUE );
-											TerminateClosedClient( event_data->pc );
+											InternalRemoveClientEx( pc, FALSE, TRUE );
+											TerminateClosedClient( pc );
 											LeaveCriticalSec( &globalNetworkData.csNetwork );
 										}
 									}
-								} else {
-									event_data->pc->dwFlags |= CF_CONNECTERROR;
 								}
 							}
 						} else if( event_data->pc->dwFlags & CF_UDP ) {
@@ -39714,19 +41094,34 @@ int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t unu
 							// udp write event complete....
 							// do we ever care? probably sometime...
 						} else {
-#ifdef LOG_NOTICES
-							if( globalNetworkData.flags.bLogNotices )
+#  if defined( LOG_NETWORK_EVENT_THREAD ) || defined( LOG_WRITE_NOTICES )
+							//if( globalNetworkData.flags.bLogNotices )
 								lprintf( "TCP Write Event..." );
 #endif
 							// if write did not get locked, a write is in progress
 							// wait until it finished there?
 							// did this wake up because that wrote?
 							if( locked ) {
-								TCPWrite( event_data->pc );
+								if( pc->lpFirstPending
+										&&( !pc->flags.bAggregateOutput
+											|| !pc->writeTimer ) ) {
+									//lprintf( "(2)Data was pending on a connected socket, try sending it now" );
+									// this is the normal large packet auto write....
+									TCPWrite( pc );
+								}else {
+									pc->dwFlags |= CF_WRITEREADY;
+								}
 							} else {
+								//lprintf( "Write but lock wasn't enabled? (set WOU)" );
 								// although this is only a few instructions down, this can still be a lost event that the other
 								// lock has already ended, so this will get lost still...
 								event_data->pc->flags.bWriteOnUnlock = 1;
+								if( NetworkLock( event_data->pc, 0 ) ) {
+									//lprintf( "unlock would not have happened %p", event_data->pc );
+									NetworkUnlock( event_data->pc, 0 );
+								} else {
+									//lprintf( "still locked; should get an unlock to trigger the write");
+								}
 								//lprintf( "Write event didn't get the lock... and maybe we won't get to write more?" );
 							}
 						}
@@ -39769,8 +41164,10 @@ SACK_NETWORK_NAMESPACE_END
 //
 ///////////////////////////////////////////////////////////////////////////
 //
-//  DEBUG FLAGS IN netstruc.h
+//  DEBUG FLAGS are mostly in netstruc.h
 //
+//#define DEBUG_ADDRESSES
+//#define DEBUG_MAC_ADDRESS_LOOKUP
 #ifndef _DEFAULT_SOURCE
   // for features.h
 #define _DEFAULT_SOURCE
@@ -39778,11 +41175,18 @@ SACK_NETWORK_NAMESPACE_END
 #define _GNU_SOURCE
 #endif
 #endif
-#define FIX_RELEASE_COM_COLLISION
-#define NO_UNICODE_C
 //#define DO_LOGGING // override no _DEBUG def to do loggings...
 //#define NO_LOGGING // force neverlog....
 #ifdef __LINUX__
+#include <asm/types.h>
+#  ifdef __cplusplus
+extern "C" {
+#  endif
+#include <linux/netlink.h>
+#include <linux/rtnetlink.h>
+#  ifdef __cplusplus
+}
+#  endif
 #endif
 //for GetMacAddress
 #ifdef __LINUX__
@@ -39804,174 +41208,759 @@ SACK_NETWORK_NAMESPACE_END
 #endif
 #endif
 SACK_NETWORK_NAMESPACE
+typedef uint8_t hwaddr_bytes[6];
+struct addressNode {
+	hwaddr_bytes localHw;
+	hwaddr_bytes remoteHw;
+	SOCKADDR *remote;
+};
+typedef struct addressNode MACADDRESSNODE;
+#define MAXMACADDRESSNODESPERSET 256
+DeclareSet( MACADDRESSNODE );
+static struct mac_data {
+	int interfaceCount;
+  // interface indexes
+	int *ifIndexes;
+ // interface hardware addresses;
+	hwaddr_bytes *hwaddrs;
+	int addressCount;
+ // interface hardware addresses;
+	uint8_t **netmasks;
+	// indexed by address count, with netmasks
+	struct addressNode **addresses;
+  // interface indexes
+	int *addr_ifIndexes;
+#ifdef __LINUX__
+	// used to get interface information
+	char ifbuf[512];
+#endif
+	PTREEROOT pbtAddresses;
+	PMACADDRESSNODESET addressNodePool;
+} mac_data;
+typedef uint8_t NETWORK_ADDRESS_BUFFER[MAGIC_SOCKADDR_LENGTH + 2 * sizeof( uintptr_t )];
+#define MAXNETWORK_ADDRESS_BUFFERSPERSET 256
+DeclareSet( NETWORK_ADDRESS_BUFFER );
+static PNETWORK_ADDRESS_BUFFERSET networkAddressBufferSet;
 //----------------------------------------------------------------------------
 #if !defined( __MAC__ ) && !defined( __EMSCRIPTEN__ )
 #  define INCLUDE_MAC_SUPPORT
 #endif
-//int get_mac_addr (char *device, unsigned char *buffer)
-NETWORK_PROC( int, GetMacAddress)(PCLIENT pc, uint8_t* buf, size_t *buflen )
+static void deleteAddress( CPOINTER node, uintptr_t a )
 {
-#ifdef INCLUDE_MAC_SUPPORT
-#  ifdef __LINUX__
-#    ifdef __THIS_CODE_GETS_MY_MAC_ADDRESS___
-	int fd;
-	struct ifreq ifr;
-	fd = socket(PF_UNIX, SOCK_DGRAM, 0);
-	if (fd == -1)
-	{
-		lprintf("Unable to create socket for pclient: %p", pc);
-		return -1;
+	struct addressNode *an = (struct addressNode*)node;
+	ReleaseAddress( an->remote );
+	DeleteFromSet( NETWORK_ADDRESS_BUFFER, networkAddressBufferSet, (uintptr_t)an->remote );
+}
+static int compareAddress( uintptr_t a, uintptr_t b )
+{
+	SOCKADDR *an = (SOCKADDR *)a;
+	SOCKADDR *bn = (SOCKADDR *)b;
+	if( an->sa_family == AF_INET6 ){
+		if( bn->sa_family == AF_INET6 ){
+#ifdef _WIN32
+			return MemCmp( &((SOCKADDR_IN6*)an)->sin6_addr, &((SOCKADDR_IN6*)bn)->sin6_addr, 16 );
+#else
+			return MemCmp( &((struct sockaddr_in6 *)an)->sin6_addr, &((struct sockaddr_in6 *)bn)->sin6_addr, 16 );
+#endif
+		} else {
+			return 1;
+		}
+	} else {
+		if( bn->sa_family == AF_INET6 ){
+			return -1;
+		} else {
+#ifdef _WIN32
+			return MemCmp( &((SOCKADDR_IN*)an)->sin_addr, &((SOCKADDR_IN*)bn)->sin_addr, 4 );
+#else
+			return MemCmp( &((struct sockaddr_in*)an)->sin_addr, &((struct sockaddr_in*)bn)->sin_addr, 4 );
+#endif
+		}
 	}
-	strcpy (ifr.ifr_name, GetNetworkLong(pc,GNL_IP));
-	if (ioctl (fd, SIOCGIFFLAGS, &ifr) < 0)
-	{
-		close (fd);
-		return -1;
+}
+#ifdef _WIN32
+static void setupInterfaces( void ) {
+	PMIB_IF_TABLE2 if_table;
+	MIB_IPNET_ROW2 row;
+ // already did this work.
+	if( mac_data.addresses ) return;
+	MemSet( &row.InterfaceLuid, 0, sizeof( row.InterfaceLuid ) );
+	GetIfTable2( &if_table );
+	int ifCount = 0;
+	for( unsigned int i = 0; i < if_table->NumEntries; i++ ) {
+ // skip if no traffic
+		if( !if_table->Table[i].InOctets) continue;
+		ifCount++;
 	}
-	if (ioctl (fd, SIOCGIFHWADDR, &ifr) < 0)
-	{
-		close (fd);
-		return -1;
+	mac_data.interfaceCount = ifCount;
+	mac_data.ifIndexes = NewArray( int, ifCount );
+	mac_data.hwaddrs = NewArray( hwaddr_bytes, ifCount );
+	ifCount = 0;
+	for( unsigned int i = 0; i < if_table->NumEntries; i++ ) {
+ // skip if no traffic
+		if( !if_table->Table[i].InOctets) continue;
+		mac_data.ifIndexes[ifCount] = if_table->Table[i].InterfaceIndex;
+		memcpy( mac_data.hwaddrs[ifCount], if_table->Table[i].PhysicalAddress, 6 );
+		ifCount++;
 	}
-	close (fd);
-	memcpy (pc->hwClient, ifr.ifr_hwaddr.sa_data, 6);
-	return 0;
-#    endif
-	   /* this code queries the arp table to figure out who the other side is */
-	//int fd;
-	struct arpreq arpr;
+	PMIB_UNICASTIPADDRESS_TABLE uip_table;
+	int ipCount = 0;
+	GetUnicastIpAddressTable( AF_UNSPEC, &uip_table );
+	for( unsigned int i = 0; i < uip_table->NumEntries; i++ ) {
+		int ifIndex = -1;
+		for( int j = 0; j < mac_data.interfaceCount; j++ ) {
+			if( mac_data.ifIndexes[j] == uip_table->Table[i].InterfaceIndex ) {
+				ifIndex = j;
+				break;
+			}
+		}
+		if( ifIndex >= 0 ) {
+			ipCount++;
+		}
+	}
+	mac_data.addressCount = ipCount;
+	mac_data.addresses = NewArray( struct addressNode*, ipCount );
+	mac_data.addr_ifIndexes = NewArray( int, ipCount );
+	mac_data.netmasks = NewArray( uint8_t*, ipCount );
+	ipCount = 0;
+	for( unsigned int i = 0; i < uip_table->NumEntries; i++ ) {
+		int ifIndex = -1;
+		for( int j = 0; j < mac_data.interfaceCount; j++ ) {
+			if( mac_data.ifIndexes[j] == uip_table->Table[i].InterfaceIndex ) {
+				for( int k = 0; k < mac_data.interfaceCount; k++ ) {
+					if( mac_data.ifIndexes[k] == uip_table->Table[i].InterfaceIndex ) {
+						mac_data.addr_ifIndexes[ipCount] = k;
+						break;
+					}
+				}
+				ifIndex = j;
+				break;
+			}
+		}
+		if( ifIndex >= 0 ) {
+			if( uip_table->Table[i].Address.si_family == AF_INET ) {
+				uint8_t *mask = mac_data.netmasks[ipCount] = NewArray( uint8_t, 4 );
+				int b;
+				for( b = 0; b < uip_table->Table[i].OnLinkPrefixLength; b++ ) {
+					mask[b/8] |= (1<<(7-(b%8)) );
+				}
+				for( ; b < 32; b++ ) {
+					mask[b/8] &= ~(1<<(7-(b%8)) );
+				}
+			} else {
+				uint8_t *mask = mac_data.netmasks[ipCount] = NewArray( uint8_t, 16 );
+				int b;
+				for( b = 0; b < uip_table->Table[i].OnLinkPrefixLength; b++ ) {
+					mask[b/8] |= (1<<(7-(b%8)) );
+				}
+				for( ; b < 128; b++ ) {
+					mask[b/8] &= ~(1<<(7-(b%8)) );
+				}
+			}
+// (struct addressNode*)AllocateEx( sizeof( struct addressNode ) DBG_SRC );
+			struct addressNode *newAddress = GetFromSet( MACADDRESSNODE, &mac_data.addressNodePool );
+			newAddress->remote = AllocAddr();
+			newAddress->remote->sa_family = uip_table->Table[i].Address.si_family;
+			if( newAddress->remote->sa_family == AF_INET ) {
+				((uint32_t*)(newAddress->remote->sa_data+2))[0] = ((uint32_t*)(&uip_table->Table[i].Address.Ipv4.sin_addr))[0];
+				SET_SOCKADDR_LENGTH( newAddress->remote, IN_SOCKADDR_LENGTH );
+			} else {
+				((uint32_t*)( newAddress->remote->sa_data + 2))[0] = 0;
+				((uint64_t*)( newAddress->remote->sa_data + 6))[0] = ((uint64_t*)(&uip_table->Table[i].Address.Ipv6.sin6_addr))[0];
+				((uint64_t*)( newAddress->remote->sa_data + 6))[1] = ((uint64_t*)(&uip_table->Table[i].Address.Ipv6.sin6_addr))[1];
+				SET_SOCKADDR_LENGTH( newAddress->remote, IN6_SOCKADDR_LENGTH );
+			}
+			mac_data.addresses[ipCount] = newAddress;
+			ipCount++;
+		}
+	}
+	FreeMibTable( if_table );
+	FreeMibTable( uip_table );
+}
+#endif
+#ifdef __LINUX__
+// largly based on the following code.
+//https://codereview.stackexchange.com/questions/278848/linux-netlink-kernel-socket-arp-cache-getter-similar-to-ip-ne
+#ifdef DEBUG_MAC_ADDRESS_LOOKUP
+static void LogMacAddress( struct addressNode *newAddress ){
+	DumpAddr( "New Address Remote", newAddress->remote );
+	lprintf( "Local: %02x:%02x:%02x:%02x:%02x:%02x", newAddress->localHw[0], newAddress->localHw[1], newAddress->localHw[2], newAddress->localHw[3], newAddress->localHw[4], newAddress->localHw[5] );
+	lprintf( "remote: %02x:%02x:%02x:%02x:%02x:%02x", newAddress->remoteHw[0], newAddress->remoteHw[1], newAddress->remoteHw[2], newAddress->remoteHw[3], newAddress->remoteHw[4], newAddress->remoteHw[5] );
+}
+#endif
+static void setupInterfaces() {
 	struct ifconf ifc;
-	MemSet( &arpr, 0, sizeof( arpr ) );
-	lprintf( "this is broken." );
-	MemCpy( &arpr.arp_pa, pc->saClient, sizeof( SOCKADDR ) );
-	arpr.arp_ha.sa_family = AF_INET;
-	{
-		char ifbuf[256];
-		ifc.ifc_len = sizeof( ifbuf );
-		ifc.ifc_buf = ifbuf;
-		ioctl( pc->Socket, SIOCGIFCONF, &ifc );
+ // already did this work.
+	if( mac_data.ifbuf[0] ) return;
+		ifc.ifc_len = sizeof( mac_data.ifbuf );
+		ifc.ifc_buf = mac_data.ifbuf;
+//pc->Socket;
+		int sock_handle = socket( AF_INET6, SOCK_STREAM, 0);
+		ioctl( sock_handle, SIOCGIFCONF, &ifc );
 		{
 			int i;
 			struct ifreq *IFR;
 			IFR = ifc.ifc_req;
-			for( i = ifc.ifc_len / sizeof( struct ifreq); --i >=0; IFR++ )
+			const int len = ifc.ifc_len / sizeof( struct ifreq );
+			mac_data.interfaceCount = len;
+			mac_data.ifIndexes = NewArray( int, len );
+			mac_data.hwaddrs = NewArray( hwaddr_bytes, len );
+			for( i = 0; i < len; i++, IFR++ )
 			{
-				printf( "IF: %s\n", IFR->ifr_name );
-				strcpy( arpr.arp_dev, "eth0" );
+				//LogBinary( (const uint8_t*)IFR, sizeof( *IFR));
+				struct ifreq ifr;
+				strcpy( ifr.ifr_name, IFR->ifr_name );
+				if (ioctl(sock_handle, SIOCGIFINDEX, &ifr) == 0) {
+					mac_data.ifIndexes[i] = ifr.ifr_ifindex;
+				}else {
+					lprintf( "ioctl SIOCGIFINDEX error? %d", errno);
+				}
+				if (ioctl(sock_handle, SIOCGIFFLAGS, &ifr) == 0) {
+ // don't count loopback
+					if (! (ifr.ifr_flags & IFF_LOOPBACK)) {
+						if (ioctl(sock_handle, SIOCGIFHWADDR, &ifr) == 0) {
+							//LogBinary( (const uint8_t*)ifr.ifr_hwaddr.sa_data, 12 );
+							memcpy( mac_data.hwaddrs[i], ifr.ifr_hwaddr.sa_data, 6 );
+						} else {
+							lprintf( "ioctl SIOCGIFHWADDR failed: %d", errno);
+						}
+					} else {
+						((uint32_t*)(mac_data.hwaddrs[i]))[0] = 0;
+						((uint16_t*)(mac_data.hwaddrs[i]))[2] = 0;
+					}
+				} else {
+					lprintf( "ioctl SIOCGIFFLAGS failed: %d", errno);
+				}
+			}
+		}
+		close( sock_handle );
+		{
+			struct ifaddrs *ifa;
+			struct ifaddrs *current_ifa;
+			getifaddrs( &ifa);
+			int addressCount = 0;
+			for( current_ifa = ifa; current_ifa; current_ifa = current_ifa->ifa_next ) {
+				if( current_ifa->ifa_addr->sa_family != AF_INET
+ // don't care about non IP addresses.
+				   && current_ifa->ifa_addr->sa_family != AF_INET6 ) continue;
+				addressCount++;
+			}
+			mac_data.addressCount = addressCount;
+			mac_data.addresses = NewArray( struct addressNode*, addressCount );
+			memset( mac_data.addresses, 0, sizeof( struct addressNode* ) * addressCount );
+			mac_data.netmasks = NewArray( uint8_t*, addressCount );
+			mac_data.addr_ifIndexes = NewArray( int, addressCount );
+			addressCount = 0;
+			for( current_ifa = ifa; current_ifa; current_ifa = current_ifa->ifa_next ) {
+				//if( current_ifa->ifa_addr->sa_family == AF_PACKET ) continue; // don't care about packet addresses.
+				if( current_ifa->ifa_addr->sa_family != AF_INET
+ // don't care about non IP addresses.
+				   && current_ifa->ifa_addr->sa_family != AF_INET6 ) continue;
+// = (struct addressNode*)AllocateEx( sizeof( struct addressNode ) DBG_SRC );
+				struct addressNode newAddress;
+				uint8_t addrbuf[MAGIC_SOCKADDR_LENGTH + 2 * sizeof( uintptr_t )];
+				memset( addrbuf, 0, MAGIC_SOCKADDR_LENGTH + 2 * sizeof( uintptr_t ) );
+				//initialize socket length to something identifiable?
+				((uintptr_t*)addrbuf)[0] = 3;
+ // string representation of address
+				((uintptr_t*)addrbuf)[1] = 0;
+//AllocAddr();
+				SOCKADDR *sa = (SOCKADDR*)(addrbuf + sizeof(uintptr_t) * 2);
+				//(SOCKADDR*)AllocateEx( MAGIC_SOCKADDR_LENGTH + 2 * sizeof( uintptr_t ) DBG_RELAY )
+				newAddress.remote = sa;
+				//lprintf( "Got ifaddr on %s %d", current_ifa->ifa_name, current_ifa->ifa_addr->sa_family );
+				//LogBinary( (const uint8_t*)current_ifa->ifa_addr, sizeof( *current_ifa->ifa_addr));
+				sa->sa_family = current_ifa->ifa_addr->sa_family;
+				if( sa->sa_family == AF_INET ) {
+					((uint32_t*)(sa->sa_data+2))[0] = ((uint32_t*)(current_ifa->ifa_addr->sa_data+2))[0];
+					//lprintf( "Set address v4: %04x", ((uint32_t*)(sa->sa_data+2))[0] );
+					SET_SOCKADDR_LENGTH( sa, IN_SOCKADDR_LENGTH );
+				} else {
+					// scopr or flow control or something
+					((uint32_t*)( sa->sa_data + 2))[0] = ((uint32_t*)(current_ifa->ifa_addr->sa_data+2))[0];
+					((uint64_t*)( sa->sa_data + 6))[0] = ((uint64_t*)(current_ifa->ifa_addr->sa_data+6))[0];
+					((uint64_t*)( sa->sa_data + 6))[1] = ((uint64_t*)(current_ifa->ifa_addr->sa_data+6))[1];
+					SET_SOCKADDR_LENGTH( sa, IN6_SOCKADDR_LENGTH );
+				}
+				{
+					struct ifreq *IFR;
+					IFR = (struct ifreq*)mac_data.ifbuf;
+					for( int i = 0; i < mac_data.interfaceCount; i++, IFR++){
+						if( strcmp( current_ifa->ifa_name, IFR->ifr_name ) == 0 ) {
+							mac_data.addr_ifIndexes[addressCount] = i;
+							if( sa->sa_family == AF_INET ) {
+								mac_data.netmasks[addressCount] = NewArray( uint8_t, 4 );
+								memcpy( mac_data.netmasks[addressCount], ((uint32_t*)(current_ifa->ifa_netmask->sa_data+2)), 4 );
+#ifdef DEBUG_MAC_ADDRESS_LOOKUP
+								lprintf( "ipv4 netmask:" );
+								LogBinary( mac_data.netmasks[addressCount], 4 );
+#endif
+							} else {
+								mac_data.netmasks[addressCount] = NewArray( uint8_t, 16 );
+								memcpy( mac_data.netmasks[addressCount], ((uint32_t*)(current_ifa->ifa_netmask->sa_data+6)), 16 );
+#ifdef DEBUG_MAC_ADDRESS_LOOKUP
+								lprintf( "ipv6 netmask:" );
+								LogBinary( mac_data.netmasks[addressCount], 16 );
+#endif
+							}
+							memcpy( newAddress.localHw, mac_data.hwaddrs[i], 6);
+							memcpy( newAddress.remoteHw, mac_data.hwaddrs[i], 6);
+#ifdef DEBUG_MAC_ADDRESS_LOOKUP
+							LogMacAddress( newAddress );
+#endif
+							if( !FindInBinaryTree( mac_data.pbtAddresses, (uintptr_t)sa )) {
+//(struct addressNode*)AllocateEx( sizeof( struct addressNode ) DBG_SRC );
+								struct addressNode *storeAddress = GetFromSet( MACADDRESSNODE, &mac_data.addressNodePool );
+								storeAddress[0] = newAddress;
+								storeAddress->remote = DuplicateAddress( storeAddress->remote );
+								if( AddBinaryNode( mac_data.pbtAddresses, (CPOINTER)storeAddress, (uintptr_t)sa ) ) {
+									//lprintf( "Added address to tree" );
+									mac_data.addresses[addressCount] = storeAddress;
+								} else {
+									//lprintf( "Failed to add address to tree" );
+									//ReleaseAddress( sa );
+									//Deallocate( struct addressNode *, newAddress );
+								}
+							}
+							break;
+						}
+					}
+				}
+				addressCount++;
+			}
+			//LogBinary( (const uint8_t*)ifa, sizeof( *ifa));
+			freeifaddrs( ifa );
+		}
+#ifdef DEBUG_MAC_ADDRESS_LOOKUP
+		{
+			struct ifreq *IFR;
+			IFR = (struct ifreq*)mac_data.ifbuf;
+			for( int i = 0; IFR->ifr_name[0]; i++, IFR++ ) {
+				lprintf( "IF: %d(%d) %s %02x:%02x:%02x:%02x:%02x", i, mac_data.ifIndexes[i], IFR->ifr_name, mac_data.hwaddrs[i][0], mac_data.hwaddrs[i][1], mac_data.hwaddrs[i][2], mac_data.hwaddrs[i][3], mac_data.hwaddrs[i][4], mac_data.hwaddrs[i][5] );
+			}
+		}
+#endif
+}
+PTHREAD macThread;
+int macThreadEnd =0;
+PLIST macWaiters;
+int macTableUpdated = 0;
+int threadFailed = 0;
+ATEXIT( CloseMacThread ){
+	macThreadEnd = TRUE;
+	WakeThread( macThread );
+}
+static uintptr_t MacThread( PTHREAD thread ) {
+	int stat;
+	int rtnetlink_socket = socket(PF_NETLINK, SOCK_DGRAM, NETLINK_ROUTE);
+	if( rtnetlink_socket < 0 )
+	{
+		threadFailed = 1;
+		if( errno == ESOCKTNOSUPPORT ){
+			lprintf( "Socket No Support?");
+		}else
+			lprintf( "Unable to create netlink socket %d", errno );
+		return 0;
+	}
+	struct sockaddr rtnetlink_addr;
+	rtnetlink_addr.sa_family = AF_NETLINK;
+	rtnetlink_addr.sa_data[0] = 0;
+	rtnetlink_addr.sa_data[1] = 0;
+	int ppid = (int)(GetMyThreadID() >> 32);
+	rtnetlink_addr.sa_data[2] = ppid & 0xFF;
+	rtnetlink_addr.sa_data[3] = (ppid >> 8) & 0xFF;
+	rtnetlink_addr.sa_data[4] = (ppid >> 16) & 0xFF;
+	rtnetlink_addr.sa_data[5] = (ppid >> 24) & 0xFF;
+	int grp = RTMGRP_NEIGH;
+	rtnetlink_addr.sa_data[6] = grp & 0xFF;
+	rtnetlink_addr.sa_data[7] = 0;
+	rtnetlink_addr.sa_data[8] = 0;
+	rtnetlink_addr.sa_data[9] = 0;
+	stat = bind(rtnetlink_socket, &rtnetlink_addr, 12 );
+	if( stat < 0 )
+	{
+		threadFailed = 1;
+		lprintf( "Unable to bind netlink socket %s", strerror( errno ) );
+		return 0;
+	}
+	int seq;
+	struct {
+	struct nlmsghdr nlh;
+	struct ndmsg ndm;
+	char buf[256];
+	} req;
+	req.nlh.nlmsg_len = NLMSG_LENGTH(sizeof(struct ndmsg));
+	req.nlh.nlmsg_type = RTM_GETNEIGH;
+	req.nlh.nlmsg_flags = NLM_F_DUMP | NLM_F_REQUEST;
+	req.nlh.nlmsg_seq =  ++seq;
+	req.ndm.ndm_family = 0;
+	send( rtnetlink_socket, (struct msghdr*)&req, sizeof(req), 0);
+	while( !macThreadEnd ) {
+		//sendmsg( rtnetlink_socket, (struct msghdr*)&req, 0);
+		ssize_t rstat;
+		static uint8_t buf[8192];
+		int loop = 1;
+		do {
+/*MSG_DONTWAIT*/
+			rstat = recv( rtnetlink_socket, buf, sizeof(buf), 0 );
+			if( rstat < 0) {
+				if( errno == EAGAIN || errno == EWOULDBLOCK ) {
+					//lprintf( "No data available" );
+					Relinquish();
+				} else{
+					lprintf( "Error: %s", strerror( errno ) );
+					loop = 0;
+				}
+			}
+			else {
+				struct response {
+					struct nlmsghdr nl;
+					struct ndmsg rt;
+				} *res;
+				int msgLen;
+				int priorLen = 0;
+#ifdef DEBUG_MAC_ADDRESS_LOOKUP
+				lprintf( "Got some data from socket:%d", rstat);
+				lprintf( "Flag Values %d %d %d",NTF_SELF, NTF_PROXY, NTF_ROUTER    );
+#endif
+				while( priorLen < rstat ) {
+// = (struct addressNode*)AllocateEx( sizeof( struct addressNode ) DBG_SRC );
+					struct addressNode newAddress;
+					res = (struct response*)(buf+priorLen);
+#ifdef DEBUG_MAC_ADDRESS_LOOKUP
+					lprintf( "Stuff: %p %d", res, priorLen );
+#endif
+					struct rtattr *attr = (struct rtattr*)(res+1);
+					//lprintf( "message:%d", res->nl.nlmsg_type );
+					switch( res->nl.nlmsg_type ) {
+						case NLMSG_DONE:
+							// end of dump; should send information here.
+							break;
+						case RTM_DELNEIGH:
+							// should probably delete the entry in the tree here...
+							break;
+						case RTM_NEWNEIGH:
+							//LogBinary( (uint8_t*)(res), res->nl.nlmsg_len );
+							/*
+							lprintf( "First message: type:%d len:%d flg:%d pid:%d seq:%d", res->nl.nlmsg_type
+									, res->nl.nlmsg_len-sizeof( res)
+									, res->nl.nlmsg_flags, res->nl.nlmsg_pid, res->nl.nlmsg_seq );
+							lprintf( "fam:%d ifi:%d st:%d fl:%d type:%d"
+										, res->rt.ndm_family, res->rt.ndm_ifindex
+										, res->rt.ndm_state, res->rt.ndm_flags, res->rt.ndm_type );
+							*/
+							// state == NUD_INCOMPLETE, NUD_REACHABLE, NUD_STALE, NUD_DELAY, NUD_PROBE, NUD_FAILED, NUD_NORARP,NUD_PERMANENT
+							// flags == NTF_PROXY, NTF_ROUTER
+							//
+							{
+								uint8_t addrbuf[MAGIC_SOCKADDR_LENGTH + 2 * sizeof( uintptr_t )];
+								memset( addrbuf, 0, MAGIC_SOCKADDR_LENGTH + 2 * sizeof( uintptr_t ) );
+								//initialize socket length to something identifiable?
+								((uintptr_t*)addrbuf)[0] = 3;
+ // string representation of address
+								((uintptr_t*)addrbuf)[1] = 0;
+//AllocAddr();
+								SOCKADDR *sa = (SOCKADDR*)(addrbuf + sizeof(uintptr_t) * 2);
+								sa->sa_family = res->rt.ndm_family;
+								sa->sa_data[0] = 0;
+								sa->sa_data[1] = 0;
+								newAddress.remote = sa;
+								for( int i = 0; i < mac_data.interfaceCount; i++ ) {
+									if( mac_data.ifIndexes[i] == res->rt.ndm_ifindex ) {
+										memcpy( newAddress.localHw, mac_data.hwaddrs[i], 6);
+										break;
+									}
+								}
+								{
+									LOGICAL duplicated = FALSE;
+									LOGICAL destFound, linkFound;
+									size_t attLen = res->nl.nlmsg_len-sizeof( *res);
+									size_t attOfs = priorLen + sizeof( *res );
+									destFound = linkFound = FALSE;
+									do {
+										struct rtattr *attr = (struct rtattr*)(buf+attOfs);
+										if( !attr->rta_len )
+											break;
+#ifdef DEBUG_MAC_ADDRESS_LOOKUP
+										lprintf( "Attr:%d %d %d", attLen, attr->rta_len, attr->rta_type );
+#endif
+										switch( attr->rta_type ) {
+											case NDA_DST:
+												destFound = TRUE;
+#ifdef DEBUG_MAC_ADDRESS_LOOKUP
+												lprintf( "Destination Address" );
+#endif
+												if( ( sa->sa_family = res->rt.ndm_family ) == AF_INET ){
+													((uint32_t*)(sa->sa_data+2))[0] = ((uint32_t*)(attr+1))[0];
+													SET_SOCKADDR_LENGTH( sa, IN_SOCKADDR_LENGTH );
+												} else {
+													((uint32_t*)( sa->sa_data + 2))[0] = 0;
+													((uint64_t*)( sa->sa_data + 6))[0] = ((uint64_t*)(attr+1))[0];
+													((uint64_t*)( sa->sa_data + 6))[1] = ((uint64_t*)(attr+1))[1];
+													SET_SOCKADDR_LENGTH( sa, IN6_SOCKADDR_LENGTH );
+												}
+												//LogMacAddress( &newAddress );
+												if( FindInBinaryTree( mac_data.pbtAddresses, (uintptr_t)sa ) ) {
+													duplicated = TRUE;
+#ifdef DEBUG_MAC_ADDRESS_LOOKUP
+													DumpAddr( "Duplicate address notification", sa );
+#endif
+													//ReleaseAddress( sa );
+													//Deallocate( struct addressNode *, newAddress );
+													break;
+												}
+#ifdef DEBUG_MAC_ADDRESS_LOOKUP
+												else {
+													DumpAddr( "New address notification", sa );
+												}
+#endif
+												break;
+											case NDA_UNSPEC:
+												lprintf( "Unknown type" );
+												break;
+											case NDA_LLADDR:
+												linkFound = TRUE;
+#ifdef DEBUG_MAC_ADDRESS_LOOKUP
+												lprintf( "Link Layer Address" );
+#endif
+												memcpy( newAddress.remoteHw, (attr+1), 6 );
+												break;
+											case NDA_PROBES: {
+												uint32_t *probes = (uint32_t*)(attr+1);
+												lprintf( "Probes: %d %d %d", probes[0], probes[1], probes[2] );
+												break;
+											}
+											case NDA_CACHEINFO:{
+												struct nda_cacheinfo *ci = (struct nda_cacheinfo*)(attr+1);
+#ifdef DEBUG_MAC_ADDRESS_LOOKUP
+												lprintf( "Cache Info  conf:%d used:%d upd:%d cnt:%d", ci->ndm_confirmed, ci->ndm_used, ci->ndm_updated, ci->ndm_refcnt );
+#endif
+												break;
+											}
+											default:
+												lprintf( "Unknown attribute type: %d", attr->rta_type );
+												break;
+										}
+										attOfs += attr->rta_len;
+										attLen -= attr->rta_len;
+									} while( !duplicated && attLen );
+									if( !linkFound || !destFound || duplicated ) {
+//#ifdef DEBUG_MAC_ADDRESS_LOOKUP
+										if( !duplicated )
+											if( !linkFound || !destFound )
+												lprintf( "Network Address was incomplete: %s %s", linkFound?"":"Link Address", destFound?"":"Destination Address" );
+//#endif
+										break;
+									}
+#ifdef DEBUG_MAC_ADDRESS_LOOKUP
+									else {
+										lprintf( "duplicated wasn't found?");
+									}
+#endif
+#ifdef DEBUG_MAC_ADDRESS_LOOKUP
+									LogMacAddress( &newAddress );
+#endif
+//(struct addressNode*)AllocateEx( sizeof( struct addressNode ) DBG_SRC );
+									struct addressNode *storeAddress = GetFromSet( MACADDRESSNODE, &mac_data.addressNodePool );
+									storeAddress[0] = newAddress;
+									storeAddress->remote = DuplicateAddress( storeAddress->remote );
+									if( !AddBinaryNode( mac_data.pbtAddresses, (CPOINTER)storeAddress, (uintptr_t)storeAddress->remote ) ) {
+										lprintf( "Failed to add address to tree; should have already been marked as duplicated and in tree?" );
+#ifdef DEBUG_MAC_ADDRESS_LOOKUP
+										LogMacAddress( storeAddress );
+#endif
+										ReleaseAddress( storeAddress->remote );
+										Deallocate( struct addressNode *, storeAddress );
+									}
+									//LogBinary( (uint8_t*)(buf+attOfs), res->nl.nlmsg_len-attOfs );
+								}
+							}
+							break;
+						default:
+							lprintf( "Default message: type:%d len:%d flg:%d pid:%d seq:%d", res->nl.nlmsg_type, res->nl.nlmsg_len
+									, res->nl.nlmsg_flags, res->nl.nlmsg_pid, res->nl.nlmsg_seq );
+							break;
+					}
+					//lprintf( "");
+					priorLen += res->nl.nlmsg_len;
+				}
+				//LogBinary( buf, rstat );
+			}
+			{
+				INDEX idx;
+				PTHREAD waiter;
+				macTableUpdated = TRUE;
+				LIST_FORALL( macWaiters, idx, PTHREAD, waiter ) {
+					WakeThread( waiter );
+				}
+			}
+		} while( loop );
+	}
+	close( rtnetlink_socket );
+	return 0;
+}
+#endif
+NETWORK_PROC( int, GetMacAddress)(PCLIENT pc, uint8_t* bufLocal, size_t *bufLocalLen
+//int get_mac_addr (char *device, unsigned char *buffer)
+                                 , uint8_t *bufRemote, size_t* bufRemoteLen )
+{
+	if( pc->dwFlags & CF_AVAILABLE )
+		return FALSE;
+	if( !mac_data.pbtAddresses )
+		mac_data.pbtAddresses = CreateBinaryTreeExx( BT_OPT_NODUPLICATES, compareAddress, deleteAddress );
+	SOCKADDR *saDup = DuplicateAddress_6to4( pc->saClient );
+	// clear Port for later...
+	saDup->sa_data[0] = 0;
+	saDup->sa_data[1] = 0;
+#ifdef __LINUX__
+retry:
+	macTableUpdated = FALSE;
+#endif
+#ifdef DEBUG_MAC_ADDRESS_LOOKUP
+	DumpAddr( "Find address in tree", saDup );
+#endif
+	struct addressNode *oldAddress = (struct addressNode *)FindInBinaryTree( mac_data.pbtAddresses, (uintptr_t)saDup );
+#ifdef DEBUG_MAC_ADDRESS_LOOKUP
+	lprintf( "FindinBinaryTree: %p", oldAddress );
+#endif
+	if( oldAddress )
+	{
+		MemCpy( bufLocal, oldAddress->localHw, 6 );
+		(*bufLocalLen) = 6;
+		MemCpy( bufRemote, oldAddress->remoteHw, 6 );
+		(*bufRemoteLen) = 6;
+		ReleaseAddress( saDup );
+		return TRUE;
+	}
+	if( ( saDup->sa_family == AF_INET6
+	     && ( ( MemCmp( saDup->sa_data+6, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 16 ) == 0 )
+		     || ( MemCmp( saDup->sa_data+6, "\0\0\0\0\0\0\0\0\0\0\xff\xff\x7f\0\0\x1", 16 ) == 0 )
+	        || ( MemCmp( saDup->sa_data+6, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x1", 16 ) == 0 ) ) )
+	  || ( saDup->sa_family == AF_INET
+	     && MemCmp( saDup->sa_data+2, "\x7f\0\0\x01", 4 ) == 0 ) )
+	{
+		// localhost
+		memset( bufLocal, 0, 6 );
+		(*bufLocalLen) = 6;
+		memset( bufRemote, 0, 6 );
+		(*bufRemoteLen) = 6;
+		ReleaseAddress( saDup );
+		return TRUE;
+	}
+	setupInterfaces();
+#ifdef __LINUX__
+	if( !macThread ) macThread = ThreadTo( MacThread, 0 );
+#endif
+	int addr;
+//  (struct addressNode*)AllocateEx( sizeof( struct addressNode ) DBG_SRC );
+	struct addressNode *newAddress = GetFromSet( MACADDRESSNODE, &mac_data.addressNodePool );
+	newAddress->remote = saDup;
+	for( addr = 0; addr < mac_data.addressCount; addr++ ) {
+		if( mac_data.addresses[addr] && saDup->sa_family == mac_data.addresses[addr]->remote->sa_family ) {
+			if( saDup->sa_family == AF_INET ) {
+				const uint32_t testIP = ((uint32_t*)(saDup->sa_data+2))[0] & ((uint32_t*)(mac_data.netmasks[addr]))[0];
+				const uint32_t testAddr = ((uint32_t*)(mac_data.addresses[addr]->remote->sa_data+2))[0] & ((uint32_t*)(mac_data.netmasks[addr]))[0];
+				if( testIP == testAddr ) {
+					break;
+				}
+			} else {
+				const uint64_t testIP[2] = {
+					((uint64_t*)(saDup->sa_data+6))[0] & ((uint64_t*)(mac_data.netmasks[addr]))[0]
+					, ((uint64_t*)(saDup->sa_data+6))[1] & ((uint64_t*)(mac_data.netmasks[addr]))[1]
+				};
+				const uint64_t testAddr[2] = {
+					((uint64_t*)(mac_data.addresses[addr]->remote->sa_data+6))[0] & ((uint64_t*)(mac_data.netmasks[addr]))[0]
+					, ((uint64_t*)(mac_data.addresses[addr]->remote->sa_data+6))[1] & ((uint64_t*)(mac_data.netmasks[addr]))[1]
+				};
+				if( testIP[0] == testAddr[0] && testIP[1] == testAddr[1] ) {
+					break;
+				}
 			}
 		}
 	}
-	DebugBreak();
-	if( ioctl( pc->Socket, SIOCGARP, &arpr ) < 0 )
-	{
-		lprintf( "Error of some sort ... %s", strerror( errno ) );
-		DebugBreak();
+	int local_addr;
+	SOCKADDR *saSource = DuplicateAddress_6to4( pc->saSource );
+	for( local_addr = 0; local_addr < mac_data.addressCount; local_addr++ ) {
+		if( mac_data.addresses[local_addr] && saDup->sa_family == mac_data.addresses[local_addr]->remote->sa_family ) {
+			if( saDup->sa_family == AF_INET ) {
+				if( ((uint32_t*)(saSource->sa_data+2))[0] == ((uint32_t*)(mac_data.addresses[local_addr]->remote->sa_data+2))[0] ) {
+					MemCpy( bufLocal, mac_data.hwaddrs[mac_data.addr_ifIndexes[local_addr]], 6 );
+					(*bufLocalLen) = 6;
+					break;
+				}
+			} else {
+				if( ((uint64_t*)(saDup->sa_data+6))[0] == ((uint64_t*)(mac_data.addresses[local_addr]->remote->sa_data+6))[0]
+				  && ((uint64_t*)(saDup->sa_data+6))[1] == ((uint64_t*)(mac_data.addresses[local_addr]->remote->sa_data+6))[1] ) {
+					MemCpy( bufLocal, mac_data.hwaddrs[mac_data.addr_ifIndexes[local_addr]], 6 );
+					(*bufLocalLen) = 6;
+					break;
+				}
+			}
+		}
 	}
-	return 0;
-#  endif
-#  ifdef WIN32
-	HRESULT hr;
-	ULONG   ulLen;
-	// I don't understand this useless cast - from size_t to ULONG?
-	// isn't that the same thing?
-	ulLen = (ULONG)(*buflen);
-	//needs ws2_32.lib and iphlpapi.lib in the linker.
-	hr = SendARP ( (IPAddr)GetNetworkLong(pc,GNL_MYIP), (IPAddr)GetNetworkLong(pc,GNL_MYIP), (PULONG)buf, &ulLen);
-	(*buflen) = ulLen;
-//  The second parameter of SendARP is a PULONG, which is typedef'ed to a pointer to
-//  an unsigned long.  The pc->hwClient is a pointer to an array of uint8_t (unsigned chars),
-//  actually defined in netstruc.h as uint8_t hwClient[6]; Well, in the end, they are all
-//  just addresses, whether they be address to information of eight bits in length, or
-//  of (sizeof(unsigned)) in length.  Although this may, in the future, throw a warning.
-	//hr = SendARP (GetNetworkLong(pc,GNL_IP), 0, (PULONG)pc->hwClient, &ulLen);
-	//lprintf ("Return %08x, length %8d\n", hr, ulLen);
-	return hr == S_OK;
-#  endif
-#else
+	ReleaseAddress( saSource );
+	MemCpy( newAddress->localHw, bufLocal, 6 );
+	if( addr == mac_data.addressCount ) {
+		//lprintf( "No matching address mask found... maybe just fake add this entry for the future?" );
+		memset( newAddress->remoteHw, 0, 6 );
+		(*bufRemoteLen) = 6;
+		// keep this remote address for future checks...
+		AddBinaryNode( mac_data.pbtAddresses, (CPOINTER)newAddress, (uintptr_t)newAddress->remote );
+		memset( bufRemote, 0, 6 );
+		(*bufRemoteLen) = 6;
+		return TRUE;
+	}
+#ifdef __LINUX__
+	AddLink( &macWaiters, MakeThread() );
+	uint64_t waitTime = timeGetTime64() + 500;
+	while( !macTableUpdated && !threadFailed ) {
+		// guess I should check to see if it is even possible to resolve with netmask...
+		WakeableSleep( 500 );
+	}
+	if( threadFailed || ( timeGetTime64() > waitTime ) ) {
+		//lprintf( "Timeout waiting for mac address" );
+		ReleaseAddress( saDup );
+		memset( bufLocal, 0, 6 );
+		(*bufLocalLen) = 6;
+		memset( bufRemote, 0, 6 );
+		(*bufRemoteLen) = 6;
+		return TRUE;
+	}
+	goto retry;
 	return 0;
 #endif
+#  ifdef WIN32
+	HRESULT hr;
+	MIB_IPNET_ROW2 row;
+	MemSet( &row.InterfaceLuid, 0, sizeof( row.InterfaceLuid ) );
+	row.Address = *((SOCKADDR_INET*)saDup);
+	row.InterfaceIndex = mac_data.ifIndexes[mac_data.addr_ifIndexes[local_addr]];
+	hr = ResolveIpNetEntry2( &row, (SOCKADDR_INET*)GetNetworkLong( pc, GNL_LOCAL_ADDRESS) );
+	lprintf( "hr=%d", hr );
+	if( hr == S_OK ) {
+		MemCpy( newAddress->remoteHw, row.PhysicalAddress, row.PhysicalAddressLength );
+		AddBinaryNode( mac_data.pbtAddresses, (CPOINTER)newAddress, (uintptr_t)newAddress->remote );
+		MemCpy( bufRemote, row.PhysicalAddress, row.PhysicalAddressLength );
+		(*bufRemoteLen) = row.PhysicalAddressLength;
+		lprintf( "Resolve addr: %d  %d", local_addr, hr );
+		return TRUE;
+	} else {
+		ReleaseAddress( saDup);
+		memset( bufRemote, 0, 6 );
+		(*bufRemote) = 0;
+		return FALSE;
+	}
+	return FALSE;
+#  endif
 }
 //int get_mac_addr (char *device, unsigned char *buffer)
 NETWORK_PROC( PLIST, GetMacAddresses)( void )
 {
-#ifdef INCLUDE_MAC_SUPPORT
-#ifdef __LINUX__
-#ifdef __THIS_CODE_GETS_MY_MAC_ADDRESS___
-	int fd;
-	struct ifreq ifr;
-	fd = socket(PF_UNIX, SOCK_DGRAM, 0);
-	if (fd == -1)
-	{
-		lprintf("Unable to create socket for pclient: %p", pc);
-		return -1;
+	PLIST list = NULL;
+	setupInterfaces();
+	for( int i = 0; i < mac_data.interfaceCount; i++ ) {
+		AddLink( &list, mac_data.hwaddrs[i] );
 	}
-	strcpy (ifr.ifr_name, GetNetworkLong(pc,GNL_IP));
-	if (ioctl (fd, SIOCGIFFLAGS, &ifr) < 0)
-	{
-		close (fd);
-		return -1;
-	}
-	if (ioctl (fd, SIOCGIFHWADDR, &ifr) < 0)
-	{
-		close (fd);
-		return -1;
-	}
-	close (fd);
-	memcpy (pc->hwClient, ifr.ifr_hwaddr.sa_data, 6);
-	return 0;
-#endif
-	/* this code queries the arp table to figure out who the other side is */
-	//int fd;
-	struct arpreq arpr;
-	MemSet( &arpr, 0, sizeof( arpr ) );
-#if 0
-	lprintf( "this is broken." );
-	MemCpy( &arpr.arp_pa, pc->saClient, sizeof( SOCKADDR ) );
-	arpr.arp_ha.sa_family = AF_INET;
-	{
-		char ifbuf[256];
-		ifc.ifc_len = sizeof( ifbuf );
-		ifc.ifc_buf = ifbuf;
-		ioctl( pc->Socket, SIOCGIFCONF, &ifc );
-		{
-			int i;
-			struct ifreq *IFR;
-			IFR = ifc.ifc_req;
-			for( i = ifc.ifc_len / sizeof( struct ifreq); --i >=0; IFR++ )
-			{
-				printf( "IF: %s\n", IFR->ifr_name );
-				strcpy( arpr.arp_dev, "eth0" );
-			}
-		}
-	}
-	DebugBreak();
-	if( ioctl( pc->Socket, SIOCGARP, &arpr ) < 0 )
-	{
-		lprintf( "Error of some sort ... %s", strerror( errno ) );
-		DebugBreak();
-	}
-#endif
-	return 0;
-#endif
-#ifdef WIN32
-	HRESULT hr;
-	ULONG   ulLen;
-	uint8_t hwClient[6];
-	ulLen = 6;
-	//needs ws2_32.lib and iphlpapi.lib in the linker.
-	hr = SendARP ((IPAddr)GetNetworkLong(NULL,GNL_IP), 0x100007f, (PULONG)&hwClient, &ulLen);
-//  The second parameter of SendARP is a PULONG, which is typedef'ed to a pointer to
-//  an unsigned long.  The pc->hwClient is a pointer to an array of uint8_t (unsigned chars),
-//  actually defined in netstruc.h as uint8_t hwClient[6]; Well, in the end, they are all
-//  just addresses, whether they be address to information of eight bits in length, or
-//  of (sizeof(unsigned)) in length.  Although this may, in the future, throw a warning.
-	//hr = SendARP (GetNetworkLong(pc,GNL_IP), 0, (PULONG)pc->hwClient, &ulLen);
-	lprintf ("Return %08x, length %8d\n", hr, ulLen);
-	return 0;
-#endif
-#else
-	return 0;
-#endif
+	return list;
 }
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
@@ -40058,8 +42047,12 @@ void SetAddrName( SOCKADDR *addr, const char *name )
 //---------------------------------------------------------------------------
 SOCKADDR *AllocAddrEx( DBG_VOIDPASS )
 {
-	SOCKADDR *lpsaAddr=(SOCKADDR*)AllocateEx( MAGIC_SOCKADDR_LENGTH + 2 * sizeof( uintptr_t ) DBG_RELAY );
-	memset( lpsaAddr, 0, MAGIC_SOCKADDR_LENGTH );
+//(SOCKADDR*)AllocateEx( MAGIC_SOCKADDR_LENGTH + 2 * sizeof( uintptr_t ) DBG_RELAY );
+	SOCKADDR *lpsaAddr=(SOCKADDR*)GetFromSet( NETWORK_ADDRESS_BUFFER, &networkAddressBufferSet );
+#ifdef DEBUG_ADDRESSES
+	lprintf( "New Length: %d", MAGIC_SOCKADDR_LENGTH);
+#endif
+	memset( lpsaAddr, 0, MAGIC_SOCKADDR_LENGTH + 2 * sizeof( uintptr_t ) );
 	//initialize socket length to something identifiable?
 	((uintptr_t*)lpsaAddr)[0] = 3;
  // string representation of address
@@ -40094,16 +42087,53 @@ int GetAddressParts( SOCKADDR *sa, uint32_t *pdwIP, uint16_t *pdwPort )
 	return result;
 }
 //----------------------------------------------------------------------------
- // return a copy of this address...
+// return a copy of this address... if it is a ipv6 that wraps an ipv4, return ipv4 version
+SOCKADDR* DuplicateAddress_6to4_Ex( SOCKADDR *pAddr DBG_PASS )
+{
+	POINTER tmp = (POINTER)( ( (uintptr_t)pAddr ) - 2*sizeof(uintptr_t) );
+	SOCKADDR *dup = AllocAddrEx( DBG_VOIDRELAY );
+	POINTER tmp2 = (POINTER)( ( (uintptr_t)dup ) - 2*sizeof(uintptr_t) );
+#ifdef DEBUG_ADDRESSES
+	lprintf( "Existing length: %d", SOCKADDR_LENGTH( pAddr ) );
+#endif
+	MemCpy( tmp2, tmp, SOCKADDR_LENGTH( pAddr ) + 2*sizeof(uintptr_t) );
+	if( pAddr->sa_family == AF_INET6 ) {
+		if( memcmp( &((struct sockaddr_in6 *)pAddr)->sin6_addr, "\0\0\0\0\0\0\0\0\0\0\xff\xff", 12 ) == 0 ) {
+			// convert to ipv4
+			((SOCKADDR_IN*)dup)->sin_family = AF_INET;
+#ifdef __LINUX__
+			((SOCKADDR_IN*)dup)->sin_addr.S_un.S_addr = ((struct sockaddr_in6 *)pAddr)->sin6_addr.s6_addr32[3];
+#else
+			((SOCKADDR_IN*)dup)->sin_addr.S_un.S_addr = ((struct sockaddr_in6 *)pAddr)->sin6_addr.s6_words[6] | ( ((struct sockaddr_in6 *)pAddr)->sin6_addr.s6_words[7] << 16);
+#endif
+			((SOCKADDR_IN*)dup)->sin_port = ((SOCKADDR_IN*)pAddr)->sin_port;
+			SOCKADDR_NAME( dup ) = strdup( GetAddrName( pAddr ) );
+			SET_SOCKADDR_LENGTH( dup, IN_SOCKADDR_LENGTH );
+		}
+	}
+	if( ((char**)( ( (uintptr_t)pAddr ) - sizeof(char*) ))[0] )
+		( (char**)( ( (uintptr_t)dup ) - sizeof( char* ) ) )[0]
+				= strdup( ((char**)( ( (uintptr_t)pAddr ) - sizeof( char* ) ))[0] );
+	return dup;
+}
+//----------------------------------------------------------------------------
+// return a copy of this address...
 SOCKADDR* DuplicateAddressEx( SOCKADDR *pAddr DBG_PASS )
 {
 	POINTER tmp = (POINTER)( ( (uintptr_t)pAddr ) - 2*sizeof(uintptr_t) );
 	SOCKADDR *dup = AllocAddrEx( DBG_VOIDRELAY );
 	POINTER tmp2 = (POINTER)( ( (uintptr_t)dup ) - 2*sizeof(uintptr_t) );
+#ifdef DEBUG_ADDRESSES
+	lprintf( "Existing length: %d", SOCKADDR_LENGTH( pAddr ) );
+#endif
 	MemCpy( tmp2, tmp, SOCKADDR_LENGTH( pAddr ) + 2*sizeof(uintptr_t) );
 	if( ((char**)( ( (uintptr_t)pAddr ) - sizeof(char*) ))[0] )
 		( (char**)( ( (uintptr_t)dup ) - sizeof( char* ) ) )[0]
 				= strdup( ((char**)( ( (uintptr_t)pAddr ) - sizeof( char* ) ))[0] );
+	//lprintf( "original:");
+	//LogBinary( (const uint8_t*)tmp, MAGIC_SOCKADDR_LENGTH + 2*sizeof(uintptr_t) );
+	//lprintf( "duplicate:");
+	//LogBinary( (const uint8_t*)tmp2, MAGIC_SOCKADDR_LENGTH + 2*sizeof(uintptr_t) );
 	return dup;
 }
 //---------------------------------------------------------------------------
@@ -40134,20 +42164,12 @@ struct sockaddr_un {
 NETWORK_PROC( SOCKADDR *,CreateUnixAddress)( CTEXTSTR path )
 {
 	struct sockaddr_un *lpsaAddr;
-#ifdef UNICODE
-	char *tmp_path = CStrDup( path );
-#endif
-   lpsaAddr=(struct sockaddr_un*)AllocAddr();
+	lpsaAddr=(struct sockaddr_un*)AllocAddr();
 	if (!lpsaAddr)
 		return(NULL);
 	((uintptr_t*)lpsaAddr)[-1] = StrLen( path ) + 1;
 	lpsaAddr->sun_family = PF_UNIX;
-#ifdef UNICODE
-	strncpy( lpsaAddr->sun_path, tmp_path, 107 );
-	Deallocate( char*, tmp_path );
-#else
 	strncpy( lpsaAddr->sun_path, path, 107 );
-#endif
 #ifdef __MAC__
 	lpsaAddr->sun_len = 2+strlen( lpsaAddr->sun_path );
 #endif
@@ -40168,21 +42190,17 @@ SOCKADDR *CreateAddress( uint32_t dwIP,uint16_t nHisPort)
 		return(NULL);
 	SET_SOCKADDR_LENGTH( lpsaAddr, IN_SOCKADDR_LENGTH );
          // InetAddress Type.
-	lpsaAddr->sin_family	    = AF_INET;
+	lpsaAddr->sin_family            = AF_INET;
 	lpsaAddr->sin_addr.S_un.S_addr  = dwIP;
-	lpsaAddr->sin_port         = htons(nHisPort);
+	lpsaAddr->sin_port              = htons(nHisPort);
 	return((SOCKADDR*)lpsaAddr);
 }
 //---------------------------------------------------------------------------
-SOCKADDR *CreateRemote( CTEXTSTR lpName,uint16_t nHisPort)
+SOCKADDR *CreateRemoteV2( CTEXTSTR lpName, uint16_t nHisPort, enum NetworkAddressFlags flags )
 {
 	SOCKADDR_IN *lpsaAddr;
 	int conversion_success = FALSE;
 	char *tmpName = NULL;
-#ifdef UNICODE
-	char *_lpName = CStrDup( lpName );
-#  define lpName _lpName
-#endif
 #ifndef WIN32
 	PHOSTENT phe;
 	// a IP type name will never have a / in it, therefore
@@ -40200,17 +42218,14 @@ SOCKADDR *CreateRemote( CTEXTSTR lpName,uint16_t nHisPort)
 	lpsaAddr=(SOCKADDR_IN*)AllocAddr();
 	if( !lpsaAddr )
 	{
-#ifdef UNICODE
-		Deallocate( char *, _lpName );
-#endif
 		return(NULL);
 	}
 	SetAddrName( (SOCKADDR*)lpsaAddr, lpName );
 	// if it's a numeric name... attempt to use as an address.
-#ifdef __LINUX__
-	if( lpName &&
-		( lpName[0] >= '0' && lpName[0] <= '9' )
-	  && StrChr( lpName, '.' ) )
+	int has_bracket = 0;
+	if( lpName
+	    && ( lpName[0] >= '0' && lpName[0] <= '9' )
+	    && StrChr( lpName, '.' ) )
 	{
 		if( inet_pton( AF_INET, lpName, &lpsaAddr->sin_addr ) > 0 )
 		{
@@ -40221,12 +42236,13 @@ SOCKADDR *CreateRemote( CTEXTSTR lpName,uint16_t nHisPort)
 		}
 	}
 	else if( lpName
-		   && ( ( lpName[0] >= '0' && lpName[0] <= '9' )
-		      || ( lpName[0] >= 'a' && lpName[0] <= 'f' )
-		      || ( lpName[0] >= 'A' && lpName[0] <= 'F' )
-		      || lpName[0] == ':'
-		      || ( lpName[0] == '[' && lpName[StrLen( lpName ) - 1] == ']' ) )
-		   && StrChr( lpName, ':' )!=StrRChr( lpName, ':' ) )
+	         && ( ( lpName[0] >= '0' && lpName[0] <= '9' )
+	            || ( lpName[0] >= 'a' && lpName[0] <= 'f' )
+	            || ( lpName[0] >= 'A' && lpName[0] <= 'F' )
+	            || lpName[0] == ':'
+	            || ( ( has_bracket = 1 )
+	               , ( lpName[0] == '[' && lpName[StrLen( lpName ) - 1] == ']' ) ) )
+	         && StrChr( lpName, ':' )!=StrRChr( lpName, ':' ) )
 	{
 		//lprintf( "Converting name:", lpName );
 		if( inet_pton( AF_INET6, lpName, (struct in6_addr*)(&lpsaAddr->sin_addr+1) ) > 0 )
@@ -40239,7 +42255,6 @@ SOCKADDR *CreateRemote( CTEXTSTR lpName,uint16_t nHisPort)
 			conversion_success = TRUE;
 		}
 	}
-#endif
 	if( !conversion_success )
 	{
 		if( lpName )
@@ -40267,81 +42282,81 @@ SOCKADDR *CreateRemote( CTEXTSTR lpName,uint16_t nHisPort)
 						break;
 					}
 				}
-				else
-					lprintf( "getaddrinfo Error: %d for [%s]", error, lpName );
+				else {
+					globalNetworkData.lastAddressError = error;
+					//lprintf( "getaddrinfo Error: %d for [%s]", error, lpName );
+					ReleaseAddress( (SOCKADDR*)lpsaAddr );
+					lpsaAddr = NULL;
+				}
 			}
  //WIN32
 #else
-			char *tmp = CStrDup( lpName );
-#ifdef __EMSCRIPTEN__
-			if(!(phe=gethostbyname(tmp) ) )
-#else
-         if(1)
-#endif
+#  ifdef __EMSCRIPTEN__
+			if( !( phe = gethostbyname( lpName ) ) )
 			{
-#if !defined( __EMSCRIPTEN__ )
-				if( !(phe=gethostbyname2(tmp,AF_INET6) ) )
-#endif
-				{
-#if !defined( __EMSCRIPTEN__ )
-					if( !(phe=gethostbyname2(tmp,AF_INET) ) )
-#endif
-					{
-						 // could not find the name in the host file.
-						lprintf( "Could not Resolve to %s  %s", tmp, lpName );
-						ReleaseAddress((SOCKADDR*)lpsaAddr);
-						Deallocate( char*, tmp );
-						if( tmpName ) Deallocate( char*, tmpName );
-						return(NULL);
-					}
-#if !defined( __EMSCRIPTEN__ )
-					else
-					{
-						//lprintf( "Strange, gethostbyname failed, but AF_INET worked... %s", tmp );
-						SET_SOCKADDR_LENGTH( lpsaAddr, IN_SOCKADDR_LENGTH );
-						lpsaAddr->sin_family = AF_INET;
-           // save IP address from host entry.
-						memcpy( &lpsaAddr->sin_addr.S_un.S_addr,
-							    phe->h_addr,
-						       phe->h_length);
-					}
-#endif
-				}
-#if !defined( __EMSCRIPTEN__ )
-				else
-				{
-					SET_SOCKADDR_LENGTH( lpsaAddr, IN6_SOCKADDR_LENGTH );
-         // InetAddress Type.
-					lpsaAddr->sin_family = AF_INET6;
-					//lprintf( "This copy:%d", phe->h_length );
-#  if inline_note_never_included
-					{
-						__SOCKADDR_COMMON (sin6_);
-						n_port_t sin6_port;
-						uint32_t sin6_flowinfo;
-						struct in6_addr sin6_addr;
-						uint32_t sin6_scope_id;
-					};
-#  endif
-           // save IP address from host entry.
-					memcpy( ((struct sockaddr_in6*)lpsaAddr)->sin6_addr.s6_addr,
-							 phe->h_addr,
-							 phe->h_length);
-				}
-#endif
+				 // could not find the name in the host file.
+				globalNetworkData.lastAddressError = errno;
+				lprintf( "Could not Resolve to %s", lpName );
+				ReleaseAddress((SOCKADDR*)lpsaAddr);
+				if( tmpName ) Deallocate( char*, tmpName );
+				return(NULL);
 			}
 			else
 			{
-				Deallocate( char *, tmp );
 				SET_SOCKADDR_LENGTH( lpsaAddr, IN_SOCKADDR_LENGTH );
          // InetAddress Type.
 				lpsaAddr->sin_family = AF_INET;
 				//lprintf( "gethostbyname2:...." );
            // save IP address from host entry.
-				memcpy( &lpsaAddr->sin_addr.S_un.S_addr,
-					 phe->h_addr,
-					 phe->h_length);
+				memcpy( &lpsaAddr->sin_addr.S_un.S_addr
+				      , phe->h_addr,
+				      , phe->h_length);
 			}
+#  else
+			int found = 0;
+			int try_again;
+			do {
+				try_again = 0;
+				if( !( flags & NETWORK_ADDRESS_FLAG_PREFER_V4 )
+				    && ( phe = gethostbyname2( lpName, AF_INET6 ) ) ) {
+					found = 1;
+					SET_SOCKADDR_LENGTH( lpsaAddr, IN6_SOCKADDR_LENGTH );
+         // InetAddress Type.
+					lpsaAddr->sin_family = AF_INET6;
+					//lprintf( "This copy:%d", phe->h_length );
+           // save IP address from host entry.
+					memcpy( ( (struct sockaddr_in6*)lpsaAddr )->sin6_addr.s6_addr
+						, phe->h_addr
+						, phe->h_length );
+				}
+				if( !found
+				    && !( flags & NETWORK_ADDRESS_FLAG_PREFER_V6 )
+				    && ( phe = gethostbyname2( lpName, AF_INET ) ) ) {
+					found = 1;
+					//lprintf( "Strange, gethostbyname failed, but AF_INET worked... %s", tmp );
+					SET_SOCKADDR_LENGTH( lpsaAddr, IN_SOCKADDR_LENGTH );
+					lpsaAddr->sin_family = AF_INET;
+           // save IP address from host entry.
+					memcpy( &lpsaAddr->sin_addr.S_un.S_addr
+						, phe->h_addr
+						, phe->h_length );
+				} else {
+					if( flags & NETWORK_ADDRESS_FLAG_PREFER_V4 ) {
+						flags = NETWORK_ADDRESS_FLAG_PREFER_V6;
+						try_again = 1;
+					}
+				}
+			} while( try_again && !found );
+			if( !found )
+			{
+				// could not find the name in the host file.
+				globalNetworkData.lastAddressError = errno;
+				lprintf( "Could not Resolve to %s", lpName );
+				ReleaseAddress( (SOCKADDR*)lpsaAddr );
+				if( tmpName ) Deallocate( char*, tmpName );
+				return( NULL );
+			}
+#  endif
 #endif
 #ifdef H_ADDR_DEFINED
 #  undef H_ADDR_DEFINED
@@ -40356,21 +42371,62 @@ SOCKADDR *CreateRemote( CTEXTSTR lpName,uint16_t nHisPort)
 			SET_SOCKADDR_LENGTH( lpsaAddr, IN_SOCKADDR_LENGTH );
 		}
 	}
-#ifdef UNICODE
-	Deallocate( char *, _lpName );
-#  undef lpName
-#endif
 	//lprintf( "Resulting thing" );
 	//DumpAddr( "RESULT ADDRESS", (SOCKADDR*)lpsaAddr );
 	// put in his(destination) port number...
 	if( tmpName ) Deallocate( char*, tmpName );
-	lpsaAddr->sin_port         = htons(nHisPort);
+	if( lpsaAddr )
+		lpsaAddr->sin_port         = htons(nHisPort);
 	return((SOCKADDR*)lpsaAddr);
 }
 //----------------------------------------------------------------------------
 #ifdef __cplusplus
 namespace udp {
 #endif
+#undef FreeAddrString
+#undef AddrToString
+	NETWORK_PROC( void, FreeAddrString )( CTEXTSTR string DBG_PASS ) {
+		PTEXT p = (PTEXT)( ( (uintptr_t)string ) - offsetof( TEXT, data.data ) );
+		LineReleaseEx( p DBG_RELAY );
+	}
+	NETWORK_PROC( CTEXTSTR, AddrToString )( CTEXTSTR name, SOCKADDR* sa DBG_PASS ) {
+		PVARTEXT pvt = VarTextCreate();
+		if( !sa ) { vtprintf( pvt, "%s: NULL", name ); } else {
+			BinaryToString( pvt, (uint8_t*)sa, ((sa->sa_family==AF_INET)? IN_SOCKADDR_LENGTH: IN6_SOCKADDR_LENGTH)  DBG_RELAY );
+			if( sa->sa_family == AF_INET ) {
+				vtprintf( pvt, "%s: (%s) %d.%d.%d.%d:%d ", name
+				        , ( ( (uintptr_t*)sa )[-1] & 0xFFFF0000 ) ? ( ( (char**)sa )[-1] ) : "no name"
+				        //*(((unsigned char *)sa)+0),
+				        //*(((unsigned char *)sa)+1),
+				        , *( ( (unsigned char*)sa ) + 4 )
+				        , *( ( (unsigned char*)sa ) + 5 )
+				        , *( ( (unsigned char*)sa ) + 6 )
+				        , *( ( (unsigned char*)sa ) + 7 )
+				        , ntohs( *( ( (unsigned short*)( (unsigned char*)sa + 2 ) ) ) )
+				);
+			} else if( sa->sa_family == AF_INET6 ) {
+				lprintf( "Socket address binary: %s", name );
+				vtprintf( pvt, "%s: (%s) %03d %04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x "
+				        , name
+				        , ( ( (uintptr_t*)sa )[-1] & 0xFFFF0000 ) ? ( ( (char**)sa )[-1] ) : "no name"
+				        , ntohs( *( ( (unsigned short*)( (unsigned char*)sa + 2 ) ) ) )
+				        , ntohs( *( ( (unsigned short*)( (unsigned char*)sa + 8 ) ) ) )
+				        , ntohs( *( ( (unsigned short*)( (unsigned char*)sa + 10 ) ) ) )
+				        , ntohs( *( ( (unsigned short*)( (unsigned char*)sa + 12 ) ) ) )
+				        , ntohs( *( ( (unsigned short*)( (unsigned char*)sa + 14 ) ) ) )
+				        , ntohs( *( ( (unsigned short*)( (unsigned char*)sa + 16 ) ) ) )
+				        , ntohs( *( ( (unsigned short*)( (unsigned char*)sa + 18 ) ) ) )
+				        , ntohs( *( ( (unsigned short*)( (unsigned char*)sa + 20 ) ) ) )
+				        , ntohs( *( ( (unsigned short*)( (unsigned char*)sa + 22 ) ) ) )
+				);
+			}
+		}
+		PTEXT result = VarTextGet( pvt );
+		VarTextDestroy( &pvt );
+		return GetText( result );
+	}
+#define FreeAddrString(s) FreeAddrString( s DBG_SRC )
+#define AddrToString(n,s) AddrToString( n, s DBG_SRC )
 NETWORK_PROC( void, DumpAddrEx)( CTEXTSTR name, SOCKADDR *sa DBG_PASS )
 	{
 		if( !sa ) { _lprintf(DBG_RELAY)( "%s: NULL", name ); return; }
@@ -40390,18 +42446,18 @@ NETWORK_PROC( void, DumpAddrEx)( CTEXTSTR name, SOCKADDR *sa DBG_PASS )
 		{
 			lprintf( "Socket address binary: %s", name );
 			_lprintf(DBG_RELAY)( "%s: (%s) %03d %04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x "
-					 , name
-					, ( ((uintptr_t*)sa)[-1] & 0xFFFF0000 )?( ((char**)sa)[-1] ) : "no name"
-					 , ntohs(*(((unsigned short *)((unsigned char*)sa+2))))
-					 , ntohs(*(((unsigned short *)((unsigned char*)sa+8))))
-					 , ntohs(*(((unsigned short *)((unsigned char*)sa+10))))
-					 , ntohs(*(((unsigned short *)((unsigned char*)sa+12))))
-					 , ntohs(*(((unsigned short *)((unsigned char*)sa+14))))
-					 , ntohs(*(((unsigned short *)((unsigned char*)sa+16))))
-					 , ntohs(*(((unsigned short *)((unsigned char*)sa+18))))
-					 , ntohs(*(((unsigned short *)((unsigned char*)sa+20))))
-					 , ntohs(*(((unsigned short *)((unsigned char*)sa+22))))
-					 );
+			                   , name
+			                   , ( ((uintptr_t*)sa)[-1] & 0xFFFF0000 )?( ((char**)sa)[-1] ) : "no name"
+			                   , ntohs(*(((unsigned short *)((unsigned char*)sa+2))))
+			                   , ntohs(*(((unsigned short *)((unsigned char*)sa+8))))
+			                   , ntohs(*(((unsigned short *)((unsigned char*)sa+10))))
+			                   , ntohs(*(((unsigned short *)((unsigned char*)sa+12))))
+			                   , ntohs(*(((unsigned short *)((unsigned char*)sa+14))))
+			                   , ntohs(*(((unsigned short *)((unsigned char*)sa+16))))
+			                   , ntohs(*(((unsigned short *)((unsigned char*)sa+18))))
+			                   , ntohs(*(((unsigned short *)((unsigned char*)sa+20))))
+			                   , ntohs(*(((unsigned short *)((unsigned char*)sa+22))))
+			                   );
 		}
 }
 #ifdef __cplusplus
@@ -40422,7 +42478,7 @@ NETWORK_PROC( SOCKADDR *, SetNonDefaultPort )( SOCKADDR *pAddr, uint16_t nDefaul
 	return pAddr;
 }
 //----------------------------------------------------------------------------
-NETWORK_PROC( SOCKADDR *,CreateSockAddress)(CTEXTSTR name, uint16_t nDefaultPort )
+NETWORK_PROC( SOCKADDR *,CreateSockAddressV2)(CTEXTSTR name, uint16_t nDefaultPort, enum NetworkAddressFlags flags )
 {
 // blah... should process a ip:port - but - default port?!
 	uint32_t bTmpName = 0;
@@ -40431,10 +42487,6 @@ NETWORK_PROC( SOCKADDR *,CreateSockAddress)(CTEXTSTR name, uint16_t nDefaultPort
 	char *port;
 	uint16_t wPort;
 	CTEXTSTR portName = name;
-#ifdef UNICODE
-	char *_name = CStrDup( name );
-#  define name _name
-#endif
  //-V595
 	if( name[0] == '[' ) {
 		while( portName[0] && portName[0] != ']' )
@@ -40464,12 +42516,7 @@ NETWORK_PROC( SOCKADDR *,CreateSockAddress)(CTEXTSTR name, uint16_t nDefaultPort
 				se = getservbyname( port, NULL );
 				if( !se )
 				{
-#ifdef UNICODE
-#define FMT "S"
-#else
-#define FMT "s"
-#endif
-					Log1( "Could not resolve \"%" FMT "\" as a valid service name", port );
+					lprintf( "Could not resolve \"%s\" as a valid service name", port );
 					//return NULL;
 					wPort = nDefaultPort;
 				}
@@ -40480,10 +42527,7 @@ NETWORK_PROC( SOCKADDR *,CreateSockAddress)(CTEXTSTR name, uint16_t nDefaultPort
 		}
 		else
 			wPort = nDefaultPort;
-#ifdef UNICODE
-#  undef name
-#endif
-		sa = CreateRemote( name, wPort );
+		sa = CreateRemoteV2( name, wPort, flags );
 		if( port )
 		{
   // incase we obliterated it
@@ -40494,11 +42538,8 @@ NETWORK_PROC( SOCKADDR *,CreateSockAddress)(CTEXTSTR name, uint16_t nDefaultPort
 	else
 	{
 		//Log1( "%s does not have a ':'", name );
-		sa = CreateRemote( name, nDefaultPort );
+		sa = CreateRemoteV2( name, nDefaultPort, flags );
 	}
-#ifdef UNICODE
-	Deallocate( char *, _name );
-#endif
 	if( bTmpName ) Deallocate( char*, tmp );
 	return sa;
 }
@@ -40510,7 +42551,7 @@ SOCKADDR *CreateLocal(uint16_t nMyPort)
 	{
 		return(NULL);
 	}
-	return CreateRemote( "0.0.0.0", nMyPort );
+	return CreateRemote( "::0", nMyPort );
 }
 //----------------------------------------------------------------------------
 LOGICAL CompareAddressEx( SOCKADDR *sa1, SOCKADDR *sa2, int method )
@@ -40600,11 +42641,11 @@ LOGICAL IsThisAddressMe( SOCKADDR *addr, uint16_t myport )
 //----------------------------------------------------------------------------
 LOGICAL IsBroadcastAddressForInterface( struct interfaceAddress *address, SOCKADDR *addr ) {
 	if( addr->sa_family == AF_INET ) {
-      //lprintf( "can test for broadcast... %08x %08x %08x", ( ((uint32_t*)(address->saMask->sa_data+2))[0] | ((uint32_t*)(addr->sa_data+2))[0] ), ((uint32_t*)address->saMask->sa_data)[0] , ((uint32_t*)addr->sa_data)[0] );
+		//lprintf( "can test for broadcast... %08x %08x %08x", ( ((uint32_t*)(address->saMask->sa_data+2))[0] | ((uint32_t*)(addr->sa_data+2))[0] ), ((uint32_t*)address->saMask->sa_data)[0] , ((uint32_t*)addr->sa_data)[0] );
 		if( ( ((uint32_t*)(address->saMask->sa_data+2))[0] | ((uint32_t*)(addr->sa_data+2))[0] ) == 0xFFFFFFFFU )
-         return TRUE;
+			return TRUE;
 	}
-   return FALSE;
+	return FALSE;
 }
 //----------------------------------------------------------------------------
 struct interfaceAddress* GetInterfaceForAddress( SOCKADDR *addr )
@@ -40722,7 +42763,8 @@ void ReleaseAddress(SOCKADDR *lpsaAddr)
 	{
 		/* strdup is used for the addr part so use free instead of release */
 		free( ((POINTER*)( ( (uintptr_t)lpsaAddr ) - sizeof(uintptr_t) ))[0] );
-		Deallocate(POINTER, (POINTER)( ( (uintptr_t)lpsaAddr ) - 2 * sizeof(uintptr_t) ));
+		DeleteFromSet( NETWORK_ADDRESS_BUFFER, &networkAddressBufferSet, (POINTER)( ( (uintptr_t)lpsaAddr ) - 2 * sizeof(uintptr_t) ));
+		//Deallocate(POINTER, (POINTER)( ( (uintptr_t)lpsaAddr ) - 2 * sizeof(uintptr_t) ));
 	}
 }
 //----------------------------------------------------------------------------
@@ -40824,8 +42866,6 @@ CTEXTSTR GetSystemName( void )
 #endif
 	return globalNetworkData.system_name;
 }
-#undef NetworkLock
-#undef NetworkUnlock
 NETWORK_PROC( void, GetNetworkAddressBinary )( SOCKADDR *addr, uint8_t **data, size_t *datalen ) {
 	if( addr ) {
 		size_t namelen;
@@ -40926,13 +42966,7 @@ void LoadNetworkAddresses( void ) {
 	{
 		struct addrinfo *result;
 		struct addrinfo *test;
-#ifdef _UNICODE
-		char *tmp = WcharConvert( globalNetworkData.system_name );
-		getaddrinfo( tmp, NULL, NULL, (struct addrinfo**)&result );
-		Deallocate( char*, tmp );
-#else
 		getaddrinfo( globalNetworkData.system_name, NULL, NULL, (struct addrinfo**)&result );
-#endif
 		for( test = result; test; test = test->ai_next )
 		{
 			//if( test->ai_family == AF_INET )
@@ -41044,34 +43078,6 @@ https:
 SACK_NETWORK_NAMESPACE_END
 // DEBUG FALGS in netstruc.h
 //TODO: after the connect and just before the call to the connect callback fill in the PCLIENT's MAC addr field.
-//TODO: After the accept, put in this code:
-/*
-NETWORK_PROC( int, GetMacAddress)(CTEXTSTR device, CTEXTSTR buffer )//int get_mac_addr (char *device, unsigned char *buffer)
-{
-int fd;
-struct ifreq ifr;
-fd = socket(PF_UNIX, SOCK_DGRAM, 0);
-if (fd == -1)
-{
-perr ("Unable to create socket for device: %s", device);
-return -1;
-}
-strcpy (ifr.ifr_name, device);
-if (ioctl (fd, SIOCGIFFLAGS, &ifr) < 0)
-{
-close (fd);
-return -1;
-}
-if (ioctl (fd, SIOCGIFHWADDR, &ifr) < 0)
-{
-close (fd);
-return -1;
-}
-close (fd);
-memcpy (buffer, ifr.ifr_hwaddr.sa_data, 6);
-return 0;
-}
-*/
 //#define DEBUG_SOCK_IO
 #define LIBRARY_DEF
 #ifndef UNDER_CE
@@ -41094,6 +43100,14 @@ return 0;
 #  define ioctl ioctlsocket
 #endif
 //#define NO_LOGGING // force neverlog....
+#if !defined( _WIN32 )
+#  ifndef MSG_NOSIGNAL
+#    define MSG_NOSIGNAL 0
+#  endif
+#else
+// on windows define MSG_NOSIGNAL as 0
+#  define MSG_NOSIGNAL 0
+#endif
 SACK_NETWORK_NAMESPACE
 	extern int CPROC ProcessNetworkMessages( struct peer_thread_info *thread, uintptr_t quick_check );
 _TCP_NAMESPACE
@@ -41102,6 +43116,25 @@ _TCP_NAMESPACE
 LOGICAL TCPDrainRead( PCLIENT pClient );
 #endif
 //----------------------------------------------------------------------------
+static inline void scheduleSocket( PCLIENT pc, struct peer_thread_info *this_thread ) {
+#ifdef _WIN32
+	if( globalNetworkData.flags.bLogNotices )
+		lprintf( "SET GLOBAL EVENT (wait for connect) %p %p", pc, pc->event );
+	EnqueLink( &globalNetworkData.client_schedule, pc );
+	WSASetEvent( globalNetworkData.hMonitorThreadControlEvent );
+	// this_thread may be NULL, which won't be equal to root_thread?
+	// the root thread is a wakeable object wait, which schedules other wsaasyncwait threads
+	if( this_thread == globalNetworkData.root_thread ) {
+		ProcessNetworkMessages( this_thread, 1 );
+	}
+#endif
+#ifdef __LINUX__
+	{
+		//lprintf( "schedule socket %p %d", pc, pc->Socket );
+		AddThreadEvent( pc, 0 );
+	}
+#endif
+}
 void SetNetworkListenerReady( PCLIENT pListen ) {
 	pListen->flags.bWaiting = 0;
 }
@@ -41131,15 +43164,22 @@ void AcceptClient(PCLIENT pListen)
 	// length... usually didn't JAB: 980203
 	nTemp = MAGIC_SOCKADDR_LENGTH;
 	pNewClient->saClient = AllocAddr();
+	pNewClient->pcServer = pListen;
 	pNewClient->flags.bSecure = pListen->flags.bSecure;
 	pNewClient->flags.bAllowDowngrade = pListen->flags.bAllowDowngrade;
 	pNewClient->Socket = accept( pListen->Socket
 										, pNewClient->saClient
 										,&nTemp
 										);
+	SET_SOCKADDR_LENGTH( pNewClient->saClient, pNewClient->saClient->sa_family == AF_INET6?IN6_SOCKADDR_LENGTH:IN_SOCKADDR_LENGTH );
 	//lprintf( "Accept new client...%p %d", pNewClient, pNewClient->Socket );
-#ifdef WIN32
+#ifdef _WIN32
 	SetHandleInformation( (HANDLE)pNewClient->Socket, HANDLE_FLAG_INHERIT, 0 );
+#else
+	{
+		int flags = fcntl( pNewClient->Socket, F_GETFD, 0 );
+		if( flags >= 0 ) fcntl( pNewClient->Socket, F_SETFD, flags | FD_CLOEXEC );
+	}
 #endif
 #ifdef LOG_SOCKET_CREATION
 	lprintf( "Accepted socket %p %d  (%d)", pNewClient, pNewClient->Socket, nTemp );
@@ -41151,13 +43191,16 @@ void AcceptClient(PCLIENT pListen)
 #else
 			int
 #endif
-			nLen = MAGIC_SOCKADDR_LENGTH;
-		if( !pNewClient->saSource )
-			pNewClient->saSource = AllocAddr();
+		nLen = MAGIC_SOCKADDR_LENGTH;
+		pNewClient->saSource = DuplicateAddress( pListen->saSource );
 		if( getsockname( pNewClient->Socket, pNewClient->saSource, &nLen ) )
 		{
+			DumpAddr( "Failed adr:", pNewClient->saSource );
+			DumpAddr( " Failed from:", pNewClient->saClient);
 			lprintf( "getsockname errno = %d", errno );
 		}
+		if( SOCKADDR_NAME( pNewClient->saSource) ) free( SOCKADDR_NAME( pNewClient->saSource ) );
+		SOCKADDR_NAME( pNewClient->saSource ) = NULL;
 		//lprintf( "sockaddrlen: %d", nLen );
 		if( pNewClient->saSource->sa_family == AF_INET )
 			SET_SOCKADDR_LENGTH( pNewClient->saSource, IN_SOCKADDR_LENGTH );
@@ -41180,9 +43223,6 @@ void AcceptClient(PCLIENT pListen)
 	{
 #ifdef _WIN32
 		pNewClient->event = WSACreateEvent();
-#ifdef LOG_NETWORK_EVENT_THREAD
-		lprintf( "New event on accepted %p", pNewClient->event );
-#endif
 		WSAEventSelect( pNewClient->Socket, pNewClient->event,
 			FD_READ|FD_WRITE|FD_CLOSE );
 #else
@@ -41193,8 +43233,13 @@ void AcceptClient(PCLIENT pListen)
 		AddActive( pNewClient );
 		{
 			//lprintf( "Accepted and notifying..." );
+			if( pNewClient->Socket != INVALID_SOCKET ) {
+				scheduleSocket( pNewClient, NULL );
+			}
 			if( pListen->connect.ClientConnected )
 			{
+				pNewClient->dwFlags |= CF_CONNECT_ISSUED;
+				// SSL layer(if hooked) will clear CONNECT_ISSUED, and track that state itself.
 				if( pListen->dwFlags & CF_CPPCONNECT )
 					pListen->connect.CPPClientConnected( pListen->psvConnect, pNewClient );
 				else
@@ -41202,41 +43247,16 @@ void AcceptClient(PCLIENT pListen)
 			}
 			// signal initial read.
 			//lprintf(" Initial notifications...");
- // may be... at least we can fail sooner...
-			pNewClient->dwFlags |= CF_READREADY;
 			if( pNewClient->read.ReadComplete )
 			{
+ // may be... at least we can fail sooner...
+				pNewClient->dwFlags |= CF_READREADY;
 				if( pListen->dwFlags & CF_CPPREAD )
   // process read to get data already pending...
 					pNewClient->read.CPPReadComplete( pNewClient->psvRead, NULL, 0 );
 				else
   // process read to get data already pending...
 					pNewClient->read.ReadComplete( pNewClient, NULL, 0 );
-			}
-			/*
-			* really don't need a write complete on initial open... the initial read should suffice.
-			if( pNewClient->write.WriteComplete  &&
-				!pNewClient->bWriteComplete )
-			{
-				pNewClient->bWriteComplete = TRUE;
-				if( pNewClient->dwFlags & CF_CPPWRITE )
-					pNewClient->write.CPPWriteComplete( pNewClient->psvWrite, NULL, 0 );
-				else
-					pNewClient->write.WriteComplete( pNewClient, NULL, 0 );
-				pNewClient->bWriteComplete = FALSE;
-			}
-			*/
-			//lprintf( "Is it already closed HERE?""?""?");
-			if( pNewClient->Socket ) {
-#ifdef USE_WSA_EVENTS
-				if( globalNetworkData.flags.bLogNotices )
-					lprintf( "SET GLOBAL EVENT (accepted socket added)  %p  %p", pNewClient, pNewClient->event );
-				EnqueLink( &globalNetworkData.client_schedule, pNewClient );
-				WSASetEvent( globalNetworkData.hMonitorThreadControlEvent );
-#endif
-#ifdef __LINUX__
-				AddThreadEvent( pNewClient, 0 );
-#endif
 			}
 			NetworkUnlockEx( pNewClient, 0 DBG_SRC );
 			NetworkUnlockEx( pNewClient, 1 DBG_SRC );
@@ -41258,6 +43278,122 @@ void AcceptClient(PCLIENT pListen)
 	}
 }
 //----------------------------------------------------------------------------
+static void openSocket( PCLIENT pClient, SOCKADDR *pFromAddr, SOCKADDR *pAddr )
+{
+#ifdef __LINUX__
+	int replaced = 0;
+#endif
+	if( !IsInvalid( pClient->Socket ) )
+	{
+		//lprintf( "CLOSE SOCKET IN OPEN: %d", pClient->Socket );
+#ifdef __LINUX__
+		// closing a handle and re-opening it doesn't trick epoll...  have to probably at last add the events...
+		// but there's other work associated with related sockets that needs to be done... not just reset epoll handle
+		RemoveThreadEvent( pClient );
+		replaced = 1;
+#endif
+		closesocket( pClient->Socket );
+	}
+#ifndef _WIN32
+	if( pAddr->sa_family==AF_UNIX ) {
+		// delete the old socket file if it exists
+ // this would only be true for listeners(?)
+		if( pFromAddr == pAddr )
+			unlink( (char*)(((uint16_t*)pAddr)+1));
+	}
+#endif
+	//	pListen->Socket = socket( *(uint16_t*)pAddr, SOCK_STREAM, 0 );
+#ifdef _WIN32
+	pClient->event = WSACreateEvent();
+	pClient->Socket = OpenSocket( ((*(uint16_t*)pAddr) == AF_INET)?TRUE:FALSE, TRUE, FALSE, 0 );
+	if( pClient->Socket == INVALID_SOCKET )
+#endif
+#ifdef __MAC__
+		pClient->Socket = socket( ((uint8_t*)pAddr)[1]
+										, SOCK_STREAM
+										, ((((uint8_t*)pAddr)[1] == AF_INET)||((((uint8_t*)pAddr)[1]) == AF_INET6))?IPPROTO_TCP:0 );
+#else
+		pClient->Socket = socket( *(uint16_t*)pAddr
+										, SOCK_STREAM
+										, (((*(uint16_t*)pAddr) == AF_INET)||((*(uint16_t*)pAddr) == AF_INET6))?IPPROTO_TCP:0 );
+#endif
+#ifdef LOG_SOCKET_CREATION
+	// accept() also is 'created new Socket'
+	lprintf( "Created new socket %p %p %d %d", pClient, pFromAddr, pClient->Socket, errno );
+#endif
+	if( pClient->Socket != INVALID_SOCKET )
+	{
+		int err;
+		if( pFromAddr )
+		{
+			LOGICAL opt = 1;
+			err = setsockopt( pClient->Socket, SOL_SOCKET, SO_REUSEADDR, (const char *)&opt, sizeof( opt ) );
+			if( err )
+			{
+				uint32_t dwError = WSAGetLastError();
+				lprintf( "Failed to set socket option REUSEADDR : %d", dwError );
+			}
+			// client's don't normally have a from, but when they do, it gets overwritten with another duplicate...
+			if( pClient->saSource != pFromAddr ) {
+				if( !pClient->saSource )
+					pClient->saSource = DuplicateAddress( pFromAddr );
+				else {
+					lprintf( "Source address already set... %p", pClient->saSource );
+					DumpAddr( "Source address is already", pClient->saSource );
+					DumpAddr( "new from address is", pFromAddr );
+				}
+			}
+			//DumpAddr( " in pFromAddr source", pClient->saSource );
+			if( ( err = bind( pClient->Socket, pClient->saSource
+											, SOCKADDR_LENGTH( pClient->saSource ) ) ) )
+			{
+				uint32_t dwError;
+				dwError = WSAGetLastError();
+				lprintf( "Error binding connecting socket to source address...: %d", dwError );
+				DumpAddr( "Bind address:", pAddr );
+				closesocket( pClient->Socket );
+				pClient->Socket = INVALID_SOCKET;
+			}
+			if( pClient->saSource->sa_family == AF_INET ) {
+#ifdef _WIN32
+				if( !(*(uint32_t*)(pClient->saSource->sa_data+2) ) ) {
+					// have to have the base one open or pcOther cannot be set.
+					SOCKADDR* lpMyAddr = CreateSockAddress( ":::", ntohs(((uint16_t*)(pClient->saSource->sa_data+0))[0]) );
+					pClient->pcOther = CPPOpenTCPListenerAddr_v2d( lpMyAddr, pClient->connect.CPPClientConnected, pClient->psvConnect, pClient->flags.bWaiting DBG_SRC );
+					ReleaseAddress( lpMyAddr );
+				}
+#endif
+			} else if( pClient->saSource->sa_family == AF_INET6 ) {
+				// maybe we only do the 'other' for IPV4 source?
+#if 0
+				if( MemCmp( pClient->saSource->sa_data+6, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 16 ) == 0 ) {
+					lpMyAddr = CreateSockAddress( "0.0.0.0", ntohs(((uint16_t*)(pClient->saSource->sa_data+0))[0]) );
+					pClient->pcOther = CPPOpenTCPListenerAddr_v2d( lpMyAddr, pClient->connect.CPPClientConnected, pClient->psvConnected, pListen->flags.bWaiting DBG_RELAY );
+					ReleaseAddress( lpMyAddr );
+				}
+#endif
+			}
+		}
+#ifdef WIN32
+		SetHandleInformation( (HANDLE)pClient->Socket, HANDLE_FLAG_INHERIT, 0 );
+#else
+		{
+			int flags = fcntl( pClient->Socket, F_GETFL, 0 );
+			fcntl( pClient->Socket, F_SETFL, O_NONBLOCK );
+		}
+		{
+			int flags = fcntl( pClient->Socket, F_GETFD, 0 );
+			if( flags >= 0 ) fcntl( pClient->Socket, F_SETFD, flags | FD_CLOEXEC );
+		}
+#endif
+	}
+#ifdef __LINUX__
+		// closing a handle and re-opening it doesn't trick epoll...  have to probably at last add the events...
+		// but there's other work associated with related sockets that needs to be done... not just reset epoll handle
+	if( replaced )
+		AddThreadEvent( pClient, 0 );
+#endif
+}
 PCLIENT CPPOpenTCPListenerAddr_v2d( SOCKADDR *pAddr
                                  , cppNotifyCallback NotifyCallback
                                  , uintptr_t psvConnect
@@ -41273,30 +43409,17 @@ PCLIENT CPPOpenTCPListenerAddr_v2d( SOCKADDR *pAddr
 		lprintf( "Network has not been started." );
 		return NULL;
 	}
-	//	pListen->Socket = socket( *(uint16_t*)pAddr, SOCK_STREAM, 0 );
-#ifdef WIN32
-	pListen->Socket = OpenSocket( ((*(uint16_t*)pAddr) == AF_INET)?TRUE:FALSE, TRUE, FALSE, 0 );
-	if( pListen->Socket == INVALID_SOCKET )
-#endif
-#ifdef __MAC__
-		pListen->Socket = socket( ((uint8_t*)pAddr)[1]
-										, SOCK_STREAM
-										, ((((uint8_t*)pAddr)[1] == AF_INET)||((((uint8_t*)pAddr)[1]) == AF_INET6))?IPPROTO_TCP:0 );
-#else
-		pListen->Socket = socket( *(uint16_t*)pAddr
-										, SOCK_STREAM
-										, (((*(uint16_t*)pAddr) == AF_INET)||((*(uint16_t*)pAddr) == AF_INET6))?IPPROTO_TCP:0 );
-#endif
-#ifdef WIN32
-	SetHandleInformation( (HANDLE)pListen->Socket, HANDLE_FLAG_INHERIT, 0 );
-#endif
-#ifdef LOG_SOCKET_CREATION
-	lprintf( "Created new socket %d", pListen->Socket );
-#endif
+	// openSocket also schedules it for event handling... so setup what events.
  // make sure this flag is clear!
 	pListen->dwFlags &= ~CF_UDP;
 	pListen->dwFlags |= CF_LISTEN;
 	pListen->flags.bWaiting = waitForReady;
+	pListen->connect.CPPClientConnected = NotifyCallback;
+	pListen->psvConnect = psvConnect;
+	pListen->dwFlags |= CF_CPPCONNECT;
+	// this does the bind part of the socket also... (if any)
+ /*second parameter just selects link protocol, and stream */
+	openSocket( pListen, pAddr, pAddr );
 	if( pListen->Socket == INVALID_SOCKET )
 	{
 		lprintf( " Open Listen Socket Fail... %d", errno);
@@ -41309,57 +43432,9 @@ PCLIENT CPPOpenTCPListenerAddr_v2d( SOCKADDR *pAddr
 		pListen = NULL;
 		return NULL;
 	}
-#ifdef _WIN32
-#  ifdef USE_WSA_EVENTS
-	pListen->event = WSACreateEvent();
-	WSAEventSelect( pListen->Socket, pListen->event, FD_ACCEPT|FD_CLOSE );
-#  else
-	if( WSAAsyncSelect( pListen->Socket, globalNetworkData.ghWndNetwork,
-                       SOCKMSG_TCP, FD_ACCEPT|FD_CLOSE ) )
-	{
-		lprintf( "Windows AsynchSelect failed: %d", WSAGetLastError() );
-		EnterCriticalSec( &globalNetworkData.csNetwork );
-		InternalRemoveClientEx( pListen, TRUE, FALSE );
-		LeaveCriticalSec( &globalNetworkData.csNetwork );
-		NetworkUnlockEx( pListen, 0 DBG_SRC );
-		NetworkUnlockEx( pListen, 1 DBG_SRC );
-		return NULL;
-	}
-#  endif
-	{
-		int t = FALSE;
-		setsockopt( pListen->Socket, IPPROTO_IPV6, IPV6_V6ONLY, (const char *)&t, 4 );
-	}
-#else
-	{
-		int t = TRUE;
-		setsockopt( pListen->Socket, SOL_SOCKET, SO_REUSEADDR, &t, 4 );
-		fcntl( pListen->Socket, F_SETFL, O_NONBLOCK );
-	}
-#  ifdef SO_REUSEPORT
-	{
-		int t = TRUE;
-		setsockopt( pListen->Socket, SOL_SOCKET, SO_REUSEPORT, &t, 4 );
-	}
-#  endif
-#endif
-#ifndef _WIN32
-	if( pAddr->sa_family==AF_UNIX )
-		unlink( (char*)(((uint16_t*)pAddr)+1));
-#endif
-	if (!pAddr ||
-		 bind(pListen->Socket ,pAddr, SOCKADDR_LENGTH( pAddr ) ) )
-	{
-		_lprintf(DBG_RELAY)( "Cannot bind to address..:%d", WSAGetLastError() );
-		DumpAddr( "Bind address:", pAddr );
-		EnterCriticalSec( &globalNetworkData.csNetwork );
-		InternalRemoveClientEx( pListen, TRUE, FALSE );
-		LeaveCriticalSec( &globalNetworkData.csNetwork );
-		NetworkUnlockEx( pListen, 0 DBG_SRC );
-		NetworkUnlockEx( pListen, 1 DBG_SRC );
-		return NULL;
-	}
+	AddActive( pListen );
 	pListen->saSource = DuplicateAddress( pAddr );
+	scheduleSocket( pListen, NULL );
 	if(listen(pListen->Socket, SOMAXCONN ) == SOCKET_ERROR )
 	{
 		lprintf( "listen(5) failed: %d", WSAGetLastError() );
@@ -41370,23 +43445,11 @@ PCLIENT CPPOpenTCPListenerAddr_v2d( SOCKADDR *pAddr
 		NetworkUnlockEx( pListen, 1 DBG_SRC );
 		return NULL;
 	}
-	pListen->connect.CPPClientConnected = NotifyCallback;
-	pListen->psvConnect = psvConnect;
-	pListen->dwFlags |= CF_CPPCONNECT;
 	NetworkUnlockEx( pListen, 0 DBG_SRC );
 	NetworkUnlockEx( pListen, 1 DBG_SRC );
-	AddActive( pListen );
-   // make sure to schedule this socket for events (connect)
+	// make sure to schedule this socket for events (connect)
 #ifdef USE_WSA_EVENTS
-	if( globalNetworkData.flags.bLogNotices )
-		lprintf( "SET GLOBAL EVENT (listener added)" );
-	EnqueLink( &globalNetworkData.client_schedule, pListen );
-	WSASetEvent( globalNetworkData.hMonitorThreadControlEvent );
-#endif
-#ifdef __LINUX__
-	EnterCriticalSec( &globalNetworkData.csNetwork );
-	AddThreadEvent( pListen, 0 );
-	LeaveCriticalSec( &globalNetworkData.csNetwork );
+	WSAEventSelect( pListen->Socket, pListen->event, FD_ACCEPT|FD_CLOSE );
 #endif
 	return pListen;
 }
@@ -41424,15 +43487,8 @@ PCLIENT CPPOpenTCPListenerExx( uint16_t wPort
                              )
 {
 	SOCKADDR *lpMyAddr = CreateLocal(wPort);
-	PCLIENT pc = CPPOpenTCPListenerAddrExx( lpMyAddr, NotifyCallback, psvConnect DBG_RELAY );
+	PCLIENT pc = CPPOpenTCPListenerAddr_v2d( lpMyAddr, NotifyCallback, psvConnect, FALSE DBG_RELAY );
 	ReleaseAddress( lpMyAddr );
-	if( pc )
-	{
-		// have to have the base one open or pcOther cannot be set.
-		lpMyAddr = CreateSockAddress( ":::", wPort );
-		pc->pcOther = CPPOpenTCPListenerAddrExx( lpMyAddr, NotifyCallback, psvConnect DBG_RELAY );
-		ReleaseAddress( lpMyAddr );
-	}
 	return pc;
 }
 //----------------------------------------------------------------------------
@@ -41455,42 +43511,158 @@ int NetworkConnectTCPEx( PCLIENT pc DBG_PASS ) {
 		Relinquish();
 	}
 	pc->dwFlags |= CF_CONNECTING;
-	//DumpAddr( "Connect to", &pResult->saClient );
-	if( (err = connect( pc->Socket, pc->saClient
-		, SOCKADDR_LENGTH( pc->saClient ) )) )
-	{
-		uint32_t dwError;
-		dwError = WSAGetLastError();
-		if( dwError != WSAEWOULDBLOCK
+	while( 1 ) {
+		if( (err = connect( pc->Socket, pc->saClient
+		                  , SOCKADDR_LENGTH( pc->saClient ) )) )
+		{
+			uint32_t dwError;
+			dwError = WSAGetLastError();
+			//lprintf( "err: %d %d %d", err, dwError, EHOSTUNREACH );
+			if(
 #ifdef __LINUX__
-			&& dwError != EINPROGRESS
+			    dwError == EHOSTUNREACH
+			  || dwError == ENETUNREACH
 #else
-			&& dwError != WSAEINPROGRESS
+			    dwError == WSAENETUNREACH
 #endif
 			)
-		{
-			_lprintf( DBG_RELAY )("Connect FAIL: %d %d %" _32f, pc->Socket, err, dwError);
-			EnterCriticalSec( &globalNetworkData.csNetwork );
-			InternalRemoveClientEx( pc, TRUE, FALSE );
-			LeaveCriticalSec( &globalNetworkData.csNetwork );
-			NetworkUnlockEx( pc, 0 DBG_SRC );
-			pc = NULL;
-			return -1;
+			{
+				//DumpAddr( "Unreachable address:", pc->saClient );
+				if( pc->saClient->sa_family == AF_INET6 )
+				{
+					char * tmp = ((char**)(pc->saClient))[-1];
+					if( tmp ) {
+						SOCKADDR *addr = (SOCKADDR*)CreateSockAddressV2( tmp, ntohs((uint16_t)( (SOCKADDR_IN*)(pc->saClient))->sin_port), NETWORK_ADDRESS_FLAG_PREFER_V4 );
+						if( addr->sa_family == AF_INET ) {
+							pc->saClient = addr;
+							// the old pc->Socket was scheduled (in wait events?)
+							// and this creates a new One...
+							//lprintf( "Re-open the socket... was %d", pc->Socket );
+							// if saSource == saClient (which it never should, they should be indepdenatly duplicated)
+							// this behaves like a listener
+							if( pc->saSource ) {
+								lprintf( "Why is saSource not NULL? (if it wasn't... ) %p", pc->saSource );
+								ReleaseAddress( pc->saSource );
+								pc->saSource = NULL;
+							}
+ /* used to bind to an address on the client side */
+ /* just determins socket parameters with family */
+							openSocket( pc, pc->saSource, pc->saClient );
+							//lprintf( "Re-open the socket... and is %d", pc->Socket );
+							// should kick the thread waiting to wait on the new one now...
+							// but it didn't have to be scheduled, connect() bombed before an event...
+							continue;
+						}else {
+							DumpAddr( "The resulting request for a V4 was still v6?", addr );
+							DumpAddr( "and it started V6", pc->saClient );
+							ReleaseAddress( addr );
+						}
+					}
+				}
+			} else if( dwError != WSAEWOULDBLOCK
+#ifdef __LINUX__
+			  && dwError != EINPROGRESS
+#else
+			  && dwError != WSAEINPROGRESS
+#endif
+				)
+			{
+				// is a union, either is valid to test
+				if( pc->connect.CPPThisConnected ) {
+					//lprintf( "connect callback dispatch... %p", pc->saClient );
+					pc->dwFlags |= CF_CONNECT_ISSUED;
+					if( pc->dwFlags & CF_CPPCONNECT )
+						pc->connect.CPPThisConnected( pc->psvConnect, dwError );
+					else
+						pc->connect.ThisConnected( pc, dwError );
+				}
+				//_lprintf( DBG_RELAY )("Connect FAIL: %p %d %d %" _32f, pc->saClient, pc->Socket, err, dwError);
+				EnterCriticalSec( &globalNetworkData.csNetwork );
+				InternalRemoveClientEx( pc, TRUE, FALSE );
+				LeaveCriticalSec( &globalNetworkData.csNetwork );
+				NetworkUnlockEx( pc, 0 DBG_SRC );
+				pc = NULL;
+				return dwError;
+			}
+			else
+			{
+				// is EINPROGRESS on linux, WSAEWOULDBLOCK on windows...
+				//lprintf( "Pending connect has begun...%p %d", pc, dwError );
+			}
 		}
 		else
 		{
-			//lprintf( "Pending connect has begun..." );
-		}
-	}
-	else
-	{
-#ifdef VERBOSE_DEBUG
-		lprintf( "Connected before we even get a chance to wait" );
+			// if FD_CONNECT isn't selected, then this section is called
+			// otherwise this is mostly dead code in this block.
+			pc->dwFlags &= ~CF_CONNECTING;
+			pc->dwFlags |= CF_CONNECTED;
+			if( !pc->saSource ) {
+#ifdef __LINUX__
+				socklen_t
+#else
+				int
 #endif
+					nLen = MAGIC_SOCKADDR_LENGTH;
+				if( !pc->saSource )
+					pc->saSource = AllocAddr();
+				if( getsockname( pc->Socket, pc->saSource, &nLen ) ) {
+					lprintf( "getsockname errno = %d", errno );
+				}
+				SET_SOCKADDR_LENGTH( pc->saSource
+					, pc->saSource->sa_family == AF_INET
+					? IN_SOCKADDR_LENGTH
+					: IN6_SOCKADDR_LENGTH );
+			}
+			if( pc->connect.CPPThisConnected ) {
+				//lprintf( "connect callback dispatch... %p", pc->saClient );
+				pc->dwFlags |= CF_CONNECT_ISSUED;
+				if( pc->dwFlags & CF_CPPCONNECT )
+					pc->connect.CPPThisConnected( pc->psvConnect, 0 );
+				else
+					pc->connect.ThisConnected( pc, 0 );
+			}
+			if( pc->read.ReadComplete ) {
+				if( pc->dwFlags & CF_CPPREAD )
+					// process read to get data already pending...
+					pc->read.CPPReadComplete( pc->psvRead, NULL, 0 );
+				else
+					// process read to get data already pending...
+					pc->read.ReadComplete( pc, NULL, 0 );
+			}
+//#ifdef VERBOSE_DEBUG
+			lprintf( "Connected before we even get a chance to wait" );
+//#endif
+		}
+		break;
 	}
 	NetworkUnlockEx( pc, 0 DBG_SRC );
 	return 0;
 }
+#if 0
+static inline void waitScheduleSocket( PCLIENT pc ) {
+#ifdef _WIN32
+	int tries = 0;
+	while( !pc->this_thread ) {
+		INDEX idx;
+		POINTER client;
+ // wait for it to be added to waiting lists?
+		IdleFor(1);
+		if( tries++ > 10 ) {
+			tries = 0;
+			for( idx = 0; client = PeekQueueEx( globalNetworkData.client_schedule, (int)idx); idx++ ){
+				if( client == pc ) break;
+			}
+			if( !pc->this_thread && !client ) {
+				lprintf( "Lost client in schedule list:%p (Requeuing)", pc );
+				EnqueLink( &globalNetworkData.client_schedule, pc );
+				WSASetEvent( globalNetworkData.hMonitorThreadControlEvent );
+			}
+		}
+	}
+	//if( tries > 1 ) lprintf( "Took %d tries.", tries );
+#endif
+}
+#endif
 //----------------------------------------------------------------------------
 static PCLIENT InternalTCPClientAddrFromAddrExxx( SOCKADDR *lpAddr, SOCKADDR *pFromAddr,
                                                   int bCPP,
@@ -41515,25 +43687,12 @@ static PCLIENT InternalTCPClientAddrFromAddrExxx( SOCKADDR *lpAddr, SOCKADDR *pF
 	{
 		struct peer_thread_info *this_thread = IsNetworkThread();
 		// use the sockaddr to switch what type of socket this is.
-#ifdef WIN32
-		pResult->Socket = OpenSocket( ((*(uint16_t*)lpAddr) == AF_INET)?TRUE:FALSE, TRUE, FALSE, 0 );
-		if( pResult->Socket == INVALID_SOCKET )
-#endif
-#ifdef __MAC__
-			pResult->Socket=socket( ((uint8_t*)lpAddr)[1]
-			                      , SOCK_STREAM
-			                      , (((((uint8_t*)lpAddr)[1]) == AF_INET)||((((uint8_t*)lpAddr)[1]) == AF_INET6))?IPPROTO_TCP:0 );
-#else
-			pResult->Socket=socket( *(uint16_t*)lpAddr
-			                      , SOCK_STREAM
-			                      , (((*(uint16_t*)lpAddr) == AF_INET)||((*(uint16_t*)lpAddr) == AF_INET6))?IPPROTO_TCP:0 );
-#endif
-#ifdef LOG_SOCKET_CREATION
-		lprintf( "Created new socket %p %d", pResult, pResult->Socket );
-#endif
+ // addr determins some socket flags
+		openSocket( pResult, pFromAddr, lpAddr );
 		if (pResult->Socket==INVALID_SOCKET)
 		{
-			lprintf( "Create socket failed. %d", WSAGetLastError() );
+			// this is a windows failure like 'network not started'
+			lprintf( "Create socket failed (network not started?). %d", WSAGetLastError() );
 			EnterCriticalSec( &globalNetworkData.csNetwork );
 			InternalRemoveClientEx( pResult, TRUE, FALSE );
 			LeaveCriticalSec( &globalNetworkData.csNetwork );
@@ -41543,57 +43702,7 @@ static PCLIENT InternalTCPClientAddrFromAddrExxx( SOCKADDR *lpAddr, SOCKADDR *pF
 		}
 		else
 		{
-			int err;
-#ifdef _WIN32
-			if( 0 )
-			{
-				DWORD dwFlags;
-				GetHandleInformation( (HANDLE)pResult->Socket, &dwFlags );
-				lprintf( "Natural was %d", dwFlags );
-			}
-			SetHandleInformation( (HANDLE)pResult->Socket, HANDLE_FLAG_INHERIT, 0 );
-#  ifdef USE_WSA_EVENTS
-			pResult->event = WSACreateEvent();
-#    ifdef LOG_NETWORK_EVENT_THREAD
-			lprintf( "new event is %p", pResult->event );
-#    endif
-			WSAEventSelect( pResult->Socket, pResult->event, FD_READ|FD_WRITE|FD_CONNECT|FD_CLOSE );
-#  else
-			if( WSAAsyncSelect( pResult->Socket,globalNetworkData.ghWndNetwork,SOCKMSG_TCP
-			                  , FD_READ|FD_WRITE|FD_CLOSE|FD_CONNECT) )
-			{
-				lprintf( " Select NewClient Fail! %d", WSAGetLastError() );
-				EnterCriticalSec( &globalNetworkData.csNetwork );
-				InternalRemoveClientEx( pResult, TRUE, FALSE );
-				LeaveCriticalSec( &globalNetworkData.csNetwork );
-				NetworkUnlockEx( pResult, 1 DBG_SRC );
-				NetworkUnlockEx( pResult, 0 DBG_SRC );
-				pResult = NULL;
-				goto LeaveNow;
-			}
-#  endif
-#else
-			fcntl( pResult->Socket, F_SETFL, O_NONBLOCK );
-#endif
-			if( pFromAddr )
-			{
-				LOGICAL opt = 1;
-				err = setsockopt( pResult->Socket, SOL_SOCKET, SO_REUSEADDR, (const char *)&opt, sizeof( opt ) );
-				if( err )
-				{
-					uint32_t dwError = WSAGetLastError();
-					lprintf( "Failed to set socket option REUSEADDR : %d", dwError );
-				}
-				pResult->saSource = DuplicateAddress( pFromAddr );
-				//DumpAddr( "source", pResult->saSource );
-				if( ( err = bind( pResult->Socket, pResult->saSource
-				                , SOCKADDR_LENGTH( pResult->saSource ) ) ) )
-				{
-					uint32_t dwError;
-					dwError = WSAGetLastError();
-					lprintf( "Error binding connecting socket to source address... continuing with connect : %d", dwError );
-				}
-			}
+			// allow caller to forge their copy (Hold, but this structure has negative indices)
 			pResult->saClient = DuplicateAddress( lpAddr );
 			// set up callbacks before asynch select...
 			pResult->connect.CPPThisConnected  = pConnectComplete;
@@ -41610,124 +43719,102 @@ static PCLIENT InternalTCPClientAddrFromAddrExxx( SOCKADDR *lpAddr, SOCKADDR *pF
 			NetworkUnlockEx(pResult, 1 DBG_SRC);
 			NetworkUnlockEx(pResult, 0 DBG_SRC);
 			//lprintf( "Leaving Client's critical section" );
-			// socket should now get scheduled for events, after unlocking it?
+			scheduleSocket( pResult, this_thread );
 #ifdef USE_WSA_EVENTS
-			if( globalNetworkData.flags.bLogNotices )
-				lprintf( "SET GLOBAL EVENT (wait for connect) new %p %p  %08x %p", pResult, pResult->event, pResult->dwFlags, globalNetworkData.hMonitorThreadControlEvent );
-			EnqueLink( &globalNetworkData.client_schedule, pResult );
-			if( this_thread == globalNetworkData.root_thread ) {
-				ProcessNetworkMessages( this_thread, 1 );
-				if( !pResult->this_thread ) {
-					WSASetEvent( globalNetworkData.hMonitorThreadControlEvent );
-					//lprintf( "Failed to schedule myself in a single run of root thread that I am running on." );
-				}
-			}
-			else {
-				WSASetEvent( globalNetworkData.hMonitorThreadControlEvent );
-				while( !pResult->this_thread )
- // wait for it to be added to waiting lists?
-					Relinquish();
-			}
+			WSAEventSelect( pResult->Socket, pResult->event, FD_CONNECT|FD_READ|FD_WRITE|FD_CLOSE );
 #endif
-#ifdef __LINUX__
-			AddThreadEvent( pResult, 0 );
-#endif
+			// socket should now get scheduled for events, after unlocking it?
 			if (!(flags & OPEN_TCP_FLAG_DELAY_CONNECT)) {
 				NetworkConnectTCPEx(pResult DBG_RELAY);
-			}
-			if( !pConnectComplete && !(flags & OPEN_TCP_FLAG_DELAY_CONNECT) )
-			{
-				uint64_t Start = timeGetTime64();
-				int bProcessing = 0;
-				// should trigger a rebuild (if it's the root thread)
-				pResult->dwFlags |= CF_CONNECT_WAITING;
-				// caller was expecting connect to block....
-				while( !( pResult->dwFlags & (CF_CONNECTED|CF_CONNECTERROR|CF_CONNECT_CLOSED) ) &&
-						( ( timeGetTime64() - Start ) < globalNetworkData.dwConnectTimeout ) )
+				// if there is not a network callback, wait for connect inline...
+				if( !pConnectComplete )
 				{
-					// may be this thread itself which connects...
-					if( this_thread )
+					uint64_t Start = timeGetTime64();
+					int bProcessing = 0;
+					// should trigger a rebuild (if it's the root thread)
+					pResult->dwFlags |= CF_CONNECT_WAITING;
+					// caller was expecting connect to block....
+					while( !( pResult->dwFlags & (CF_CONNECTED|CF_CONNECTERROR|CF_CONNECT_CLOSED) ) &&
+							( ( timeGetTime64() - Start ) < globalNetworkData.dwConnectTimeout ) )
 					{
-						if( !bProcessing )
+						// may be this thread itself which connects...
+						if( this_thread )
 						{
-							if( ProcessNetworkMessages( this_thread, 0 ) >= 0 )
-								bProcessing = 1;
+							if( !bProcessing )
+							{
+								if( ProcessNetworkMessages( this_thread, 0 ) >= 0 )
+									bProcessing = 1;
+								else
+									bProcessing = 2;
+							}
 							else
-								bProcessing = 2;
+							{
+								if( bProcessing >= 0 )
+									ProcessNetworkMessages( this_thread, 0 );
+							}
 						}
 						else
 						{
-							if( bProcessing >= 0 )
-								ProcessNetworkMessages( this_thread, 0 );
+							// isn't a network thread; so wait as an external thread
+							bProcessing = 2;
+						}
+						if( bProcessing == 2 )
+						{
+							pResult->pWaiting = MakeThread();
+							if( globalNetworkData.flags.bLogNotices )
+								lprintf( "Falling asleep 3 seconds waiting for connect on %p.", pResult );
+							//pResult->tcp_delay_count++;
+							WakeableSleep( 3000 );
+							pResult->pWaiting = NULL;
+							if( pResult->dwFlags & CF_CLOSING )
+								return NULL;
+						}
+						else
+						{
+							lprintf( "Spin wait for connect" );
+							Relinquish();
 						}
 					}
-					else
+					if( (( timeGetTime64() - Start ) >= 10000)
+						|| (pResult->dwFlags &  CF_CONNECTERROR ) )
 					{
-						// isn't a network thread; so wait as an external thread
-						bProcessing = 2;
+						if( pResult->dwFlags &  CF_CONNECTERROR )
+						{
+							//DumpAddr( "Connect to: ", lpAddr );
+							//lprintf( "Connect FAIL: message result" );
+						}
+						else
+							lprintf( "Connect FAIL: Timeout" );
+						EnterCriticalSec( &globalNetworkData.csNetwork );
+						InternalRemoveClientEx( pResult, TRUE, FALSE );
+						LeaveCriticalSec( &globalNetworkData.csNetwork );
+						pResult->dwFlags &= ~CF_CONNECT_WAITING;
+						return pResult = NULL;
 					}
-					if( bProcessing == 2 )
 					{
-						pResult->pWaiting = MakeThread();
-						if( globalNetworkData.flags.bLogNotices )
-							lprintf( "Falling asleep 3 seconds waiting for connect on %p.", pResult );
-						pResult->tcp_delay_count++;
-						WakeableSleep( 3000 );
-						pResult->pWaiting = NULL;
-						if( pResult->dwFlags & CF_CLOSING )
-							return NULL;
-					}
-					else
-					{
-						lprintf( "Spin wait for connect" );
-						Relinquish();
-					}
-				}
-				if( (( timeGetTime64() - Start ) >= 10000)
-					|| (pResult->dwFlags &  CF_CONNECTERROR ) )
-				{
-					if( pResult->dwFlags &  CF_CONNECTERROR )
-					{
-						//DumpAddr( "Connect to: ", lpAddr );
-						//lprintf( "Connect FAIL: message result" );
-					}
-					else
-						lprintf( "Connect FAIL: Timeout" );
-					EnterCriticalSec( &globalNetworkData.csNetwork );
-					InternalRemoveClientEx( pResult, TRUE, FALSE );
-					LeaveCriticalSec( &globalNetworkData.csNetwork );
-					pResult->dwFlags &= ~CF_CONNECT_WAITING;
-					pResult = NULL;
-					goto LeaveNow;
-				}
-				{
-			#ifdef __LINUX__
-					socklen_t
-			#else
+#ifdef __LINUX__
+						socklen_t
+#else
 						int
-			#endif
-						nLen = MAGIC_SOCKADDR_LENGTH;
-					if( !pResult->saSource )
-						pResult->saSource = AllocAddr();
-					if( getsockname( pResult->Socket, pResult->saSource, &nLen ) )
-					{
-						lprintf( "getsockname errno = %d", errno );
-					}
-				}
-				//lprintf( "Connect did complete... returning to application");
-			}
-#ifdef VERBOSE_DEBUG
-			else
-				lprintf( "Connect in progress, will notify application when done." );
 #endif
-			pResult->dwFlags &= ~CF_CONNECT_WAITING;
+							nLen = MAGIC_SOCKADDR_LENGTH;
+						if( !pResult->saSource )
+							pResult->saSource = AllocAddr();
+						//lprintf( "Setup sa Source to connect (reconnect?) %p", pResult->saSource);
+						if( getsockname( pResult->Socket, pResult->saSource, &nLen ) )
+						{
+							lprintf( "getsockname errno = %d", errno );
+						}
+					}
+					//lprintf( "Connect did complete... returning to application");
+					pResult->dwFlags &= ~CF_CONNECT_WAITING;
+				}
+#ifdef VERBOSE_DEBUG
+				else
+					lprintf( "Connect in progress, will notify application when done." );
+#endif
+			}
 		}
-	}
-LeaveNow:
-  // didn't break out of the loop with a good return.
-	if( !pResult )
-	{
-		//lprintf( "Failed Open TCP Client." );
 	}
 	return pResult;
 }
@@ -41818,22 +43905,34 @@ PCLIENT CPPOpenTCPClientExEx(CTEXTSTR lpName,uint16_t wPort,
 	PCLIENT pClient;
 	SOCKADDR *lpsaDest;
 	pClient = NULL;
-	if( lpName &&
-	   (lpsaDest = CreateSockAddress(lpName,wPort) ) )
-	{
-		pClient = CPPOpenTCPClientAddrExxx( lpsaDest
-		                                  , pReadComplete
-		                                  , psvRead
-		                                  , CloseCallback
-		                                  , psvClose
-		                                  , WriteComplete
-		                                  , psvWrite
-		                                  , pConnectComplete
-		                                  , psvConnect
-		                                  , flags
-		                                    DBG_RELAY
-		                                  );
-		ReleaseAddress( lpsaDest );
+	if( lpName ) {
+		if(lpsaDest = CreateSockAddressV2(lpName,wPort
+		                                 , (flags&OPEN_TCP_FLAG_PREFER_V6)
+		                                   ? NETWORK_ADDRESS_FLAG_PREFER_V6
+		                                   : (flags&OPEN_TCP_FLAG_PREFER_V4)
+		                                   ? NETWORK_ADDRESS_FLAG_PREFER_V4
+		                                   : NETWORK_ADDRESS_FLAG_PREFER_NONE
+		   ) ) {
+			pClient = CPPOpenTCPClientAddrExxx( lpsaDest
+			                                  , pReadComplete
+			                                  , psvRead
+			                                  , CloseCallback
+			                                  , psvClose
+			                                  , WriteComplete
+			                                  , psvWrite
+			                                  , pConnectComplete
+			                                  , psvConnect
+			                                  , flags
+			                                    DBG_RELAY
+			                                  );
+			ReleaseAddress( lpsaDest );
+		} else if( pConnectComplete ) {
+#ifdef WIN32
+			pConnectComplete( psvConnect, globalNetworkData.lastAddressError );
+#else
+			pConnectComplete( psvConnect, errno );
+#endif
+		}
 	}
 	return pClient;
 }
@@ -41849,16 +43948,28 @@ PCLIENT OpenTCPClientExxx(CTEXTSTR lpName,uint16_t wPort,
 	PCLIENT pClient;
 	SOCKADDR *lpsaDest;
 	pClient = NULL;
-	if( lpName &&
-		(lpsaDest = CreateSockAddress(lpName,wPort) ) )
-	{
-		pClient = OpenTCPClientAddrExxx( lpsaDest
-		                               , pReadComplete
-		                               , CloseCallback
-		                               , WriteComplete
-		                               , pConnectComplete
-		                               , flags DBG_RELAY );
-		ReleaseAddress( lpsaDest );
+	if( lpName ) {
+		if(lpsaDest = CreateSockAddressV2(lpName,wPort
+		                                 , (flags&OPEN_TCP_FLAG_PREFER_V6)
+		                                   ? NETWORK_ADDRESS_FLAG_PREFER_V6
+		                                   : (flags&OPEN_TCP_FLAG_PREFER_V4)
+		                                   ? NETWORK_ADDRESS_FLAG_PREFER_V4
+		                                   : NETWORK_ADDRESS_FLAG_PREFER_NONE
+		   ) ) {
+			pClient = OpenTCPClientAddrExxx( lpsaDest
+			                               , pReadComplete
+			                               , CloseCallback
+			                               , WriteComplete
+			                               , pConnectComplete
+			                               , flags DBG_RELAY );
+			ReleaseAddress( lpsaDest );
+		} else if( pConnectComplete ) {
+#ifdef WIN32
+			pConnectComplete( NULL, globalNetworkData.lastAddressError );
+#else
+			pConnectComplete( NULL, errno );
+#endif
+		}
 	}
 	return pClient;
 }
@@ -41938,7 +44049,7 @@ int FinishPendingRead(PCLIENT lpClient DBG_PASS )
 							 lpClient->RecvPending.dwUsed,
 							 (int)lpClient->RecvPending.dwAvail,0);
 			 dwError = WSAGetLastError();
-			//lprintf( "Network receive %d %d %d", nRecv, lpClient->RecvPending.dwUsed, lpClient->RecvPending.dwAvail );
+			//lprintf( "Network receive %p %d %zd %zd", lpClient, nRecv, lpClient->RecvPending.dwUsed, lpClient->RecvPending.dwAvail );
 			if (nRecv == SOCKET_ERROR)
 			{
 #ifdef DEBUG_SOCK_IO
@@ -41953,6 +44064,8 @@ int FinishPendingRead(PCLIENT lpClient DBG_PASS )
 					return (int)lpClient->RecvPending.dwUsed;
 #ifdef __LINUX__
 				case ECONNRESET:
+				// sometimes this leaks past connect and read happens?
+				case ECONNREFUSED:
 #else
 				case WSAECONNRESET:
 				case WSAECONNABORTED:
@@ -41963,7 +44076,8 @@ int FinishPendingRead(PCLIENT lpClient DBG_PASS )
 					if(0)
 					{
 					default:
-						Log5( "Failed reading from %d (err:%d) into %p %" _size_f " bytes %" _size_f " read already.",
+						lprintf( "Failed reading from %p %d (err:%d) into %p %" _size_f " bytes %" _size_f " read already.",
+							  lpClient,
 							  lpClient->Socket,
 							  WSAGetLastError(),
 							  lpClient->RecvPending.buffer.p,
@@ -42041,7 +44155,7 @@ int FinishPendingRead(PCLIENT lpClient DBG_PASS )
 					size_t length = lpClient->RecvPending.dwUsed;
 					lpClient->RecvPending.dwUsed = 0;
 #ifdef LOG_PENDING
-					lprintf( "Send to application...." );
+					//lprintf( "Send to application...." );
 #endif
 					if( lpClient->dwFlags & CF_CPPREAD )
 					{
@@ -42059,8 +44173,7 @@ int FinishPendingRead(PCLIENT lpClient DBG_PASS )
 					if( !IsValid( lpClient->Socket ) )
 						return -1;
 #ifdef LOG_PENDING
- // new read probably pending ehre...
-					lprintf( "back from applciation... (loop to next)" );
+					//lprintf( "back from applciation... (loop to next)" ); // new read probably pending ehre...
 #endif
 					continue;
 				}
@@ -42259,10 +44372,8 @@ static void PendWrite( PCLIENT pClient
                      , size_t nLen, int bLongBuffer )
 {
 	PendingBuffer *lpPend;
-#ifdef LOG_PENDING
-	{
-		lprintf( "Pending %d Bytes to network..." , nLen );
-	}
+#if defined( LOG_PENDING ) || defined( LOG_WRITE_NOTICES )
+	lprintf( "Pending %d Bytes to network... %p" , nLen, pClient );
 #endif
 	lpPend = New( PendingBuffer );
 	//lprintf( "Write pend %d", nLen );
@@ -42292,16 +44403,53 @@ int TCPWriteEx(PCLIENT pc DBG_PASS)
 	int nSent;
 	PendingBuffer *lpNext;
 	if( !pc || !(pc->dwFlags & CF_CONNECTED ) )
-		return TRUE;
+		return 1;
 	while (pc->lpFirstPending)
 	{
 #ifdef VERBOSE_DEBUG
-		if( pc->dwFlags & CF_CONNECTING )
+//		if( pc->dwFlags & CF_CONNECTING )
 			lprintf( "Sending previously queued data." );
 #endif
 		if( pc->lpFirstPending->dwAvail )
 		{
-			  uint32_t dwError;
+			uint32_t dwError;
+			if( pc->flags.bAggregateOutput && pc->lpFirstPending->lpNext ){
+				uint32_t size = 0;
+				//uint32_t blocks = 0;
+				PendingBuffer *lpNext = pc->lpFirstPending;
+				// collapse all pending into first pending block.
+ /*blocks++; */
+				while( lpNext ) { size += lpNext->dwAvail;lpNext = lpNext->lpNext;}
+				if( size > 0 ) {
+					POINTER newbuffer =  Allocate( size );
+					//
+					//lprintf( "Allocate total aggregate size:%d in %d chunks", size, blocks );
+					lpNext = pc->lpFirstPending;
+					size = 0;
+					while( lpNext ) {
+						//lprintf( "Copy:%d %d",size, lpNext->dwAvail );
+						MemCpy( ((uint8_t*)newbuffer) + size
+								, ((const uint8_t*)lpNext->buffer.c)+lpNext->dwUsed
+								, lpNext->dwAvail );
+						if( lpNext->s.bDynBuffer )
+							Release( lpNext->buffer.p );
+						size += lpNext->dwAvail;
+						PendingBuffer *next = lpNext->lpNext;
+						if( lpNext != &pc->FirstWritePending )
+							Release( lpNext );
+						lpNext = next;
+					}
+					pc->FirstWritePending.buffer.c = newbuffer;
+					pc->FirstWritePending.dwAvail = size;
+					pc->FirstWritePending.dwUsed = 0;
+					pc->FirstWritePending.lpNext = NULL;
+					pc->FirstWritePending.s.bDynBuffer = TRUE;
+#ifdef LOG_WRITE_AGGREGATION
+					lprintf( "Aggregated %d bytes into single buffer %p", size, pc );
+#endif
+					pc->lpLastPending =	pc->lpFirstPending = &pc->FirstWritePending;
+				}
+			}
 			if( globalNetworkData.flags.bLogSentData )
 			{
 				LogBinary( (uint8_t*)pc->lpFirstPending->buffer.c +
@@ -42315,7 +44463,7 @@ int TCPWriteEx(PCLIENT pc DBG_PASS)
 							 (char*)pc->lpFirstPending->buffer.c +
 							 pc->lpFirstPending->dwUsed,
 							 (int)pc->lpFirstPending->dwAvail,
-							 0);
+							 MSG_NOSIGNAL );
 			  dwError = WSAGetLastError();
 #ifdef DEBUG_SOCK_IO
 			lprintf( "sent result: %d %d %d", nSent, pc->lpFirstPending->dwUsed, pc->lpFirstPending->dwAvail );
@@ -42325,11 +44473,37 @@ int TCPWriteEx(PCLIENT pc DBG_PASS)
 				if( dwError == WSAEWOULDBLOCK )
 				{
 #ifdef VERBOSE_DEBUG
-					lprintf( "Pending write..." );
+					lprintf( "Pending write...(EBLOCK) %p %zd", pc, pc->lpFirstPending->dwAvail );
 #endif
+					pc->dwFlags &= ~CF_WRITEREADY;
 					pc->dwFlags |= CF_WRITEPENDING;
 					return TRUE;
 				}
+				if( dwError == EPIPE ) {
+					//_lprintf(DBG_RELAY)( "EPIPE on send() to socket...");
+					pc->dwFlags |= CF_TOCLOSE;
+					return FALSE;
+				}
+				if( dwError == ECONNREFUSED ) {
+					_lprintf(DBG_RELAY)( "ECONNREFUSED on send() to socket...");
+					pc->dwFlags |= CF_TOCLOSE;
+					return FALSE;
+				}
+#ifdef _WIN32
+				// especially websockets that try to gracefully cloose
+				if( dwError == WSAESHUTDOWN) {
+					if( pc->dwFlags & CF_WANTCLOSE )
+						pc->dwFlags |= CF_TOCLOSE;
+					else
+						_lprintf(DBG_RELAY)( "WSAESHUTDOWN on send() to socket...");
+					pc->dwFlags |= CF_TOCLOSE;
+					return FALSE;
+				}
+				if( dwError == WSAECONNABORTED ) {
+					pc->dwFlags |= CF_TOCLOSE;
+					return FALSE;
+				}
+#endif
 				{
 					_lprintf(DBG_RELAY)(" Network Send Error: %5d(sock:%p, buffer:%p ofs: %" _size_f "  Len: %" _size_f ")",
 											  dwError,
@@ -42348,7 +44522,7 @@ int TCPWriteEx(PCLIENT pc DBG_PASS)
 					{
 						pc->dwFlags |= CF_TOCLOSE;
 					}
- // get out of here!
+ // get out of here! (say we sent whatever was pending...; don't repend long buffers)
 					return FALSE;
 				}
  // other side closed.
@@ -42361,11 +44535,19 @@ int TCPWriteEx(PCLIENT pc DBG_PASS)
   // no sence processing the rest of this.
 				return FALSE;
 			} else if( pc->lpFirstPending && ( nSent < (int)pc->lpFirstPending->dwAvail ) ) {
+				pc->dwFlags &= ~CF_WRITEREADY;
 				pc->dwFlags |= CF_WRITEPENDING;
 			}
+#ifdef _WIN32
+			// windows only gives a FD_WRITE when a send gets an ewouldblock...
+			else
+				pc->dwFlags |= CF_WRITEREADY;
+#endif
 		}
-		else
+		else {
+			lprintf( "nothing was pending?" );
 			nSent = 0;
+		}
 #ifdef DEBUG_SOCK_IO
 		lprintf( "sent... %d %d %d", nSent, pc->lpFirstPending?pc->lpFirstPending->dwUsed:0, pc->lpFirstPending?pc->lpFirstPending->dwAvail:0 );
 #endif
@@ -42421,13 +44603,18 @@ int TCPWriteEx(PCLIENT pc DBG_PASS)
 							pc->write.WriteComplete( pc, p, len );
 						pc->bWriteComplete = FALSE;
 					}
-					if( !pc->lpFirstPending )
+					if( !pc->lpFirstPending ) {
 						pc->dwFlags &= ~CF_WRITEPENDING;
+						//lprintf( "nothing left pending.... %p", pc );
+					}
 				}
 				else
 				{
+					// still have more to send...
+					//lprintf( "wasn't able to send all at this time, there's still pending data %p", pc );
 					if( !(pc->dwFlags & CF_WRITEPENDING) )
 					{
+						//lprintf( "And set writepending again?  Do a scheduled timer?" );
 						pc->dwFlags |= CF_WRITEPENDING;
 					}
 					return TRUE;
@@ -42435,28 +44622,226 @@ int TCPWriteEx(PCLIENT pc DBG_PASS)
 			}
 		}
 	}
+#ifdef LOG_WRITE_NOTICES
+	lprintf( "everything is written. %p", pc );
+#endif
  // 0 = everything sent / nothing left to send...
 	return FALSE;
 }
 //----------------------------------------------------------------------------
-LOGICAL doTCPWriteExx( PCLIENT lpClient
+void SetTCPWriteAggregation( PCLIENT pc, int bAggregate )
+{
+	lprintf( "Write Aggregation causes failures:%d", bAggregate );
+	bAggregate = 0;
+	pc->flags.bAggregateOutput = bAggregate;
+}
+static void triggerWrite( uintptr_t psv ){
+	PCLIENT pc = (PCLIENT)psv;
+#ifdef LOG_WRITE_AGGREGATION
+	lprintf( "Timer fired %p  %d", psv, pc->writeTimer );
+#endif
+	if( pc )
+	{
+#ifdef LOG_WRITE_AGGREGATION
+		int32_t timer = pc->writeTimer;
+#endif
+		pc->writeTimer = 0;
+		if( pc->dwFlags & CF_WRITEPENDING )
+		{
+			int tries = 0;
+			//lprintf( "Triggered write event..." );
+			while( tries++ < 20 && !NetworkLockEx( pc, 0 DBG_SRC ) ) {
+ // while waiting to write, got more to aggregate.
+				if( pc->writeTimer ) return;
+				Relinquish();
+			}
+			if( tries >= 10 ){
+				lprintf( "Failed to lock network? waiting in timer to generate write? %p %p", pc, pc->lpFirstPending );
+				if( (!(pc->dwFlags & CF_ACTIVE )) || (pc->dwFlags & CF_TOCLOSE) )
+					return;
+				lprintf( "Use write on unlock flag to trigger write on unlock. %p", pc );
+				pc->flags.bWriteOnUnlock = 1;
+				return;
+			}
+			if( pc->dwFlags & CF_ACTIVE ) {
+#ifdef LOG_WRITE_AGGREGATION
+				lprintf( "locked and can write: %p %d %d", pc, timer, pc->writeTimer );
+#endif
+				if( pc->writeTimer ) {
+					NetworkUnlockEx( pc, 0 DBG_SRC );
+					return;
+				}
+				TCPWrite( pc );
+			}
+#ifdef LOG_WRITE_AGGREGATION
+			lprintf( "Unlocking after write... %p", pc );
+#endif
+			NetworkUnlockEx( pc, 0 DBG_SRC );
+		} else {
+			lprintf( "Triggered write shouldn't have no pending...%p (Try Again?) %s", (POINTER)psv, NetworkExpandFlags(pc) );
+			//RescheduleTimerEx( timer, 3 );
+			//pc->writeTimer = timer;
+		}
+	}
+}
+static PDATAQUEUE pdqPendingWrites = NULL;
+static PTHREAD writeWaitThread = NULL;
+void clearPending( PCLIENT pc ) {
+	INDEX i;
+	struct PendingWrite pending;
+	i = 0;
+	while( PeekDataQueueEx( &pdqPendingWrites, struct PendingWrite*, &pending, i++ ) ){
+		if( pending.pc == pc ) {
+			pending.pc = NULL;
+		}
+	}
+}
+static LOGICAL hasPending( PCLIENT pc ) {
+	INDEX i;
+	struct PendingWrite pending;
+	i = 0;
+	while( PeekDataQueueEx( &pdqPendingWrites, struct PendingWrite*, &pending, i++ ) ){
+		if( pending.pc == pc ) {
+			lprintf( "Might have still been able to get the lock...");
+			return TRUE;
+		}
+	}
+	return FALSE;
+}
+uintptr_t WaitToWrite( PTHREAD thread ) {
+	PDATALIST requeued = CreateDataList( sizeof( struct PendingWrite ) );
+	INDEX lastCount = 0;
+	if( !pdqPendingWrites )
+		pdqPendingWrites = CreateDataQueue( sizeof( struct PendingWrite ) );
+	//lprintf( "started waittowrite" );
+	while( 1 ) {
+		//uint32_t tick; tick = timeGetTime();
+		if( lastCount == GetDataQueueLength( pdqPendingWrites ) || IsDataQueueEmpty( &pdqPendingWrites ) ) {
+			//lprintf( "WaitToWrite sleeps..." );
+			WakeableSleep( 10000 );
+			/*
+			uint32_t now; now = timeGetTime();
+			if( now -tick < 9000 ) {
+				lprintf( "woke to write writes %d", now-tick);
+			}else {
+				if( !IsDataQueueEmpty( &pdqPendingWrites ))
+					lprintf( "delayed like 10 seconds and now checking writes");
+			}
+			*/
+		} else {
+//lprintf( "already have writes to check" );
+			;
+		}
+		struct PendingWrite pending;
+		struct PendingWrite *lpPending = &pending;
+#ifdef LOG_PENDING_WRITES
+		lprintf( "WaitToWrite is checking for writes" );
+#endif
+		while( DequeData( &pdqPendingWrites, &pending ) ) {
+			if( !pending.pc ) {
+				Release( pending.buffer );
+				lprintf( "Socket closed while data was pending");
+				continue;
+			}
+#ifdef LOG_PENDING_WRITES
+			lprintf( "Handling pending writes... %p %zd", pending.pc, pending.len );
+#endif
+			{
+				INDEX idx;
+				struct PendingWrite* lpPending;
+				DATA_FORALL( requeued, idx, struct PendingWrite*, lpPending ) {
+					if( lpPending->pc == pending.pc ) {
+						lprintf( "socket is already pending, requeue more:%p", pending.pc );
+						AddDataItem( &requeued, lpPending );
+						break;
+					}
+				}
+				if( lpPending ) {
+					lprintf( "This was already found as pending, saved for requeue");
+					continue;
+				}
+			}
+			if( !( pending.pc->dwFlags & CF_ACTIVE )  || (pending.pc->dwFlags & CF_TOCLOSE) ) {
+				if(pending.pc->dwFlags & CF_TOCLOSE)
+					lprintf( "Socket is intended to close already... %08x %p" , pending.pc->dwFlags, pending.pc );
+				else
+					lprintf( "Socket is is inactive already... %08x %p" , pending.pc->dwFlags, pending.pc );
+				continue;
+			}
+			if( !NetworkLockEx( pending.pc, 0 DBG_SRC ) ) {
+				if( !( pending.pc->dwFlags & CF_ACTIVE ) || (pending.pc->dwFlags & CF_TOCLOSE) ) {
+					lprintf( "Pending write on socket can't happen, no longer active." );
+ // do not requeue this... the socket has closed.
+					continue;
+				}
+#ifdef LOG_PENDING_WRITES
+				lprintf( "(pending writer)Failed to lock network... requeueing %p", pending.pc );
+#endif
+				AddDataItem( &requeued, &pending );
+			} else {
+#ifdef LOG_PENDING_WRITES
+				LogBinary( (const uint8_t*)pending.buffer, pending.len );
+				lprintf( "Send pending block %p %p %zd", pending.pc, pending.buffer, pending.len );
+#endif
+				LOGICAL stillPend = doTCPWriteV2( pending.pc, pending.buffer, pending.len, pending.bLong, pending.failpending, FALSE DBG_SRC );
+				if( stillPend == -1 ) {
+#ifdef LOG_PENDING_WRITES
+					lprintf( "--- This should not happen - have the lock already... %08x", pending.pc->dwFlags );
+#endif
+					AddDataItem( &requeued, &pending );
+				} else {
+					if( !hasPending( pending.pc ))
+						pending.pc->wakeOnUnlock = NULL;
+#ifdef LOG_PENDING_WRITES
+					else
+						lprintf( "Still has pending writes... %p", pending.pc );
+#endif
+				}
+				NetworkUnlockEx( lpPending->pc, 0|0x10 DBG_SRC );
+			}
+			;
+			//i++;
+		}
+		{
+			INDEX idx;
+			struct PendingWrite* lpPending;
+			DATA_FORALL( requeued, idx, struct PendingWrite*, lpPending ) {
+#ifdef LOG_PENDING_WRITES
+				lprintf( "Requeing block %p %p %zd", lpPending->pc, lpPending->buffer, lpPending->len );
+#endif
+				EnqueData( &pdqPendingWrites, lpPending );
+				lpPending->pc->wakeOnUnlock = thread;
+			}
+			lastCount = idx;
+			//lprintf( "Emptied requeue list...");
+			EmptyDataList( &requeued );
+		}
+	}
+}
+LOGICAL doTCPWriteV2( PCLIENT lpClient
                      , CPOINTER pInBuffer
                      , size_t nInLen
                      , int bLongBuffer
                      , int failpending
+                     , int pend_on_fail
                      DBG_PASS
                      )
 {
 	if( !lpClient )
 	{
-#ifdef VERBOSE_DEBUG
+//#ifdef VERBOSE_DEBUG
 		lprintf( "TCP Write failed - invalid client." );
-#endif
+//#endif
   // cannot process a closed channel. data not sent.
 		return FALSE;
 	}
-	while( !NetworkLockEx( lpClient, 0 DBG_SRC ) )
+/*hasPending(lpClient)*/
+	while( ( pend_on_fail && lpClient->wakeOnUnlock ) || !NetworkLockEx( lpClient, 0 DBG_SRC ) )
 	{
+#ifdef LOG_NETWORK_LOCKING
+		if( lpClient->wakeOnUnlock )
+			lprintf( "client is already waiting for wake on unlock? %p  %p", lpClient, lpClient->wakeOnUnlock);
+#endif
 		if( (!(lpClient->dwFlags & CF_ACTIVE )) || (lpClient->dwFlags & CF_TOCLOSE) )
 		{
 #ifdef LOG_NETWORK_LOCKING
@@ -42465,13 +44850,47 @@ LOGICAL doTCPWriteExx( PCLIENT lpClient
 #endif
 			return FALSE;
 		}
-		Relinquish();
+		if( pend_on_fail ) {
+			if( !writeWaitThread ) {
+				writeWaitThread = ThreadTo( WaitToWrite, 0 );
+				while( !pdqPendingWrites ) Relinquish();
+			}
+			struct PendingWrite pw;
+			pw.pc = lpClient;
+			if( bLongBuffer )
+				pw.buffer = (POINTER)pInBuffer;
+			else {
+				pw.buffer = Allocate( nInLen );
+				MemCpy( pw.buffer, pInBuffer, nInLen );
+			}
+			pw.len = nInLen;
+			pw.bLong = bLongBuffer;
+			// when re-queuing this don't want to pend the same packet again...
+//failpending;
+			pw.failpending = FALSE;
+#ifdef LOG_PENDING_WRITES
+			if( pw.len < 16 ) LogBinary( (uint8_t*)pw.buffer, pw.len );
+			fprintf( stderr, DBG_FILELINEFMT "Saving buffer to queue %p %d %p %zd\n" DBG_RELAY, lpClient, bLongBuffer, pw.buffer, pw.len );
+#endif
+			EnqueData( &pdqPendingWrites, &pw );
+			lpClient->wakeOnUnlock = writeWaitThread;
+			if( NetworkLockEx( lpClient, 0 DBG_SRC ) ) {
+#ifdef LOG_PENDING_WRITES
+				lprintf( "Network lock would not have been unlocked (wakeOnUnlock)... %p", lpClient );
+#endif
+				NetworkUnlockEx( lpClient, 0 DBG_SRC );
+			}
+#ifdef LOG_PENDING_WRITES
+			else lprintf( "pended on fail - queued buffer as pending... %p ", lpClient );
+#endif
+		}
+		return -1;
 	}
 	if( !(lpClient->dwFlags & CF_ACTIVE ) )
 	{
-#ifdef VERBOSE_DEBUG
+//#ifdef LOG_WRITE_AGGREGATION
 		lprintf( "TCP Write failed - client is inactive" );
-#endif
+//#endif
 		// change to inactive status by the time we got here...
 		NetworkUnlockEx( lpClient, 0 DBG_SRC );
 		return FALSE;
@@ -42479,15 +44898,30 @@ LOGICAL doTCPWriteExx( PCLIENT lpClient
  // will already be in a wait on network state...
 	if( lpClient->lpFirstPending )
 	{
-#ifdef VERBOSE_DEBUG
+#ifdef LOG_WRITE_AGGREGATION
 		_lprintf( DBG_RELAY )(  "Data already pending, pending buffer...%p %d", pInBuffer, nInLen );
 #endif
 		if( !failpending )
 		{
-#ifdef VERBOSE_DEBUG
+#ifdef LOG_WRITE_AGGREGATION
 			lprintf( "Queuing pending data anyhow..." );
 #endif
+			// this doesn't re-trigger sending; it assumes the network write-ready event will do that.
 			PendWrite( lpClient, pInBuffer, nInLen, bLongBuffer );
+			if( lpClient->flags.bAggregateOutput)
+			{
+#ifdef LOG_WRITE_AGGREGATION
+				_lprintf(DBG_RELAY)( "Write with aggregate... %d (timer?)%d %p", nInLen, lpClient->writeTimer, lpClient );
+#endif
+				if( lpClient->writeTimer ) {
+					RescheduleTimerEx( lpClient->writeTimer, 3 );
+				} else lpClient->writeTimer = AddTimerExx( 3, 0, triggerWrite, (uintptr_t)lpClient DBG_SRC );
+#ifdef LOG_WRITE_AGGREGATION
+				_lprintf( DBG_RELAY )( "Write with aggregate... (timer?)%d", lpClient->writeTimer );
+#endif
+			}
+ // shouldn't have to do this - this there is a race condition somewhere...
+			lpClient->dwFlags |= CF_WRITEPENDING;
 			//TCPWriteEx( lpClient DBG_SRC ); // make sure we don't lose a write event during the queuing...
 			NetworkUnlockEx( lpClient, 0 DBG_SRC );
 			return TRUE;
@@ -42513,6 +44947,29 @@ LOGICAL doTCPWriteExx( PCLIENT lpClient
 		lpClient->FirstWritePending.lpNext       = NULL;
 		lpClient->lpLastPending =
 		lpClient->lpFirstPending = &lpClient->FirstWritePending;
+		if( lpClient->flags.bAggregateOutput)
+		{
+ // caller will assume the buffer usable on return
+			if( !bLongBuffer )
+			{
+				lpClient->FirstWritePending.buffer.p = Allocate( nInLen );
+				MemCpy( lpClient->FirstWritePending.buffer.p, pInBuffer, nInLen );
+				lpClient->FirstWritePending.s.bDynBuffer = TRUE;
+			}
+#ifdef LOG_WRITE_AGGREGATION
+			int wasTimer = lpClient->writeTimer;
+#endif
+			if( lpClient->writeTimer ) RescheduleTimerEx( lpClient->writeTimer, 3 );
+			else lpClient->writeTimer = AddTimerExx( 3, 0, triggerWrite, (uintptr_t)lpClient DBG_SRC );
+#ifdef LOG_WRITE_AGGREGATION
+			_lprintf(DBG_RELAY)("Write with aggregate (firstpending forced)... %d %d %d %p", bLongBuffer, nInLen, lpClient->writeTimer, lpClient);
+#endif
+			lpClient->dwFlags |= CF_WRITEPENDING;
+			//lprintf( "First Write with aggregate... %d %d %d %p", nInLen, lpClient->writeTimer, wasTimer, lpClient );
+			NetworkUnlockEx( lpClient, 0 DBG_SRC );
+			return TRUE;
+		}
+		//lprintf("Sending immediate? %p", lpClient);
 		if( TCPWriteEx( lpClient DBG_RELAY ) )
 		{
 #ifdef VERBOSE_DEBUG
@@ -42657,6 +45114,17 @@ void SetClientKeepAlive( PCLIENT pClient, int bEnable )
 #ifndef __LINUX__
 #  undef ioctl
 #endif
+#undef doTCPWriteExx
+LOGICAL doTCPWriteExx( PCLIENT lpClient
+	, CPOINTER pInBuffer
+	, size_t nInLen
+	, int bLongBuffer
+	, int failpending
+	DBG_PASS
+) {
+	return doTCPWriteV2( lpClient, pInBuffer, nInLen, bLongBuffer, failpending, 1 DBG_SRC );
+}
+#define doTCPWriteExx( c,b,l,f1,f2,fop,...) doTCPWriteV2( (c),(b),(l),(f1),(f2),(fop),##__VA_ARGS__ )
 SACK_NETWORK_TCP_NAMESPACE_END
 #define LIBRARY_DEF
 #ifdef __LINUX__
@@ -42717,6 +45185,15 @@ PCLIENT CPPServeUDPAddrEx( SOCKADDR *pAddr
 		lprintf( "Natural was %d", dwFlags );
 	}
 	SetHandleInformation( (HANDLE)pc->Socket, HANDLE_FLAG_INHERIT, 0 );
+#else
+	{
+		int flags = fcntl( pc->Socket, F_GETFL, 0 );
+		fcntl( pc->Socket, F_SETFL, O_NONBLOCK );
+	}
+	{
+		int flags = fcntl( pc->Socket, F_GETFD, 0 );
+		if( flags >= 0 ) fcntl( pc->Socket, F_SETFD, flags | FD_CLOEXEC );
+	}
 #endif
 #ifdef LOG_SOCKET_CREATION
 	lprintf( "Created UDP %p(%d)", pc, pc->Socket );
@@ -42746,22 +45223,8 @@ PCLIENT CPPServeUDPAddrEx( SOCKADDR *pAddr
 		return NULL;
 	}
 #ifdef _WIN32
-#  ifdef USE_WSA_EVENTS
 	pc->event = WSACreateEvent();
 	WSAEventSelect( pc->Socket, pc->event, FD_READ|FD_WRITE );
-#  else
-	if (WSAAsyncSelect( pc->Socket,
-	                   globalNetworkData.ghWndNetwork,
-	                   SOCKMSG_UDP,
-	                   FD_READ|FD_WRITE ) )
-	{
-		Log( "Select Fail");
-		InternalRemoveClientEx( pc, TRUE, FALSE );
-		NetworkUnlock( pc, 0 );
-		NetworkUnlock( pc, 1 );
-		return NULL;
-	}
-#  endif
 #else
 	{
 		int t = TRUE;
@@ -42843,6 +45306,14 @@ void UDPEnableBroadcast( PCLIENT pc, int bEnable )
 				{
 					int t = TRUE;
 					ioctl( pc->SocketBroadcast, FIONBIO, &t );
+				}
+				{
+					int flags = fcntl( pc->SocketBroadcast, F_GETFL, 0 );
+					fcntl( pc->SocketBroadcast, F_SETFL, O_NONBLOCK );
+				}
+				{
+					int flags = fcntl( pc->SocketBroadcast, F_GETFD, 0 );
+					if( flags >= 0 ) fcntl( pc->SocketBroadcast, F_SETFD, flags | FD_CLOEXEC );
 				}
 				broadcastAddr = DuplicateAddress( GetBroadcastAddressForInterface( pc->saSource ) );
 				GetAddressParts( pc->saSource, NULL, &port );
@@ -43197,12 +45668,16 @@ int SetSocketReuseAddress( PCLIENT lpClient, int32_t enable )
 int SetSocketReusePort( PCLIENT lpClient, int32_t enable )
 {
 #ifdef __LINUX__
+#  ifdef SO_REUSEPORT
 	if (setsockopt(lpClient->Socket, SOL_SOCKET, SO_REUSEPORT,
 						(char*)&enable, sizeof(enable)) < 0 )
 	{
 		return 0;
 		//cerr << "NFMSim:setHost:ERROR: could not set socket to reuse addr." << endl;
 	}
+#  else
+	return 0;
+#  endif
 #else
 	SetSocketReuseAddress( lpClient, enable );
 #endif
@@ -43294,44 +45769,42 @@ void Ping(TEXTSTR pstrHost, int maxTTL);
 void ReportError(PVARTEXT pInto, CTEXTSTR pstrFrom);
 int  WaitForEchoReply(SOCKET s, uint32_t dwTime);
 uint16_t in_cksum(uint16_t *addr, int len);
+// compatible with SOCKADDR*
+// return &ip as the address to use as a SOCKADDR
+struct sockaddr_fake {
+	uintptr_t sockaddr_len;
+	CTEXTSTR sockaddr_name;
+	union my_sockaddr_un {
+		struct sockaddr_in v4;
+		struct sockaddr_in6 v6;
+	} ip;
+};
 // ICMP Echo Request/Reply functions
-int		SendEchoRequest(PVARTEXT, SOCKET, struct sockaddr_in*);
-int	   RecvEchoReply( PVARTEXT, SOCKET, struct sockaddr_in*, uint8_t *);
+int		SendEchoRequest(PVARTEXT, SOCKET, struct sockaddr_fake*);
+int		RecvEchoReply( PVARTEXT, SOCKET, struct sockaddr_fake*, uint8_t *);
 #define MAX_HOPS     128
 #define MAX_NAME_LEN 255
 typedef struct HopEntry_tag{
-                 // IP from returned
-   uint32_t dwIP;
-   uint32_t dwMinTime;
-   uint32_t dwMaxTime;
-   uint32_t dwAvgTime;
-   uint32_t dwDropped;
-//   uint32_t dwTime;
+	struct sockaddr_fake ip;
+	LOGICAL isIP6;
+	LOGICAL hasAddress;
+	uint32_t dwMinTime;
+	uint32_t dwMaxTime;
+	uint32_t dwAvgTime;
+	uint32_t dwDropped;
+//	uint32_t dwTime;
   // bRDNS resulting...
-   TEXTSTR  pName;
-                    // returned TTL from destination...
-   int TTL;
+	TEXTCHAR  pName[MAX_NAME_LEN];
+         // returned TTL from destination...
+	int TTL;
 } HOPENT, *PHOPENT;
 volatile uint32_t dwThreadsActive;
 uintptr_t CPROC RDNSThread( PTHREAD pThread )
 {
-   PHOPENT pHopEnt = (PHOPENT)GetThreadParam( pThread );
-   struct hostent *phe;
-   phe = gethostbyaddr( (char*)&pHopEnt->dwIP, 4, AF_INET );
-	if( phe )
-#ifdef _UNICODE
-		pHopEnt->pName = CharWConvert( phe->h_name );
-#else
-		pHopEnt->pName = StrDup( phe->h_name );
-#endif
-   LockedDecrement( &dwThreadsActive );
-   /*
-#ifdef _WIN32
-   ExitThread( dwThreadsActive );
-#else
-#endif
-   */
-   return 0;
+	PHOPENT pHopEnt = (PHOPENT)GetThreadParam( pThread );
+	getnameinfo( (struct sockaddr*)&pHopEnt->ip.ip.v6, (socklen_t)pHopEnt->ip.sockaddr_len, pHopEnt->pName, MAX_NAME_LEN, NULL, 0, 0 );
+	LockedDecrement( &dwThreadsActive );
+	return 0;
 }
 // Ping()
 // Calls SendEchoRequest() and
@@ -43342,126 +45815,91 @@ static LOGICAL DoPingExx( CTEXTSTR pstrHost
 								,int nCount
 								,PVARTEXT pvtResult
 								,LOGICAL bRDNS
-								,void (*ResultCallback)( uint32_t dwIP, CTEXTSTR name, int min, int max, int avg, int drop, int hops )
-								,void (*ResultCallbackEx)( uintptr_t psv, uint32_t dwIP, CTEXTSTR name, int min, int max, int avg, int drop, int hops )
+								,void (*ResultCallback)( SOCKADDR* ip, CTEXTSTR name, int min, int max, int avg, int drop, int hops )
+								,void (*ResultCallbackEx)( uintptr_t psv, SOCKADDR* ip, CTEXTSTR name, int min, int max, int avg, int drop, int hops )
 								, uintptr_t psvUser )
 {
-	SOCKET	  rawSocket;
-	struct hostent *lpHost;
-#ifdef __LINUX__
-	struct win_sockaddr_in saDest;
-	struct win_sockaddr_in saSrc;
-#else
-	struct sockaddr_in saDest;
-	struct sockaddr_in saSrc;
-#endif
-	uint64_t	     dwTimeSent;
-	uint8_t     cTTL;
-	int        nLoop;
-	int        nRet, nResult = 0;
-	int        i;
-	uint64_t      MinTime, MaxTime, AvgTime;
-	uint32_t   Dropped;
-	uint32_t     dwIP,_dwIP;
+	SOCKET rawSocket;
+	//struct hostent *lpHost;
+	struct sockaddr_fake saDest;
+	struct sockaddr_fake saLast;
+	struct sockaddr_fake saSrc;
+	uint64_t  dwTimeSent;
+	uint8_t   cTTL = 0;
+	int       nLoop;
+	int       nRet, nResult = 0;
+	int       i;
+	uint64_t  MinTime, MaxTime, AvgTime;
+	uint32_t  Dropped;
+	//uint32_t  _dwIP;
+	//uint8_t	u8IP6[16];
 	static LOGICAL csInit;
-   static CRITICALSECTION cs;
-   static  HOPENT    Entry[MAX_HOPS];
-   static  int       nEntry = 0;
-   //char     *pResultStart;
-   //pResultStart = pResult;
-   if( !csInit )
-   {
-	   InitializeCriticalSec( &cs );
-	   csInit = 1;
-   }
-   if( maxTTL < 0 )
-   {
-       if( pvtResult )
-           vtprintf( pvtResult, "TTL Parameter Error ( <0 )\n" );
-       return 0;
-   }
-   if( nCount < 0 )
-   {
-       if( pvtResult )
-           vtprintf( pvtResult, "Count Parameter Error ( <0 )\n" );
-       return 0;
-   }
-   if( maxTTL > MAX_HOPS )
-       maxTTL = MAX_HOPS;
-   if( maxTTL )
-   {
- // limit hit count on tracert....
-       if( nCount > 10 )
-           nCount = 10;
-   }
-   // Lookup host
-#ifdef __LINUX__
-   if( !inet_aton( pstrHost, (struct in_addr*)&dwIP ) )
-#else
-#  ifdef _UNICODE
+	static CRITICALSECTION cs;
+	static  HOPENT	Entry[MAX_HOPS];
+	static  int		nEntry = 0;
+	//char         *pResultStart;
+	//pResultStart = pResult;
+	if( !csInit )
 	{
-      char *tmp = WcharConvert( pstrHost );
-		dwIP = inet_addr( tmp );
-      Deallocate( char *, tmp );
+		InitializeCriticalSec( &cs );
+		csInit = 1;
 	}
-#  else
-	dwIP = inet_addr( pstrHost );
-#  endif
-   if( dwIP == INADDR_NONE )
-#endif
-   {
-       if( pvtResult )
-			 vtprintf( pvtResult, "host was not numeric\n" );
-#ifdef _UNICODE
-		 {
-          char *tmpname = WcharConvert( pstrHost );
-			 lpHost = gethostbyname(tmpname);
-			 Deallocate( char *, tmpname );
-		 }
-#else
-		 lpHost = gethostbyname(pstrHost);
-#endif
-       if (lpHost)
-		 {
-#ifndef h_addr
-#define h_addr h_addr_list[0]
-#define H_ADDR_DEFINED
-#endif
-           dwIP = *((uint32_t *) lpHost->h_addr);
-#ifdef H_ADDR_DEFINED
-#  undef H_ADDR_DEFINED
-#  undef h_addr
-#endif
-       }
-       else
-       {
-           if( pvtResult )
-               vtprintf( pvtResult, "(1)Host does not exist.(%s)\n", pstrHost );
-       }
-   }
-   if( dwIP == 0xFFFFFFFF )
-   {
-       if( pvtResult )
-           vtprintf( pvtResult, "Host does not exist.(%s)\n", pstrHost );
-       return 0;
-   }
-   nEntry = 0;
-   // Create a Raw socket
+	if( maxTTL < 0 )
+	{
+		if( pvtResult )
+			vtprintf( pvtResult, "TTL Parameter Error ( <0 )\n" );
+		return 0;
+	}
+	if( nCount < 0 )
+	{
+		if( pvtResult )
+			vtprintf( pvtResult, "Count Parameter Error ( <0 )\n" );
+		return 0;
+	}
+	if( maxTTL > MAX_HOPS )
+		maxTTL = MAX_HOPS;
+	if( maxTTL )
+	{
+ // limit hit count on tracert....
+		if( nCount > 10 )
+			nCount = 10;
+	}
+	// Lookup host
+	SOCKADDR* sockAddr = CreateSockAddress( pstrHost, 0 );
+	saDest.sockaddr_name = pstrHost;
+	if( sockAddr->sa_family == AF_INET )
+	{
+		saDest.sockaddr_len = IN_SOCKADDR_LENGTH;
+		saDest.ip.v4 = *(struct sockaddr_in*)sockAddr;
+	}
+	else if( sockAddr->sa_family == AF_INET6 )
+	{
+		saDest.sockaddr_len = IN6_SOCKADDR_LENGTH;
+		saDest.ip.v6 = *(struct sockaddr_in6*)sockAddr;
+	}
+	else
+	{
+		if( pvtResult )
+			vtprintf( pvtResult, "Unknown Address Family\n" );
+		return FALSE;
+	}
+	nEntry = 0;
+	// Create a Raw socket
 #ifdef WIN32
 //OpenSocket(TRUE,FALSE, TRUE, 0);
 	rawSocket = INVALID_SOCKET;
  //-V547
 	if( rawSocket == INVALID_SOCKET )
 	{
-      //lprintf( "Bad 'smart' open.. fallback..." );
+		//lprintf( "Bad 'smart' open.. fallback..." );
 		rawSocket = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
 	}
 #else
 	rawSocket = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
 #endif
-   if (rawSocket == SOCKET_ERROR)
+	if (rawSocket == SOCKET_ERROR)
 	{
-      if( pvtResult )
+		if( pvtResult )
 			vtprintf( pvtResult, "Uhmm bad things happened for sockraw!\n" );
 		else
 			lprintf( "Uhmm bad things happened for sockraw!\n" );
@@ -43469,237 +45907,239 @@ static LOGICAL DoPingExx( CTEXTSTR pstrHost
 		rawSocket = OpenSocket( TRUE, FALSE, TRUE, 0 );
 		if( rawSocket == SOCKET_ERROR )
 		{
-       if( WSAGetLastError() == 10013 )
-       {
-           if( pvtResult )
-               vtprintf( pvtResult, "User is not an administrator, cannot create a RAW socket.\n"
-                        "Unable to override this.\n");
-           return FALSE;
-       }
-       else
-       {
-           if( pvtResult )
-               ReportError( pvtResult, "socket()");
-       }
-		 return FALSE;
+		if( WSAGetLastError() == 10013 )
+		{
+			if( pvtResult )
+					vtprintf( pvtResult, "User is not an administrator, cannot create a RAW socket.\n"
+								"Unable to override this.\n");
+			return FALSE;
 		}
+		else
+		{
+			if( pvtResult )
+					ReportError( pvtResult, "socket()");
+		}
+		return FALSE;
+		}
+	{
+		// promiscuous
+		//WSAIoctl( rawSocket, SIO_RCV_ALL, NULL, 0, NULL, cbOutBuffer, lpcbBytesReturned, NULL, NULL );
+	}
 #endif
-   }
-   // Setup destination socket address
-   saDest.sin_addr.S_un.S_addr = dwIP;
-   saDest.sin_family = AF_INET;
-   saDest.sin_port = 0;
-   //vtprintf( pvtResult, "Version 1.0   ADA Software Developers, Inc.  Copyright 1999.\n" );
-   // Tell the user what we're doing
-   if( pvtResult )
-   {
-       vtprintf( pvtResult, "Pinging %s [%s] with %d bytes of data:\n",
-                           pstrHost,
-                           inet_ntoa(*(struct in_addr*)&saDest.sin_addr),
-                           REQ_DATASIZE);
-       if( maxTTL )
-       {
-           vtprintf( pvtResult, "Hop  Size Min(us) Max(us) Avg(us) Drop Hops? IP              Name\n" );
-           vtprintf( pvtResult, "--- ----- ------- ------- ------- ---- ----- --------------- -------->\n" );
-       }
-       else
-       {
-           vtprintf( pvtResult, "Size  Min(us) Max(us) Avg(us) Drop Hops? IP              Name\n" );
-           vtprintf( pvtResult, "----- ------- ------- ------- ---- ----- --------------- -------->\n" );
-       }
-   }
+	}
+	//vtprintf( pvtResult, "Version 1.0	ADA Software Developers, Inc.  Copyright 1999.\n" );
+	// Tell the user what we're doing
+	if( pvtResult )
+	{
+		static char addr[256];
+		inet_ntop( sockAddr->sa_family, sockAddr->sa_family==AF_INET6?sockAddr->sa_data+6:sockAddr->sa_data, addr, 256 );
+		vtprintf( pvtResult, "Pinging %s [%s] with %d bytes of data:\n",
+									pstrHost,
+									addr,
+									REQ_DATASIZE);
+		if( maxTTL )
+		{
+			vtprintf( pvtResult, "Hop  Size Min(us) Max(us) Avg(us) Drop Hops? IP              Name\n" );
+			vtprintf( pvtResult, "--- ----- ------- ------- ------- ---- ----- --------------- -------->\n" );
+		}
+		else
+		{
+			vtprintf( pvtResult, "Size  Min(us) Max(us) Avg(us) Drop Hops? IP              Name\n" );
+			vtprintf( pvtResult, "----- ------- ------- ------- ---- ----- --------------- -------->\n" );
+		}
+	}
 	EnterCriticalSec( &cs );
 	// Ping multiple times
-   _dwIP = 0;
-   for( i = 0; i <= maxTTL && dwIP != _dwIP; i++ )
-   {
-      if( maxTTL )
-      {
-       // skip TTL 0...
-         if( !i )
-            continue;
+	for( i = 0; i <= maxTTL && MemCmp( &saDest.ip, &saLast.ip, saDest.sockaddr_len ); i++ )
+	{
+		LogBinary( (const uint8_t*)&saDest.ip, saDest.sockaddr_len );
+		LogBinary( (const uint8_t*)&saLast.ip, saLast.sockaddr_len );
+		if( maxTTL )
+		{
+		// skip TTL 0...
+			if( !i )
+				continue;
 #ifndef IP_TTL
 #if defined (__LINUX__)
 #define IP_TTL 2
 #else
-#define IP_TTL	7
+#define IP_TTL 4
 #endif
 #endif
-         setsockopt( rawSocket, IPPROTO_IP, IP_TTL, (const char*)&i, sizeof(int));
-      }
+			setsockopt( rawSocket, IPPROTO_IP, IP_TTL, (const char*)&i, sizeof(int));
+		}
  // longer than EVER
-      MinTime = (uint64_t)-1;
-      MaxTime = 0;
-      AvgTime = 0;
-      Dropped = 0;
-      for(nLoop = 0; nLoop < nCount; nLoop++)
-      {
-         // Send ICMP echo request
-         dwTimeSent = GetCPUTick();
-         if( SendEchoRequest(pvtResult, rawSocket, (struct sockaddr_in*)&saDest) <= 0)
-         {
-            closesocket( rawSocket );
+		MinTime = (uint64_t)-1;
+		MaxTime = 0;
+		AvgTime = 0;
+		Dropped = 0;
+		for(nLoop = 0; nLoop < nCount; nLoop++)
+		{
+			// Send ICMP echo request
+			dwTimeSent = GetCPUTick();
+			if( SendEchoRequest(pvtResult, rawSocket, &saDest) <= 0)
+			{
+				closesocket( rawSocket );
 				LeaveCriticalSec( &cs );
  // failed on send
-            return FALSE;
-         }
-         nRet = WaitForEchoReply(rawSocket, dwTime);
-         if (nRet == SOCKET_ERROR)
-         {
-             if( pvtResult )
-                 ReportError( pvtResult, "select()");
+				return FALSE;
+			}
+			nRet = WaitForEchoReply(rawSocket, dwTime);
+			if (nRet == SOCKET_ERROR)
+			{
+				if( pvtResult )
+					ReportError( pvtResult, "select()");
   // abort abort FAIL
-             goto LoopBreakpoint;
-         }
-         else if (!nRet)
-         {
-            //AvgTime += dwTime;
-            Dropped++;
-         }
-         else
-         {
-            uint64_t dwTimeNow;
-            dwTimeNow = GetCPUTick() - dwTimeSent;
-            AvgTime += dwTimeNow;
-            if( dwTimeNow > MaxTime )
-               MaxTime = dwTimeNow;
-            if( dwTimeNow < MinTime )
-               MinTime = dwTimeNow;
-            if( !RecvEchoReply( pvtResult, rawSocket, (struct sockaddr_in*)&saSrc, &cTTL) )
-            {
-                if( pvtResult )
-                    ReportError( pvtResult, "recv()" );
-				//VarTextEmpty( &pvtResult );
-                //pResult = pResultStart;
-                closesocket( rawSocket );
-                LeaveCriticalSec( &cs );
-                return FALSE;
-            }
-         }
-      }
+				goto LoopBreakpoint;
+			}
+			else if (!nRet)
+			{
+				//AvgTime += dwTime;
+				Dropped++;
+			}
+			else
+			{
+				uint64_t dwTimeNow;
+				dwTimeNow = GetCPUTick() - dwTimeSent;
+				AvgTime += dwTimeNow;
+				if( dwTimeNow > MaxTime )
+					MaxTime = dwTimeNow;
+				if( dwTimeNow < MinTime )
+					MinTime = dwTimeNow;
+				if( !RecvEchoReply( pvtResult, rawSocket, &saSrc, &cTTL) )
+				{
+					if( pvtResult )
+						ReportError( pvtResult, "recv()" );
+					//VarTextEmpty( &pvtResult );
+					//pResult = pResultStart;
+					closesocket( rawSocket );
+					LeaveCriticalSec( &cs );
+					return FALSE;
+				}
+			}
+		}
  // no responces....
-      if( MinTime > MaxTime )
-      {
-         MinTime = 0;
-         MaxTime = 0;
-         Entry[nEntry].dwIP = 0;
-      }
-      else
-      {
-         Entry[nEntry].dwIP = _dwIP = saSrc.sin_addr.S_un.S_addr;
-      }
-      Entry[nEntry].TTL  = cTTL;
-      Entry[nEntry].dwMaxTime = ConvertTickToMicrosecond( MaxTime );
-      Entry[nEntry].dwMinTime = ConvertTickToMicrosecond( MinTime );
-      if( nCount - Dropped )
-          Entry[nEntry].dwAvgTime = ConvertTickToMicrosecond( AvgTime ) / ( nCount - Dropped );
-      else
-          Entry[nEntry].dwAvgTime = 0;
-      Entry[nEntry].dwDropped = Dropped;
-      Entry[nEntry].pName = 0;
-      nEntry++;
-   }
+		if( MinTime > MaxTime )
+		{
+			MemSet( Entry + nEntry, 0, sizeof( Entry ) );
+		}
+		else
+		{
+			Entry[nEntry].ip.sockaddr_len = saSrc.sockaddr_len;
+			Entry[nEntry].ip.sockaddr_name = NULL;
+			Entry[nEntry].ip.ip = saSrc.ip;
+			saLast = Entry[nEntry].ip;
+			Entry[nEntry].hasAddress = TRUE;
+		}
+		Entry[nEntry].TTL  = cTTL;
+		Entry[nEntry].dwMaxTime = ConvertTickToMicrosecond( MaxTime );
+		Entry[nEntry].dwMinTime = ConvertTickToMicrosecond( MinTime );
+		if( nCount - Dropped )
+			Entry[nEntry].dwAvgTime = ConvertTickToMicrosecond( AvgTime ) / ( nCount - Dropped );
+		else
+			Entry[nEntry].dwAvgTime = 0;
+		Entry[nEntry].dwDropped = Dropped;
+		Entry[nEntry].pName[0] = 0;
+		nEntry++;
+	}
 LoopBreakpoint:
 	nRet = closesocket(rawSocket);
 	if (nRet == SOCKET_ERROR)
 		if( pvtResult )
 			ReportError( pvtResult, "closesocket()");
-   if( bRDNS )
-   {
-      for( i = 0; i < nEntry; i++ )
-      {
-         if( Entry[i].dwIP )
-         {
-            //uint32_t dwID;
-            LockedIncrement( &dwThreadsActive );
-            ThreadTo( RDNSThread, (uintptr_t)(Entry+i) );
-            /*
-#ifdef _WIN32
-            CreateThread( NULL, 0, (LPTHREAD_START_ROUTINE)RDNSThread, Entry+i, 0, &dwID );
-#else
-            pthread_create( &dwID, NULL, (void*(*)(void*))RDNSThread, (void*)(Entry+i) );
-#endif
-            */
-         }
-      }
-      while( dwThreadsActive )
-         Sleep(0);
-   }
-   for( i = 0; i < nEntry; i++ )
-   {
-      char *pIPBuf;
-      if( Entry[i].dwIP )
-      {
-         saSrc.sin_addr.S_un.S_addr = Entry[i].dwIP;
-         pIPBuf = inet_ntoa( *(struct in_addr*)&saSrc.sin_addr );
-         nResult = TRUE;
-      }
-      else
-      {
-         pIPBuf = (char*)"No Response.";
-         Entry[i].pName = 0;
-      }
-      if( maxTTL )
-      {
-          TEXTCHAR Min[8], Max[8], Avg[8];
-          if( ResultCallback )
-              ResultCallback( Entry[i].dwIP
-                             , Entry[i].pName
-                             , Entry[i].dwMinTime
-                             , Entry[i].dwMaxTime
-                             , Entry[i].dwAvgTime
-                             , Entry[i].dwDropped
-                             , 256 - Entry[i].TTL );
-          else if( ResultCallbackEx )
-				 ResultCallbackEx( psvUser
-									  , Entry[i].dwIP
-                             , Entry[i].pName
-                             , Entry[i].dwMinTime
-                             , Entry[i].dwMaxTime
-                             , Entry[i].dwAvgTime
-                             , Entry[i].dwDropped
-                             , 256 - Entry[i].TTL );
-          if( pvtResult )
-			 {
+	if( bRDNS )
+	{
+		for( i = 0; i < nEntry; i++ )
+		{
+			if( Entry[i].dwAvgTime )
+			{
+				//uint32_t dwID;
+				LockedIncrement( &dwThreadsActive );
+				ThreadTo( RDNSThread, (uintptr_t)(Entry+i) );
+			}
+		}
+		while( dwThreadsActive )
+			Sleep(0);
+	}
+	for( i = 0; i < nEntry; i++ )
+	{
+		char *pIPBuf;
+		if( Entry[i].hasAddress )
+		{
+			static char addr[256];
+			pIPBuf = addr;
+			if( saSrc.ip.v4.sin_family == AF_INET )
+				inet_ntop( Entry[i].ip.ip.v4.sin_family, &Entry[i].ip.ip.v4.sin_addr, addr, 256);
+			else
+				inet_ntop( Entry[i].ip.ip.v6.sin6_family, &Entry[i].ip.ip.v6.sin6_addr, addr, 256 );
+			nResult = TRUE;
+		}
+		else
+		{
+			pIPBuf = (char*)"No Response.";
+			Entry[i].pName[0] = 0;
+		}
+		if( maxTTL )
+		{
+			TEXTCHAR Min[8], Max[8], Avg[8];
+			if( ResultCallback )
+				ResultCallback( (SOCKADDR* ) & Entry[i].ip.ip
+				              , Entry[i].pName
+				              , Entry[i].dwMinTime
+				              , Entry[i].dwMaxTime
+				              , Entry[i].dwAvgTime
+				              , Entry[i].dwDropped
+				              , 256 - Entry[i].TTL );
+			else if( ResultCallbackEx )
+				ResultCallbackEx( psvUser
+				                , (SOCKADDR*)&Entry[i].ip.ip
+				                , Entry[i].pName
+				                , Entry[i].dwMinTime
+				                , Entry[i].dwMaxTime
+				                , Entry[i].dwAvgTime
+				                , Entry[i].dwDropped
+				                , 256 - Entry[i].TTL );
+			if( pvtResult )
+			{
 #ifdef _UNICODE
-				 TEXTSTR tmp;
+				TEXTSTR tmp;
 #endif
-				 if( Entry[i].dwAvgTime )
-					 tnprintf( Avg, sizeof( Avg ),"%7" _32f, Entry[i].dwAvgTime );
-				 else
-					 tnprintf( Avg, sizeof( Avg ),"    ***" );
-				 if( Entry[i].dwMinTime )
-					 tnprintf( Min,sizeof(Min), "%7" _32f, Entry[i].dwMinTime );
-				 else
-					 tnprintf( Min, sizeof( Min ),"    ***" );
-				 if( Entry[i].dwMaxTime )
-					 tnprintf( Max, sizeof( Max), "%7" _32f, Entry[i].dwMaxTime );
-				 else
-					 tnprintf( Max, sizeof( Max ),"    ***" );
-				 vtprintf( pvtResult, "%3d %5d %s %s %s %4" _32f " %5d %15.15s %s\n",
-							 i + 1,
-							 REQ_DATASIZE,
-							 Min,
-							 Max,
-							 Avg,
-							 Entry[i].dwDropped,
-							 256 - Entry[i].TTL,
+				if( Entry[i].dwAvgTime )
+					tnprintf( Avg, sizeof( Avg ),"%7" _32f, Entry[i].dwAvgTime );
+				else
+					tnprintf( Avg, sizeof( Avg ),"	***" );
+				if( Entry[i].dwMinTime )
+					tnprintf( Min,sizeof(Min), "%7" _32f, Entry[i].dwMinTime );
+				else
+					tnprintf( Min, sizeof( Min ),"	***" );
+				if( Entry[i].dwMaxTime )
+					tnprintf( Max, sizeof( Max), "%7" _32f, Entry[i].dwMaxTime );
+				else
+					tnprintf( Max, sizeof( Max ),"	***" );
+				vtprintf( pvtResult, "%3d %5d %s %s %s %4" _32f " %5d %15.15s %s\n",
+							i + 1,
+							REQ_DATASIZE,
+							Min,
+							Max,
+							Avg,
+							Entry[i].dwDropped,
+							256 - Entry[i].TTL,
 #ifdef _UNICODE
-							 tmp = CharWConvert( pIPBuf ),
+							tmp = CharWConvert( pIPBuf ),
 #else
-							 pIPBuf,
+							pIPBuf,
 #endif
-							 Entry[i].pName
+							Entry[i].pName
 							);
 #ifdef _UNICODE
-				 Deallocate( TEXTSTR, tmp );
+				Deallocate( TEXTSTR, tmp );
 #endif
-			 }
+			}
 		}
 		else
 		{
 			if( ResultCallback )
-				ResultCallback( Entry[i].dwIP
+				ResultCallback( (SOCKADDR*)&Entry[i].ip
 									, Entry[i].pName
 									, Entry[i].dwMinTime
 									, Entry[i].dwMaxTime
@@ -43708,54 +46148,54 @@ LoopBreakpoint:
 									, 256 - Entry[i].TTL );
 			else if( ResultCallbackEx )
 				ResultCallbackEx( psvUser
-									 , Entry[i].dwIP
-									 , Entry[i].pName
-									 , Entry[i].dwMinTime
-									 , Entry[i].dwMaxTime
-									 , Entry[i].dwAvgTime
-									 , Entry[i].dwDropped
-									 , 256 - Entry[i].TTL );
+									, (SOCKADDR*)&Entry[i].ip
+									, Entry[i].pName
+									, Entry[i].dwMinTime
+									, Entry[i].dwMaxTime
+									, Entry[i].dwAvgTime
+									, Entry[i].dwDropped
+									, 256 - Entry[i].TTL );
 			if( pvtResult )
 				vtprintf( pvtResult, "%5d %7" _32f " %7" _32f " %7" _32f " %4" _32f " %5d %15.15s %s\n",
-										 REQ_DATASIZE,
-										 Entry[i].dwMinTime,
-										 Entry[i].dwMaxTime,
-										 Entry[i].dwAvgTime,
-										 Entry[i].dwDropped,
-										 256 - Entry[i].TTL,
-										 pIPBuf,
-										 Entry[i].pName
+										REQ_DATASIZE,
+										Entry[i].dwMinTime,
+										Entry[i].dwMaxTime,
+										Entry[i].dwAvgTime,
+										Entry[i].dwDropped,
+										256 - Entry[i].TTL,
+										pIPBuf,
+										Entry[i].pName
 										);
 		}
 	}
 	LeaveCriticalSec( &cs );
-   return nResult;
+	return nResult;
 }
 NETWORK_PROC( LOGICAL, DoPing )( CTEXTSTR pstrHost,
-             int maxTTL,
-             uint32_t dwTime,
-             int nCount,
-             PVARTEXT pvtResult,
-             LOGICAL bRDNS,
-             void (*ResultCallback)( uint32_t dwIP, CTEXTSTR name, int min, int max, int avg, int drop, int hops ) )
+				int maxTTL,
+				uint32_t dwTime,
+				int nCount,
+				PVARTEXT pvtResult,
+				LOGICAL bRDNS,
+				void (*ResultCallback)( SOCKADDR* dwIP, CTEXTSTR name, int min, int max, int avg, int drop, int hops ) )
 {
-   return DoPingExx( pstrHost, maxTTL, dwTime, nCount, pvtResult, bRDNS, ResultCallback, NULL, 0 );
+	return DoPingExx( pstrHost, maxTTL, dwTime, nCount, pvtResult, bRDNS, ResultCallback, NULL, 0 );
 }
 NETWORK_PROC( LOGICAL, DoPingEx )( CTEXTSTR pstrHost,
-											 int maxTTL,
-											 uint32_t dwTime,
-											 int nCount,
-											 PVARTEXT pvtResult,
-											 LOGICAL bRDNS,
-											 void (*ResultCallback)( uintptr_t psv, uint32_t dwIP, CTEXTSTR name, int min, int max, int avg, int drop, int hops )
+											int maxTTL,
+											uint32_t dwTime,
+											int nCount,
+											PVARTEXT pvtResult,
+											LOGICAL bRDNS,
+											void (*ResultCallback)( uintptr_t psv, SOCKADDR* dwIP, CTEXTSTR name, int min, int max, int avg, int drop, int hops )
 											, uintptr_t psvUser )
 {
-   return DoPingExx( pstrHost, maxTTL, dwTime, nCount, pvtResult, bRDNS, NULL, ResultCallback, psvUser );
+	return DoPingExx( pstrHost, maxTTL, dwTime, nCount, pvtResult, bRDNS, NULL, ResultCallback, psvUser );
 }
 // SendEchoRequest()
 // Fill in echo request header
 // and send to destination
-int SendEchoRequest(PVARTEXT pvtResult, SOCKET s,struct sockaddr_in *lpstToAddr)
+int SendEchoRequest(PVARTEXT pvtResult, SOCKET s,struct sockaddr_fake *lpstToAddr)
 {
 	static ECHOREQUEST echoReq;
 	static int nId = 1;
@@ -43765,8 +46205,8 @@ int SendEchoRequest(PVARTEXT pvtResult, SOCKET s,struct sockaddr_in *lpstToAddr)
 	echoReq.icmpHdr.Type		= ICMP_ECHOREQ;
 	echoReq.icmpHdr.Code		= 0;
 	echoReq.icmpHdr.Checksum	= 0;
-	echoReq.icmpHdr.ID			= (uint16_t)(nId++);
-	echoReq.icmpHdr.Seq			= (uint16_t)(nSeq++);
+	echoReq.icmpHdr.ID		= (uint16_t)(nId++);
+	echoReq.icmpHdr.Seq		= (uint16_t)(nSeq++);
 	// Fill in some data to send
 	for (nRet = 0; nRet < REQ_DATASIZE; nRet++)
 		echoReq.cData[nRet] = (char)(' '+nRet);
@@ -43776,11 +46216,11 @@ int SendEchoRequest(PVARTEXT pvtResult, SOCKET s,struct sockaddr_in *lpstToAddr)
 	echoReq.icmpHdr.Checksum = in_cksum((uint16_t *)&echoReq, sizeof(ECHOREQUEST));
 	// Send the echo request
 	nRet = sendto(s,
-				 (char*)&echoReq,
-				 sizeof(ECHOREQUEST),
-				 0,
-				 (SOCKADDR*)lpstToAddr,
-				 sizeof(SOCKADDR));
+				(char*)&echoReq,
+				sizeof(ECHOREQUEST),
+				0,
+				(SOCKADDR*)&lpstToAddr->ip,
+				sizeof(SOCKADDR));
 	if (nRet == SOCKET_ERROR)
 		if( pvtResult )
 			ReportError( pvtResult, "sendto()");
@@ -43789,16 +46229,16 @@ int SendEchoRequest(PVARTEXT pvtResult, SOCKET s,struct sockaddr_in *lpstToAddr)
 // RecvEchoReply()
 // Receive incoming data
 // and parse out fields
-int RecvEchoReply(PVARTEXT pvtResult, SOCKET s, struct sockaddr_in *lpsaFrom, uint8_t *pTTL)
+int RecvEchoReply(PVARTEXT pvtResult, SOCKET s, struct sockaddr_fake *lpsaFrom, uint8_t *pTTL)
 {
 	ECHOREPLY echoReply;
 	int nRet;
 #ifdef __LINUX__
 	socklen_t
 #else
-   int
+	int
 #endif
-		nAddrLen = sizeof(struct sockaddr_in);
+		nAddrLen = sizeof(struct sockaddr_in6);
 	// Receive the echo reply
 					// socket
 	nRet = recvfrom(s,
@@ -43809,15 +46249,16 @@ int RecvEchoReply(PVARTEXT pvtResult, SOCKET s, struct sockaddr_in *lpsaFrom, ui
 					// flags
 					0,
 	// From address
-					(SOCKADDR*)lpsaFrom,
+					(SOCKADDR*)&lpsaFrom->ip,
 			// pointer to address len
 					&nAddrLen);
+	lpsaFrom->sockaddr_len = nAddrLen;
 	// Check return value
 	if (nRet == SOCKET_ERROR)
 	{
 		if( pvtResult )
 			ReportError( pvtResult, "recvfrom()");
-      return 0;
+		return 0;
 	}
 // if( echoReply.ipHdr.
 	// return time sent and IP TTL
@@ -43827,8 +46268,8 @@ int RecvEchoReply(PVARTEXT pvtResult, SOCKET s, struct sockaddr_in *lpsaFrom, ui
 // What happened?
 void ReportError(PVARTEXT pInto, CTEXTSTR pWhere)
 {
-    vtprintf( pInto, "\n%s error: %d\n",
-                            pWhere, WSAGetLastError());
+	vtprintf( pInto, "\n%s error: %d\n",
+									pWhere, WSAGetLastError());
 }
 // WaitForEchoReply()
 // Use select() to determine when
@@ -43841,7 +46282,7 @@ int WaitForEchoReply(SOCKET s, uint32_t dwTime)
 	FD_SET( s, &readfds );
  // longer than a second is too long
 	Timeout.tv_sec = dwTime / 1000;
-    Timeout.tv_usec = ( dwTime % 1000 ) * 1000;
+	Timeout.tv_usec = ( dwTime % 1000 ) * 1000;
 	return(select(1, &readfds, NULL, NULL, &Timeout));
 }
 //
@@ -43861,16 +46302,16 @@ int WaitForEchoReply(SOCKET s, uint32_t dwTime)
  */
 uint16_t in_cksum(uint16_t *addr, int len)
 {
-	register int nleft = len;
-	register uint16_t *w = addr;
-	register uint16_t answer;
-	register int sum = 0;
+	int nleft = len;
+	uint16_t *w = addr;
+	uint16_t answer;
+	int sum = 0;
 	/*
-	 *  Our algorithm is simple, using a 32 bit accumulator (sum),
-	 *  we add sequential 16 bit words to it, and at the end, fold
-	 *  back all the carry bits from the top 16 bits into the lower
-	 *  16 bits.
-	 */
+	*  Our algorithm is simple, using a 32 bit accumulator (sum),
+	*  we add sequential 16 bit words to it, and at the end, fold
+	*  back all the carry bits from the top 16 bits into the lower
+	*  16 bits.
+	*/
 	while( nleft > 1 )  {
 		sum += *w++;
 		nleft -= 2;
@@ -43882,60 +46323,14 @@ uint16_t in_cksum(uint16_t *addr, int len)
 		sum += u;
 	}
 	/*
-	 * add back carry outs from top 16 bits to low 16 bits
-	 */
+	* add back carry outs from top 16 bits to low 16 bits
+	*/
 	sum = (sum >> 16) + (sum & 0xffff);
 	sum += (sum >> 16);
 	answer = (uint16_t)(~sum);
 	return (answer);
 }
 SACK_NETWORK_NAMESPACE_END
-//#endif
-// $Log: ping.c,v $
-// Revision 1.15  2005/01/27 07:37:11  panther
-// Linux cleaned.
-//
-// Revision 1.14  2003/11/09 03:32:15  panther
-// Added some address functions to set port and override default port
-//
-// Revision 1.13  2003/10/27 16:41:37  panther
-// Go to standard abstract ThreadTO instead of CreateThread
-//
-// Revision 1.12  2002/12/22 00:14:11  panther
-// Cleanup function declarations and project defines.
-//
-// Revision 1.11  2002/11/24 21:37:41  panther
-// Mods - network - fix server->accepted client method inheritance
-// display - fix many things
-// types - merge chagnes from verious places
-// ping - make function result meaningful yes/no
-// controls - fixes to handle lack of image structure
-// display - fixes to handle moved image structure.
-//
-// Revision 1.10  2002/11/21 00:50:57  jim
-// Made result of ping be useful - TRUE if result, FALSE if no result.
-//
-// Revision 1.9  2002/10/09 13:16:02  panther
-// Support for linux shared memory mapping.
-// Support for better linux compilation of configuration scripts...
-// Timers library is now Threads AND Timers.
-//
-// Revision 1.8  2002/06/02 11:46:01  panther
-// Modifications to build under MSVC
-// Added MSVC project files.
-//
-// Revision 1.7  2002/04/19 18:09:51  panther
-// Unix cleanup of massive changes....
-//
-// Revision 1.6  2002/04/18 15:13:55  panther
-// Added per client cricticalsection locked(unused)
-// Added timers for the pending closes (mostly)
-// Fixed minor warning in ping.c (no type default int, missing prototypes)
-//
-// Revision 1.5  2002/04/18 15:01:42  panther
-// Added Log History
-// Stage 1: Delay schedule closes - only network thread will close.
-//
 #define LIBRARY_DEF
 #ifdef __LINUX__
 // close() for closesocket() alias.
@@ -44025,6 +46420,11 @@ SACK_NETWORK_NAMESPACE_END
 #ifdef BUILD_NODE_ADDON
 #  include <node_version.h>
 #endif
+//#define DEBUG_FALLBACK
+//#define DEBUG_NO_HOST
+#if defined( DEBUG_NO_HOST ) && defined( DEBUG_FALLBACK )
+#  define DEBUG_NO_HOST_AND_FALLBACK
+#endif
 #ifdef BUILD_NODE_ADDON
 #  ifdef NODE_MAJOR_VERSION
 #    if NODE_MAJOR_VERSION >= 10
@@ -44036,7 +46436,9 @@ SACK_NETWORK_NAMESPACE_END
 #  include <prsht.h>
 #  include <cryptuiapi.h>
 #endif
+//#define DEBUG_SSL_FALLBACK
 //#define DEBUG_SSL_IO
+// also has option to control output
 //#define DEBUG_SSL_IO_BUFFERS
 //#define DEBUG_SSL_IO_RAW
 //#define DEBUG_SSL_IO_VERBOSE
@@ -44062,36 +46464,19 @@ void ssl_CloseSession( PCLIENT pc ) {
 }
 SACK_NETWORK_NAMESPACE_END
 #else
-#ifndef OPENSSL_API_COMPAT
-#  define OPENSSL_API_COMPAT 10101
-#endif
-#define _LIB
-#  if NODE_MAJOR_VERSION >= 17
-// this can't work?
-#    include <openssl/configuration.h>
-#  endif
-#include <openssl/ssl.h>
-#include <openssl/tls1.h>
-#include <openssl/err.h>
-#include <openssl/rsa.h>
-#include <openssl/pem.h>
-#include <openssl/pkcs12.h>
-#if OPENSSL_VERSION_MAJOR >= 3
-#include <openssl/core_names.h>
-#endif
 SACK_NETWORK_NAMESPACE
 //#define RSA_KEY_SIZE (1024)
-const int serverKBits = 4096;
+//const int serverKBits = 4096;
 // 4096;
 const int kBits = 1024;
 const int kExp = RSA_F4;
 struct internalCert {
-	X509_REQ *req;
+	//X509_REQ *req;
 	X509 * x509;
 	EVP_PKEY *pkey;
 	STACK_OF( X509 ) *chain;
 };
-void loadSystemCerts(SSL_CTX* ctx,X509_STORE *store );
+static void loadSystemCerts(SSL_CTX* ctx,X509_STORE *store );
 //static void gencp
 struct internalCert * MakeRequest( void );
 EVP_PKEY *genKey() {
@@ -44137,58 +46522,40 @@ EVP_PKEY *genKey() {
 	return keypair;
 }
 #define ALLOW_ANON_CONNECTIONS	1
-#ifndef UNICODE
+#  ifndef UNICODE
+// template
+verify_mydata_t verify_default = { FALSE, 100, FALSE };
 struct ssl_hostContext {
+   // contexxt to use if host matches this
 	SSL_CTX* ctx;
-	struct internalCert* cert;
+ // not sure I need this if the context is already setup...
+	struct internalCert* certToUse;
+  // list of hosts, separated by '~'
 	char* host;
-};
-struct ssl_session {
-	PLIST hosts;
-	SSL_CTX        *ctx;
-	struct internalCert* cert;
-	LOGICAL ignoreVerification;
-	LOGICAL firstPacket;
-	LOGICAL closed;
-	BIO *rbio;
-	BIO *wbio;
-	//EVP_PKEY *privkey;
- // sockets being accepted so we can find the proper SSL*
-	PLIST          accepting;
-  // accepted client's hostname request (NULL if none)
-	TEXTSTR	       hostname;
- // protocol select from TLS
-	PLIST          protocols;
-	SSL*           ssl;
- // CF_CPPREAD
-	uint32_t       dwOriginalFlags;
-	cReadComplete  user_read;
-	cppReadComplete  cpp_user_read;
-	cNotifyCallback user_connected;
-	cppNotifyCallback cpp_user_connected;
-	cCloseCallback user_close;
-	cppCloseCallback cpp_user_close;
-	uint8_t *obuffer;
-	size_t obuflen;
-	uint8_t *ibuffer;
-	size_t ibuflen;
-	uint8_t *dbuffer;
-	size_t dbuflen;
-	CRITICALSECTION csReadWrite;
-	//CRITICALSECTION csReadWrite;
-	//CRITICALSECTION csWrite;
+ // if this is the default host
+	LOGICAL defaultHost;
 };
 static struct ssl_global
 {
 	struct {
 		BIT_FIELD bInited : 1;
+		BIT_FIELD bLogBuffers : 1;
+		BIT_FIELD bLogBuffersVerbose : 1;
 	} flags;
 	LOGICAL trace;
 	struct tls_config *tls_config;
 	uint8_t cipherlen;
 // = OPENSSL_malloc(CRYPTO_num_locks() * sizeof(HANDLE));
 	uint32_t *lock_cs;
+ // common context for all SSL connections
+	SSL_CTX *ctx;
 }ssl_global;
+PRELOAD( InitSSL ) {
+#ifndef __NO_OPTIONS__
+	ssl_global.flags.bLogBuffers = SACK_GetProfileIntEx( "SACK", "Network/SSL/Log Network Data", 0, TRUE );
+	ssl_global.flags.bLogBuffersVerbose = SACK_GetProfileIntEx( "SACK", "Network/SSL/Log Network Data Verbose", 0, TRUE );
+#endif
+}
 ATEXIT( CloseSSL )
 {
 	if( ssl_global.flags.bInited ) {
@@ -44198,32 +46565,39 @@ static int logerr( const char *str, size_t len, void *userdata ) {
 	lprintf( "%d: %s", *((int*)&userdata), str );
 	return 0;
 }
-static void ssl_handlePendingControlwrites( PCLIENT pc ) {
+struct ssl_session* ssl_GetSession( PCLIENT pc )
+{
+	return pc->ssl_session;
+}
+static void ssl_handlePendingControlwrites( struct ssl_session* pc_ssl_session ) {
 	// the read generated write data, output that data
-	size_t pending = BIO_ctrl_pending( pc->ssl_session->wbio );
-	if( !pc->ssl_session ) {
+	size_t pending = BIO_ctrl_pending( pc_ssl_session->wbio );
+	if( !pc_ssl_session ) {
 		lprintf( "SSL SESSION SELF DESTRUCTED!" );
 	}
 	if( pending > 0 ) {
 		int read;
 #ifdef DEBUG_SSL_IO_VERBOSE
-		lprintf( "pending to send is %zd into %zd %p " , pending, pc->ssl_session->obuflen, pc->ssl_session->obuffer );
+		lprintf( "pending to send is %zd into %zd %p " , pending, pc_ssl_session->obuflen, pc_ssl_session->obuffer );
 #endif
-		if( pending > pc->ssl_session->obuflen ) {
-			if( pc->ssl_session->obuffer )
-				Deallocate( uint8_t *, pc->ssl_session->obuffer );
-			pc->ssl_session->obuffer = NewArray( uint8_t, pc->ssl_session->obuflen = pending * 2 );
+		if( pending > pc_ssl_session->obuflen ) {
+			if( pc_ssl_session->obuffer )
+				Deallocate( uint8_t *, pc_ssl_session->obuffer );
+			pc_ssl_session->obuffer = NewArray( uint8_t, pc_ssl_session->obuflen = pending * 2 );
 			//lprintf( "making obuffer bigger %d %d", pending, pending * 2 );
 		}
-		read  = BIO_read( pc->ssl_session->wbio, pc->ssl_session->obuffer, (int)pending );
+		read  = BIO_read( pc_ssl_session->wbio, pc_ssl_session->obuffer, (int)pending );
 		if( read < 0 ) {
 			ERR_print_errors_cb( logerr, (void*)__LINE__ );
 			lprintf( "failed to read pending control data...SSL will fail without it." );
 		} else {
 #ifdef DEBUG_SSL_IO
-			lprintf( "Send pending control %p %d", pc->ssl_session->obuffer, read );
+			lprintf( "Send pending control %p %d", pc_ssl_session->obuffer, read );
 #endif
-			SendTCP( pc, pc->ssl_session->obuffer, read );
+			if( pc_ssl_session->send_callback )
+				pc_ssl_session->send_callback( pc_ssl_session->psvSendRecv, pc_ssl_session->obuffer, read );
+			//else
+			//	SendTCP( pc, pc_ssl_session->obuffer, read );
 		}
 	}
 }
@@ -44233,89 +46607,162 @@ LOGICAL ssl_IsClosed( PCLIENT pc ) {
 	}
 	return TRUE;
 }
-void ssl_CloseSession( PCLIENT pc )
+LOGICAL ssl_IsPipeClosed( struct ssl_session*ssl_session ) {
+	if( ssl_session ) {
+		return ssl_session->closed;
+	}
+	return TRUE;
+}
+void ssl_ClosePipeSession( struct ssl_session** ssl_session )
 {
-	if( pc->ssl_session )
+#if defined( DEBUG_SSL_FALLBACK )
+	lprintf( "Close generic session %p", ssl_session );
+#endif
+	if( ssl_session[0] )
 	{
+		struct ssl_session *ses = ssl_session[0];
+		struct ssl_hostContext* hostctx;
 		INDEX idx;
 		PTEXT seg;
-		SSL_shutdown( pc->ssl_session->ssl );
-		ssl_handlePendingControlwrites( pc );
-		LIST_FORALL( pc->ssl_session->protocols, idx, PTEXT, seg ) {
+		SSL_shutdown( ses->ssl );
+		//lprintf( "SSL Shutdown... but this should only be done if handshake complete..." );
+		if( SSL_is_init_finished( ses->ssl ) ) {
+#if defined( DEBUG_SSL_FALLBACK )
+			lprintf( "SSL Shutdown... but this should only be done if handshake complete..." );
+#endif
+			ssl_handlePendingControlwrites( ses );
+		}
+		// usually this isn't released... the server socket (LISTENER)
+		// is very rarely closed (like never actually).
+		LIST_FORALL( ses->hosts, idx, struct ssl_hostContext*, hostctx ) {
+			Release( hostctx->host );
+			SSL_CTX_free( hostctx->ctx );
+			X509_free( hostctx->certToUse->x509 );
+			EVP_PKEY_free( hostctx->certToUse->pkey );
+			sk_X509_free( hostctx->certToUse->chain );
+			Release( hostctx );
+		}
+		DeleteList( &ses->hosts );
+		// accepting is another listener structure; usually NULL.
+		DeleteList( &ses->accepting );
+		LIST_FORALL( ses->protocols, idx, PTEXT, seg ) {
 			LineRelease( seg );
 		}
-		DeleteList( &pc->ssl_session->protocols );
-		if( pc->ssl_session->hostname ) {
-			Release( pc->ssl_session->hostname );
-			pc->ssl_session->hostname = NULL;
+		DeleteList( &ses->protocols );
+		if( ses->hostname ) {
+			Release( ses->hostname );
+			ses->hostname = NULL;
 		}
-		pc->ssl_session->closed = TRUE;
-		//Release( pc->ssl_session );
-		//pc->ssl_session = NULL;
+		/* this should probably have a do_close action event too like send/recv */
+		ssl_session[0] = NULL;
+		Release( ses );
+	} else {
+		//lprintf( "Session already closed" );
 	}
-	if( !( pc->dwFlags & ( CF_CLOSED|CF_CLOSING ) ) )
-		RemoveClient( pc );
 }
-static int handshake( PCLIENT pc ) {
+void ssl_CloseSession( PCLIENT pc ) {
 	struct ssl_session *ses = pc->ssl_session;
-	if (!SSL_is_init_finished(ses->ssl)) {
+	// mark that this should be closed down to the socket.
+	ses->closed = TRUE;
+	if( ses->inUse ) {
+#ifdef DEBUG_NO_HOST_AND_FALLBACK
+		lprintf( "Setting close session for later" );
+#endif
+		ses->deleteInUse++;
+		return;
+	}
+#ifdef DEBUG_NO_HOST_AND_FALLBACK
+	lprintf( "Close Session Callback: %p %p %d", pc, ses, ses->noHost );
+#endif
+	if( !ses->noHost ) {
+		if( ses->dwOriginalFlags & CF_CPPCLOSE ){
+			if( ses->cpp_user_close ) ses->cpp_user_close( pc->psvClose );
+		}else{
+			if( ses->user_close ) ses->user_close( pc );
+		}
+	}
+	ssl_ClosePipeSession( &pc->ssl_session );
+	if( !( pc->dwFlags & ( CF_CLOSED | CF_CLOSING ) ) ) {
+#ifdef DEBUG_NO_HOST_AND_FALLBACK
+		lprintf( "RemoveClient (Again?) %s", NetworkExpandFlags( pc ));
+#endif
+		if( pc->dwFlags & CF_CONNECT_ISSUED )
+			RemoveClient( pc );
+		else
+			RemoveClientEx( pc, TRUE, FALSE );
+	}
+}
+static int handshake( struct ssl_session** ses ) {
+	if( !ses[0] ) return -1;
+	if (!SSL_is_init_finished(ses[0]->ssl)) {
 		int r;
 #ifdef DEBUG_SSL_IO_VERBOSE
 		lprintf( "doing handshake...." );
 #endif
 		/* NOT INITIALISED */
 #ifdef DEBUG_SSL_IO
-		lprintf(" Handshake is not finished? %p", pc );
+		lprintf("Handshake is not finished? %p", ses[0] );
 #endif
-		r = SSL_do_handshake(ses->ssl);
+		r = SSL_do_handshake(ses[0]->ssl);
 #ifdef DEBUG_SSL_IO_VERBOSE
 		lprintf( "handle data posted to SSL? %d", r );
 #endif
 		if( r == 0 ) {
 			ERR_print_errors_cb( logerr, (void*)__LINE__ );
-			r = SSL_get_error( ses->ssl, r );
+			r = SSL_get_error( ses[0]->ssl, r );
 			ERR_print_errors_cb( logerr, (void*)__LINE__ );
 #ifdef DEBUG_SSL_IO
 			lprintf( "SSL_Read failed... %d", r );
 #endif
 			return -1;
 		}
+		// error results sometimes have to send alerts, so r can't be checked.
+		//if( r >= 0 )
+		//lprintf( "No host is false right? %d", ses[0]->noHost);
+		if( ses[0] && !(ses[0]->noHost))
 		{
 			size_t pending;
-			while( ( pending = BIO_ctrl_pending( ses->wbio) ) > 0 ) {
-				if (pending > 0) {
+			while( ( pending = BIO_ctrl_pending( ses[0]->wbio) ) > 0 ) {
+				if( r == -1 && pending < 8 ) break;
+				if (ses[0] && pending > 0) {
 					int read;
-					if( pending > ses->obuflen ) {
-						if( ses->obuffer )
-							Deallocate( uint8_t *, ses->obuffer );
-						ses->obuffer = NewArray( uint8_t, ses->obuflen = pending*2 );
+					if( pending > ses[0]->obuflen ) {
+						if( ses[0]->obuffer )
+							Deallocate( uint8_t *, ses[0]->obuffer );
+						ses[0]->obuffer = NewArray( uint8_t, ses[0]->obuflen = pending*2 );
 						//lprintf( "making obuffer bigger %d %d", pending, pending * 2 );
 					}
-					read = BIO_read(ses->wbio, ses->obuffer, (int)pending);
+					read = BIO_read(ses[0]->wbio, ses[0]->obuffer, (int)pending);
 #ifdef DEBUG_SSL_IO_VERBOSE
 					  lprintf( "send %d %d for handshake", pending, read );
 #endif
-					  if( read > 0 ) {
+					if( read > 0 ) {
 #ifdef DEBUG_SSL_IO
-						  lprintf( "handshake send %d", read );
+						lprintf( "handshake send %d", read );
 #endif
-						  SendTCP( pc, ses->obuffer, read );
-					  }
-				  }
-			  }
-		  }
+						ses[0]->send_callback( ses[0]->psvSendRecv, ses[0]->obuffer, read );
+					}
+				}
+			}
+		}
+		//lprintf( "R here is %d", r );
 		if (r < 0) {
-			r = SSL_get_error(ses->ssl, r);
+			r = SSL_get_error(ses[0]->ssl, r);
+			//lprintf( "Get error %d %d %d %d %p", r, SSL_ERROR_SSL, SSL_ERROR_WANT_READ, ses[0]->noHost, ses[0] );
 			if( SSL_ERROR_SSL == r ) {
 #ifdef DEBUG_SSL_IO
 				lprintf( "SSL_Read failed... %d", r );
 #endif
-				if( !pc->errorCallback )
+				if( !ses[0]->errorCallback )
 					ERR_print_errors_cb( logerr, (void*)__LINE__ );
 				return -1;
 			}
 			if (SSL_ERROR_WANT_READ == r)
 			{
+				if( ses[0]->noHost ) {
+					//lprintf( "No host, so no need to read more data." );
+					return -1;
+				}
 			}
 			else {
 				ERR_print_errors_cb( logerr, (void*)__LINE__ );
@@ -44330,10 +46777,14 @@ static int handshake( PCLIENT pc ) {
 #ifdef DEBUG_SSL_IO
 		lprintf(" Handshake is and has been finished?");
 #endif
+		if( ses[0]->noHost ) {
+			lprintf( "Handshake no host status return -1");
+			return -1;
+		}
 		return 1;
 	}
 }
-static void ssl_ReadComplete( PCLIENT pc, POINTER buffer, size_t length )
+static void ssl_ReadComplete_( PCLIENT pc, struct ssl_session** ses, POINTER buffer, size_t length )
 {
 #if defined( DEBUG_SSL_IO ) || defined( DEBUG_SSL_IO_RAW )
 	lprintf( "SSL Read complete %p %p %zd", pc, buffer, length );
@@ -44341,7 +46792,7 @@ static void ssl_ReadComplete( PCLIENT pc, POINTER buffer, size_t length )
 	LogBinary( (const uint8_t*)buffer, length );
 #  endif
 #endif
-	if( pc->ssl_session )
+	if( ses[0] )
 	{
 		if( buffer )
 		{
@@ -44349,219 +46800,333 @@ static void ssl_ReadComplete( PCLIENT pc, POINTER buffer, size_t length )
 			int hs_rc;
 			//lprintf( "Read from network: %d", length );
 			//LogBinary( (const uint8_t*)buffer, length );
-			EnterCriticalSec( &pc->ssl_session->csReadWrite );
-			len = BIO_write( pc->ssl_session->rbio, buffer, (int)length );
+			EnterCriticalSec( &ses[0]->csReadWrite );
+			ses[0]->inUse++;
+			len = BIO_write( ses[0]->rbio, buffer, (int)length );
 #ifdef DEBUG_SSL_IO_VERBOSE
 			lprintf( "Wrote %zd", len );
 #endif
 			if( len < (int)length ) {
 				lprintf( "Internal buffer error; wrote less to buffer than specified?" );
-				LeaveCriticalSec( &pc->ssl_session->csReadWrite );
-				Release( pc->ssl_session );
-				RemoveClient( pc );
+				ses[0]->inUse--;
+				LeaveCriticalSec( &ses[0]->csReadWrite );
+				//ssl_CloseSession( pc );
+				ssl_ClosePipeSession( ses );
+				if( pc )
+					if( !( pc->dwFlags & ( CF_CLOSED | CF_CLOSING ) ) )
+						RemoveClient( pc );
 				return;
 			}
-			if( !( hs_rc = handshake( pc ) ) ) {
-				if( !pc->ssl_session ) {
- //-V522
-					LeaveCriticalSec( &pc->ssl_session->csReadWrite );
+			//lprintf( "And session inbound is %p %p", ses, ses[0] );
+			if( !( hs_rc = handshake( ses ) ) ) {
+				// zero result is 'needs more data read'
+				if( !ses[0] ) {
+					lprintf( "IN handshake, the session disappeared?");
 					return;
 				}
 #ifdef DEBUG_SSL_IO_VERBOSE
 				// normal condition...
 				lprintf( "Receive handshake not complete iBuffer" );
 #endif
-				LeaveCriticalSec( &pc->ssl_session->csReadWrite );
-				ReadTCP( pc, pc->ssl_session->ibuffer, pc->ssl_session->ibuflen );
+				ses[0]->inUse--;
+				LeaveCriticalSec( &ses[0]->csReadWrite );
+				// read more...
+				ses[0]->recv_callback( ses[0]->psvSendRecv, ses[0]->ibuffer, ses[0]->ibuflen );
+				//ReadTCP( pc, ses->ibuffer, ses->ibuflen );
 				return;
 			}
-			if( !pc->ssl_session ) {
-				LeaveCriticalSec( &pc->ssl_session->csReadWrite );
+			if( !ses[0] ) {
+				ses[0]->inUse--;
+				LeaveCriticalSec( &ses[0]->csReadWrite );
 				return;
 			}
 			// == 1 if is already done, and not newly done
 			if( hs_rc == 2 ) {
 				// newly completed handshake.
 				{
-					if( !pc->ssl_session->ignoreVerification && SSL_get_peer_certificate( pc->ssl_session->ssl ) ) {
+					if( !ses[0]->ignoreVerification && SSL_get_peer_certificate( ses[0]->ssl ) ) {
 						int r;
-						if( ( r = SSL_get_verify_result( pc->ssl_session->ssl ) ) != X509_V_OK ) {
-							if( pc->errorCallback )
-								pc->errorCallback( pc->psvErrorCallback, pc, SACK_NETWORK_ERROR_SSL_CERTCHAIN_FAIL );
+						if( ( r = SSL_get_verify_result( ses[0]->ssl ) ) != X509_V_OK ) {
+							//lprintf( "Verify result - client connection: %d %p", r, ses[0]->errorCallback );
+							if( pc )
+								if( ses[0]->errorCallback )
+									ses[0]->errorCallback( ses[0]->psvErrorCallback, pc, SACK_NETWORK_ERROR_SSL_CERTCHAIN_FAIL );
 							lprintf( "Certificate verification failed. %d", r );
-							LeaveCriticalSec( &pc->ssl_session->csReadWrite );
-							RemoveClientEx( pc, 0, 1 );
+							ses[0]->inUse--;
+							LeaveCriticalSec( &ses[0]->csReadWrite );
+							ssl_ClosePipeSession( ses );
+							if( pc )
+								if( !( pc->dwFlags & ( CF_CLOSED | CF_CLOSING ) ) )
+									RemoveClient( pc );
 							return;
 							//ERR_print_errors_cb( logerr, (void*)__LINE__ );
 						}
 					}
-					LeaveCriticalSec( &pc->ssl_session->csReadWrite );
-					//lprintf( "Initial read dispatch.." );
-					if( pc->ssl_session->dwOriginalFlags & CF_CPPREAD )
-						pc->ssl_session->cpp_user_read( pc->psvRead, NULL, 0 );
-					else
-						pc->ssl_session->user_read( pc, NULL, 0 );
-					EnterCriticalSec( &pc->ssl_session->csReadWrite );
+					LeaveCriticalSec( &ses[0]->csReadWrite );
+					//lprintf( "Sending connect now, but the SSL server requet hasn't completed?");
+					// connect callback is where read callback is typically setup, so the initial read following this can work.
+					if( pc->pcServer ) {
+						// clients use the same read callback.  They only get the initial read complete
+						// no callbacks to setup.
+						//lprintf( "### Sent connect...");
+						pc->dwFlags |= CF_CONNECT_ISSUED;
+						if( pc->pcServer->ssl_session->dwOriginalFlags & CF_CPPCONNECT )
+							pc->pcServer->ssl_session->cpp_user_connected( pc->pcServer->psvConnect, pc );
+						else
+							pc->pcServer->ssl_session->user_connected( pc->pcServer, pc );
+					}
+					//lprintf( "Initial read dispatch.. %d", ses[0]->dwOriginalFlags & CF_CPPREAD );
+					if( ses[0]->dwOriginalFlags & CF_CPPREAD ) {
+						if( ses[0]->cpp_user_read )
+							ses[0]->cpp_user_read( ses[0]->psvRead, NULL, 0 );
+						else lprintf( "Couldn't send initial read - no C++ function?!" );
+					} else {
+						if( ses[0]->user_read )
+							ses[0]->user_read( pc, NULL, 0 );
+						else lprintf( "Couldn't send initial read - no function?!" );
+					}
+					if( ses[0]->deleteInUse ){
+						lprintf( "Pending close... was in-use when closed.");
+					}
+					EnterCriticalSec( &ses[0]->csReadWrite );
 				}
 				len = 0;
 			}
 			if( hs_rc >= 1 )
 			{
+				// 1 is 'needs to send some data to complete handshake'
 			read_more:
 				// if read isn't done before pending, pending doesn't get set
 				// but this read doens't return a useful length.
  //-V575
-				len = SSL_read( pc->ssl_session->ssl, NULL, 0 );
+				len = SSL_read( ses[0]->ssl, NULL, 0 );
 				//lprintf( "return of 0 read: %d", len );
 				//if( len < 0 )
-				//	lprintf( "error of 0 read is %d", SSL_get_error( pc->ssl_session->ssl, len ) );
-				len = SSL_pending( pc->ssl_session->ssl );
-				//lprintf( "do read.. pending %d", len );
+				//	lprintf( "error of 0 read is %d", SSL_get_error( ses[0]->ssl, len ) );
+				len = SSL_pending( ses[0]->ssl );
 				if( len ) {
-					if( len > (int)pc->ssl_session->dbuflen ) {
+					if( len > (int)ses[0]->dbuflen ) {
 						//lprintf( "Needed to expand buffer..." );
-						Release( pc->ssl_session->dbuffer );
-						pc->ssl_session->dbuflen = ( len + 4095 ) & 0xFFFF000;
-						pc->ssl_session->dbuffer = NewArray( uint8_t, pc->ssl_session->dbuflen );
+						Release( ses[0]->dbuffer );
+						ses[0]->dbuflen = ( len + 4095 ) & 0xFFFF000;
+						ses[0]->dbuffer = NewArray( uint8_t, ses[0]->dbuflen );
 					}
-					len = SSL_read( pc->ssl_session->ssl, pc->ssl_session->dbuffer, (int)pc->ssl_session->dbuflen );
+					len = SSL_read( ses[0]->ssl, ses[0]->dbuffer, (int)ses[0]->dbuflen );
 #ifdef DEBUG_SSL_IO_VERBOSE
 					lprintf( "normal read - just get the data from the other buffer : %d", len );
 #endif
 					if( len < 0 ) {
-						int error = SSL_get_error( pc->ssl_session->ssl, len );
+						int error = SSL_get_error( ses[0]->ssl, len );
 						if( error == SSL_ERROR_WANT_READ ) {
 							lprintf( "want more data?" );
 						} else
 							lprintf( "SSL_Read failed. %d", error );
-						if( pc->errorCallback )
-							pc->errorCallback( pc->psvErrorCallback, pc, SACK_NETWORK_ERROR_SSL_FAIL );
-						//ERR_print_errors_cb( logerr, (void*)__LINE__ );
-						//RemoveClient( pc );
-						//return;
+						if( pc && ses[0]->errorCallback )
+							ses[0]->errorCallback( ses[0]->psvErrorCallback, pc, SACK_NETWORK_ERROR_SSL_FAIL );
 					}
 				}
 			}
 			else if( hs_rc == -1 ) {
-				if( pc->errorCallback )
-					pc->errorCallback( pc->psvErrorCallback, pc, pc->ssl_session->firstPacket
-						? SACK_NETWORK_ERROR_SSL_HANDSHAKE
+				//lprintf( "handshake failed - client connection: %zd %p %d", length, ses[0]->errorCallback, ses[0]->noHost );
+				if( pc && ses[0]->errorCallback && !ses[0]->noHost ) {
+					ses[0]->errorCallback( ses[0]->psvErrorCallback, pc
+						, ses[0]->firstPacket ? SACK_NETWORK_ERROR_SSL_HANDSHAKE
 						: SACK_NETWORK_ERROR_SSL_HANDSHAKE_2
 						, buffer, length );
-				if( pc->ssl_session ) {
-					LeaveCriticalSec( &pc->ssl_session->csReadWrite );
-					RemoveClient( pc );
+#ifdef DEBUG_NO_HOST_AND_FALLBACK
+					lprintf( "Sent error callback");
+#endif
 				}
+				// disableSSL call can happen during error callback
+				// in which case this will eventually fall back to non-SSL reading
+				// and the buffer will get passed back in (or a new buffer if someone really crafty uses it...)
+				if( pc && !pc->ssl_session ) {
+					ses[0] = NULL;
+				}
+				if( ses[0] ) {
+					ses[0]->inUse--;
+					LeaveCriticalSec( &ses[0]->csReadWrite );
+#if defined( DEBUG_SSL_FALLBACK )
+					lprintf( "Pending SSL (not socket close) close(2)... was in-use when closed. %d %d %d", ses[0]->inUse, ses[0]->deleteInUse, ses[0]->noHost );
+#endif
+					/*
+					if( ses[0]->noHost ){
+						if( pc ) {
+							if( !( pc->dwFlags & ( CF_CLOSED | CF_CLOSING ) )
+								&& (pc->dwFlags & CF_CONNECTED ) )
+								RemoveClientEx( pc, TRUE, FALSE );
+						}
+					}
+					else
+					*/
+#ifdef DEBUG_NO_HOST_AND_FALLBACK
+					lprintf( "Handshake failed - close socket? %p %p %d", pc, pc->pcServer, pc->dwFlags & CF_CONNECT_ISSUED );
+#endif
+					if( pc->dwFlags & CF_CONNECT_ISSUED )
+						RemoveClient( pc );
+					else {
+#ifdef DEBUG_NO_HOST_AND_FALLBACK
+						lprintf( "Sent connect that is blocked notify...");
+#endif
+						RemoveClientEx( pc, TRUE, FALSE );
+#ifdef DEBUG_NO_HOST_AND_FALLBACK
+						lprintf( "so the socket really can/is closed here?" );
+#endif
+					}
+					//ssl_ClosePipeSession( ses );
+				}
+#if defined( DEBUG_SSL_FALLBACK )
+				lprintf( "done with failed handshake?");
+#endif
 				return;
 			}
 			else
 				len = 0;
-			ssl_handlePendingControlwrites( pc );
-			if( !pc->ssl_session ) {
-				LeaveCriticalSec( &pc->ssl_session->csReadWrite );
+			ssl_handlePendingControlwrites( ses[0] );
+			LeaveCriticalSec( &ses[0]->csReadWrite );
+			if( !ses[0] ) {
 				return;
 			}
-			LeaveCriticalSec( &pc->ssl_session->csReadWrite );
 			// do was have any decrypted data to give to the application?
-			if( len > 0 ) {
+			if( ses[0] && len > 0 ) {
 #ifdef DEBUG_SSL_IO_BUFFERS
-				lprintf( "READ BUFFER:" );
-				LogBinary( pc->ssl_session->dbuffer, 256 > len ? len : 256 );
+				if( ssl_global.flags.bLogBuffers ) {
+					lprintf( "READ BUFFER:" );
+					LogBinary( ses[0]->dbuffer, (( ssl_global.flags.bLogBuffers ) || ( 256 > len ))? len : 256 );
+				}
 #endif
-				if( pc->ssl_session->dwOriginalFlags & CF_CPPREAD )
-					pc->ssl_session->cpp_user_read( pc->psvRead, pc->ssl_session->dbuffer, len );
-				else
-					pc->ssl_session->user_read( pc, pc->ssl_session->dbuffer, len );
+				if( ses[0]->dwOriginalFlags & CF_CPPREAD ) {
+					if( ses[0]->cpp_user_read )
+						ses[0]->cpp_user_read( ses[0]->psvRead, ses[0]->dbuffer, len );
+					else lprintf( "Somehow missing the C++ read function?");
+				} else {
+					if( ses[0]->user_read )
+						ses[0]->user_read( pc, ses[0]->dbuffer, len );
+					else lprintf( "Somehow missing the read function?");
+				}
  // might have closed during read.
-				if( pc->ssl_session ) {
-					EnterCriticalSec( &pc->ssl_session->csReadWrite );
-					goto read_more;
+				if( ses[0] ) {
+					if( ses[0] && ses[0]->deleteInUse ){
+						//lprintf( "Pending close(3)... was in-use when closed.");
+						ses[0]->inUse--;
+						RemoveClient( pc );
+					}
+					else {
+						EnterCriticalSec( &ses[0]->csReadWrite );
+						goto read_more;
+					}
+				} else {
+					//lprintf( "Session closed during read." );
 				}
 			}
 			else if( len == 0 ) {
+				ses[0]->inUse--;
 #ifdef DEBUG_SSL_IO_VERBOSE
-				lprintf( "incomplete read" );
+				lprintf( "incomplete read (no more data to read)" );
 #endif
 			}
-			//else {
-			//	lprintf( "SSL_Read failed." );
-			//	ERR_print_errors_cb( logerr, (void*)__LINE__ );
-			//	RemoveClient( pc );
-			//}
 		}
 		else {
-			EnterCriticalSec( &pc->ssl_session->csReadWrite );
-			pc->ssl_session->ibuffer = NewArray( uint8_t, pc->ssl_session->ibuflen = (4327 + 39) );
-			pc->ssl_session->dbuffer = NewArray( uint8_t, pc->ssl_session->dbuflen = 4096 );
+			EnterCriticalSec( &ses[0]->csReadWrite );
+			ses[0]->inUse++;
+			ses[0]->ibuffer = NewArray( uint8_t, ses[0]->ibuflen = (4327 + 39) );
+			ses[0]->dbuffer = NewArray( uint8_t, ses[0]->dbuflen = 4096 );
+			// should probably just call handshake() function here too?
 			{
 				int r;
-				if( ( r = SSL_do_handshake( pc->ssl_session->ssl ) ) < 0 ) {
+				if( ( r = SSL_do_handshake( ses[0]->ssl ) ) < 0 ) {
 					//char buf[256];
-					//r = SSL_get_error( ses->ssl, r );
+					//r = SSL_get_error( ses[0]->ssl, r );
 					ERR_print_errors_cb( logerr, (void*)__LINE__ );
 					//lprintf( "err: %s", ERR_error_string( r, buf ) );
 				}
 				{
 					// the read generated write data, output that data
-					size_t pending = BIO_ctrl_pending( pc->ssl_session->wbio );
+					size_t pending = BIO_ctrl_pending( ses[0]->wbio );
 #ifdef DEBUG_SSL_IO
 					lprintf( "Pending Control To Send: %d", pending );
 #endif
 					if( pending > 0 ) {
 						int read;
-						if( pending > pc->ssl_session->obuflen ) {
-							if( pc->ssl_session->obuffer )
-								Deallocate( uint8_t *, pc->ssl_session->obuffer );
-							pc->ssl_session->obuffer = NewArray( uint8_t, pc->ssl_session->obuflen = pending * 2 );
+						if( pending > ses[0]->obuflen ) {
+							if( ses[0]->obuffer )
+								Deallocate( uint8_t *, ses[0]->obuffer );
+							ses[0]->obuffer = NewArray( uint8_t, ses[0]->obuflen = pending * 2 );
 							//lprintf( "making obuffer bigger %d %d", pending, pending * 2 );
 						}
-						read = BIO_read( pc->ssl_session->wbio, pc->ssl_session->obuffer, (int)pc->ssl_session->obuflen );
-						SendTCP( pc, pc->ssl_session->obuffer, read );
+						read = BIO_read( ses[0]->wbio, ses[0]->obuffer, (int)ses[0]->obuflen );
+#ifdef DEBUG_SSL_IO
+						lprintf( "Sending bio pending? %zd (even though we're closing the ssl to fallback?)", pending );
+#endif
+						ses[0]->send_callback( ses[0]->psvSendRecv, ses[0]->obuffer, read );
+						//SendTCP( pc, ses[0]->obuffer, read );
 					}
 				}
 			}
-			LeaveCriticalSec( &pc->ssl_session->csReadWrite );
+			if( ses[0] ){
+				ses[0]->inUse--;
+				LeaveCriticalSec( &ses[0]->csReadWrite );
+				if( ses[0]->deleteInUse ){
+					lprintf( "Pending close... was in-use when closed. (DO CLOSE!)");
+					ssl_CloseSession( pc );
+				}
+			}
 		}
 		//lprintf( "Read more data..." );
-		if( pc->ssl_session ) {
+		if( ses[0] ) {
 			if( !buffer )
-				pc->ssl_session->firstPacket = 1;
+				ses[0]->firstPacket = 1;
 			else
-				pc->ssl_session->firstPacket = 0;
-			if( pc->ssl_session ) {
-				ReadTCP( pc, pc->ssl_session->ibuffer, pc->ssl_session->ibuflen );
+				ses[0]->firstPacket = 0;
+			if( ses ) {
+				ses[0]->recv_callback( ses[0]->psvSendRecv, ses[0]->ibuffer, ses[0]->ibuflen );
+				//ReadTCP( pc, ses[0]->ibuffer, ses[0]->ibuflen );
 			}
 		}
 	}
 }
-LOGICAL ssl_Send( PCLIENT pc, CPOINTER buffer, size_t length )
+static void ssl_ReadComplete( PCLIENT pc, POINTER buffer, size_t length ) {
+	ssl_ReadComplete_( pc, &pc->ssl_session, buffer, length );
+}
+void ssl_WriteData( struct ssl_session *session, POINTER buffer, size_t length ) {
+	ssl_ReadComplete_( NULL, &session, buffer, length );
+}
+LOGICAL ssl_SendPipe( struct ssl_session **ses, CPOINTER buffer, size_t length )
 {
 	int len;
 	int32_t len_out;
 	size_t offset = 0;
 	size_t pending_out = length;
-	struct ssl_session *ses = pc->ssl_session;
-	if( !ses )
+	if( !ses || !ses[0] )
 		return FALSE;
 #if defined( DEBUG_SSL_IO ) || defined( DEBUG_SSL_IO_VERBOSE)
 	lprintf( "SSL SEND....%d ", length );
 #endif
 #ifdef DEBUG_SSL_IO_BUFFERS
-	lprintf( "SSL SEND....%d ", length );
-	LogBinary( (((uint8_t*)buffer) + offset), 256 > length ? length : 256 );
+	if( ssl_global.flags.bLogBuffers ) {
+		lprintf( "SSL SEND....%d ", length );
+		LogBinary( (((uint8_t*)buffer) + offset), (( ssl_global.flags.bLogBuffers ) || ( 256 > length )) ? length : 256 );
+	}
 #endif
+	EnterCriticalSec( &ses[0]->csReadWrite );
+	ses[0]->inUse++;
 	while( length ) {
 		if( pending_out > 4327 )
 			pending_out = 4327;
 #ifdef DEBUG_SSL_IO_VERBOSE
 		lprintf( "Sending %d of %d at %d", pending_out, length, offset );
 #endif
-		EnterCriticalSec( &pc->ssl_session->csReadWrite );
-		len = SSL_write( pc->ssl_session->ssl, (((uint8_t*)buffer) + offset), (int)pending_out );
+		len = SSL_write( ses[0]->ssl, (((uint8_t*)buffer) + offset), (int)pending_out );
 		if (len < 0) {
 			ERR_print_errors_cb(logerr, (void*)__LINE__);
-			if( pc->ssl_session )
-				LeaveCriticalSec( &pc->ssl_session->csReadWrite );
+			ses[0]->inUse--;
+			LeaveCriticalSec( &ses[0]->csReadWrite );
+			return FALSE;
+		}
+		if( !len ) {
+			ERR_print_errors_cb(logerr, (void*)__LINE__);
+			ses[0]->inUse--;
+			LeaveCriticalSec( &ses[0]->csReadWrite );
 			return FALSE;
 		}
 		offset += len;
@@ -44570,26 +47135,37 @@ LOGICAL ssl_Send( PCLIENT pc, CPOINTER buffer, size_t length )
 		// signed/unsigned comparison here.
 		// the signed value is known to be greater than 0 and less than max unsigned int
 		// so it is in a valid range to check, and is NOT a warning or error condition EVER.
-		len = BIO_pending( pc->ssl_session->wbio );
+		len = BIO_pending( ses[0]->wbio );
 		//lprintf( "resulting send is %d", len );
-		if( SUS_GT( len, int, ses->obuflen, size_t ) )
+		if( SUS_GT( len, int, ses[0]->obuflen, size_t ) )
 		{
-			Release( ses->obuffer );
+			Release( ses[0]->obuffer );
 #ifdef DEBUG_SSL_IO
 			lprintf( "making obuffer bigger %d %d", len, len * 2 );
 #endif
-			ses->obuffer = NewArray( uint8_t, len * 2 );
-			ses->obuflen = len * 2;
+			ses[0]->obuffer = NewArray( uint8_t, len * 2 );
+			ses[0]->obuflen = len * 2;
 		}
-		len_out = BIO_read( pc->ssl_session->wbio, ses->obuffer, (int)ses->obuflen );
-		if( pc->ssl_session )
-			LeaveCriticalSec( &pc->ssl_session->csReadWrite );
+		len_out = BIO_read( ses[0]->wbio, ses[0]->obuffer, (int)ses[0]->obuflen );
 #ifdef DEBUG_SSL_IO_VERBOSE
 		lprintf( "ssl_Send  %d", len_out );
 #endif
-		SendTCP( pc, ses->obuffer, len_out );
+		if( len_out > 0 )
+			ses[0]->send_callback( ses[0]->psvSendRecv, ses[0]->obuffer, len_out );
 	}
+	ses[0]->inUse--;
+	LeaveCriticalSec( &ses[0]->csReadWrite );
 	return TRUE;
+}
+LOGICAL ssl_Send( PCLIENT pc, CPOINTER buffer, size_t length ) {
+	int tries = 0;
+	while( !NetworkLock( pc, 0 ) ) {
+		Relinquish();
+		if( tries++ > 10 ) lprintf( "failing to lock client %p", pc );
+	}
+	LOGICAL status =  ssl_SendPipe( &pc->ssl_session, buffer, length );
+	NetworkUnlock( pc, 0 );
+	return status;
 }
 static void win32_locking_callback(int mode, int type, const char *file, int line)
 {
@@ -44604,7 +47180,7 @@ unsigned long pthreads_thread_id(void)
 {
 	return (unsigned long)GetThisThreadID();
 }
-static LOGICAL ssl_InitLibrary( void ){
+LOGICAL ssl_InitLibrary( void ){
 	if( !ssl_global.flags.bInited )
 	{
 		SSL_library_init();
@@ -44628,34 +47204,50 @@ static void ssl_InitSession( struct ssl_session *ses ) {
 	InitializeCriticalSec( &ses->csReadWrite );
 	//InitializeCriticalSec( &ses->csWrite );
 }
+void ssl_ClosePipe( struct ssl_session **ses ) {
+	if (!ses[0]) {
+		//lprintf("(ClosePipe)already closed?");
+		return;
+	}
+	//lprintf( "Close Pipe called...");
+	if( ses[0]->inUse ) {
+		ses[0]->deleteInUse++;
+		return;
+	}
+	DeleteCriticalSec( &ses[0]->csReadWrite );
+	//DeleteCriticalSec( &ses->csWrite );
+	Release( ses[0]->dbuffer );
+	Release( ses[0]->ibuffer );
+	Release( ses[0]->obuffer );
+	if( ses[0]->cert ) {
+		EVP_PKEY_free( ses[0]->cert->pkey );
+		X509_free( ses[0]->cert->x509 );
+		Release( ses[0]->cert );
+	}
+	SSL_free( ses[0]->ssl );
+	SSL_CTX_free( ses[0]->ctx );
+	// these are closed... with the ssl connection.
+	//BIO_free( ses->rbio );
+	//BIO_free( ses->wbio );
+	Release( ses[0] );
+	ses[0] = NULL;
+}
+// this is from network layer, so it will be a PCLIENT
 static void ssl_CloseCallback( PCLIENT pc ) {
 	struct ssl_session *ses = pc->ssl_session;
 	if (!ses) {
-		lprintf("already closed?");
+		//lprintf("already closed?");
 		return;
 	}
-	pc->ssl_session = NULL;
+	//lprintf( "ssl_closecallback and...");
 	if( ses->dwOriginalFlags & CF_CPPCLOSE ){
 		if( ses->cpp_user_close ) ses->cpp_user_close( pc->psvClose );
 	}else{
 		if( ses->user_close ) ses->user_close( pc );
 	}
-	DeleteCriticalSec( &ses->csReadWrite );
-	//DeleteCriticalSec( &ses->csWrite );
-	Release( ses->dbuffer );
-	Release( ses->ibuffer );
-	Release( ses->obuffer );
-	if( ses->cert ) {
-		EVP_PKEY_free( ses->cert->pkey );
-		X509_free( ses->cert->x509 );
-		Release( ses->cert );
-	}
-	SSL_free( ses->ssl );
-	SSL_CTX_free( ses->ctx );
-	// these are closed... with the ssl connection.
-	//BIO_free( ses->rbio );
-	//BIO_free( ses->wbio );
-	Release( ses );
+	//lprintf( "close callback into closepipe");
+	ssl_ClosePipe( &pc->ssl_session );
+	//pc->ssl_session = NULL;
 }
 #ifdef DEBUG_SSL_IO_VERBOSE
 static void infoCallback( const SSL *ssl, int where, int ret ){
@@ -44669,10 +47261,19 @@ static void infoCallback( const SSL *ssl, int where, int ret ){
 			, where, ret, SSL_alert_type_string_long(ret), SSL_alert_desc_string_long(ret) );
 }
 #endif
+static void ssl_layer_sender( uintptr_t pc, CPOINTER buffer, size_t length ) {
+	//lprintf( "Send: %p %d", buffer, length );
+	SendTCP( (PCLIENT)pc, buffer, length );
+}
+static void ssl_layer_recver( uintptr_t pc, POINTER buffer, size_t length ) {
+	//lprintf( "Queue read: %p %d", buffer, length );
+	ReadTCP( (PCLIENT)pc, buffer, length );
+}
 static void ssl_ClientConnected( PCLIENT pcServer, PCLIENT pcNew ) {
 	struct ssl_session *ses;
 	ses = New( struct ssl_session );
 	MemSet( ses, 0, sizeof( struct ssl_session ) );
+	pcNew->dwFlags &= ~CF_CONNECT_ISSUED;
 	ses->ssl = SSL_new( pcServer->ssl_session->ctx );
 	{
 		static uint32_t tick;
@@ -44682,35 +47283,82 @@ static void ssl_ClientConnected( PCLIENT pcServer, PCLIENT pcNew ) {
 	}
 	ssl_InitSession( ses );
 	SSL_set_accept_state( ses->ssl );
-	AddLink( &pcServer->ssl_session->accepting, pcNew );
+#ifdef DEBUG_NO_HOST_AND_FALLBACK
+	lprintf( "Server connected sockets: %p %p", pcServer, pcNew );
+#endif
+	ses->hostname = DupCStrLen( (CTEXTSTR)"no extension", 12 );
+	ses->pc = pcNew;
+	AddLink( &pcServer->ssl_session->accepting, ses );
+	ses->errorCallback = pcServer->ssl_session?pcServer->ssl_session->errorCallback:pcServer->errorCallback;
+	ses->psvErrorCallback = pcServer->ssl_session?pcServer->ssl_session->psvErrorCallback:pcServer->psvErrorCallback;
 	pcNew->ssl_session = ses;
 #ifdef DEBUG_SSL_IO_VERBOSE
 	SSL_set_info_callback( pcNew->ssl_session->ssl, infoCallback );
 #endif
-	if( pcServer->ssl_session->dwOriginalFlags & CF_CPPCONNECT )
-		pcServer->ssl_session->cpp_user_connected( pcServer->psvConnect, pcNew );
-	else
-		pcServer->ssl_session->user_connected( pcServer, pcNew);
-	ses->user_read = pcNew->read.ReadComplete;
-	ses->cpp_user_read = pcNew->read.CPPReadComplete;
-	ses->user_close = pcNew->close.CloseCallback;
-	ses->cpp_user_close = pcNew->close.CPPCloseCallback;
+	ses->dwOriginalFlags = pcServer->ssl_session->dwOriginalFlags;
+	// these can get set in the connection callback...
+	//lprintf( "Setup user read functions (BEFORE CONNECT)? %p %p",ses->user_read, ses->cpp_user_read );
+	//lprintf( "Setup user read functions from... %p %p",pcServer->ssl_session->user_read, pcServer->ssl_session->cpp_user_read );
+	if( !ses->user_read && !ses->cpp_user_read ) {
+		ses->cpp_user_read = pcServer->ssl_session->cpp_user_read;
+		ses->psvRead = pcServer->ssl_session->psvRead;
+		ses->user_read = pcServer->ssl_session->user_read;
+	}
+	//else lprintf( "read callbacks already set... skipped?");
+	// these can get set in the connection callback...
+	if( !ses->user_close && !ses->cpp_user_close ) {
+		ses->cpp_user_close = pcServer->ssl_session->cpp_user_close;
+		ses->user_close = pcServer->ssl_session->user_close;
+	}
+	ses->send_callback = ssl_layer_sender;
+	ses->recv_callback = ssl_layer_recver;
+	ses->psvSendRecv = (uintptr_t)pcNew;
 	pcNew->read.ReadComplete = ssl_ReadComplete;
 	pcNew->dwFlags &= ~CF_CPPREAD;
 	pcNew->close.CloseCallback = ssl_CloseCallback;
 	pcNew->dwFlags &= ~CF_CPPCLOSE;
-	ses->dwOriginalFlags = pcServer->ssl_session->dwOriginalFlags;
+}
+struct ssl_session* ssl_ClientPipeConnected( struct ssl_session* session, uintptr_t psvNew, void (*read)(uintptr_t psv, POINTER, size_t), void ( **write )( struct ssl_session *session, POINTER, size_t )
+				, void ( *connect )( uintptr_t psv, POINTER, size_t ), void (*close)(uintptr_t psv ), void (*netrecv)(uintptr_t psv, POINTER, size_t), void (*netsend)(uintptr_t psv, POINTER, size_t) ) {
+	struct ssl_session* ses;
+	ses = New( struct ssl_session );
+	MemSet( ses, 0, sizeof( struct ssl_session ) );
+	ses->ssl = SSL_new( session->ctx );
+	{
+		static uint32_t tick;
+		tick++;
+//sizeof( ses->ctx ) );
+		SSL_set_session_id_context( ses->ssl, (const unsigned char*)&tick, 4 );
+	}
+	ssl_InitSession( ses );
+	SSL_set_accept_state( ses->ssl );
+	ses->hostname = DupCStrLen( (CTEXTSTR)"no extension", 12 );
+	ses->pc = (PCLIENT)psvNew;
+	AddLink( &session->accepting, ses);
+	//pcNew->ssl_session = ses;
+#ifdef DEBUG_SSL_IO_VERBOSE
+	SSL_set_info_callback( pcNew->ssl_session->ssl, infoCallback );
+#endif
+	//lprintf( "pipe connected callback.....................");
+	ses->user_read = (cReadComplete)read;
+	ses->user_close = (cCloseCallback)close;
+	if( write ) write[0] = ssl_WriteData;
+	ses->send_callback = (cppWriteComplete)netsend;
+	ses->recv_callback = (cppReadComplete)netrecv;
+	ses->psvSendRecv = (uintptr_t)psvNew;
+	//ses->dwOriginalFlags = pcServer->ssl_session->dwOriginalFlags;
+	return ses;
 }
 #if !defined( LIBRESSL_VERSION_NUMBER )
 static int handleServerName( SSL* ssl, int* al, void* param ) {
-	PCLIENT pcListener = (PCLIENT)param;
-	PCLIENT pcAccept;
+	struct ssl_session* ses = (struct ssl_session*)param;
+	struct ssl_session* ssl_Accept;
 	INDEX idx;
-	LIST_FORALL( pcListener->ssl_session->accepting, idx, PCLIENT, pcAccept ) {
-		if( pcAccept->ssl_session && (pcAccept->ssl_session->ssl == ssl) )
+	LIST_FORALL( ses->accepting, idx, struct ssl_session*, ssl_Accept) {
+		if( ses && (ses->ssl == ssl) )
 			break;
 	}
-	if( !pcAccept ) {
+	if( !ssl_Accept ) {
 		lprintf( "FATAL, NO SUCH ACCEPTING SOCKET" );
 		return 0;
 	}
@@ -44720,7 +47368,7 @@ static int handleServerName( SSL* ssl, int* al, void* param ) {
 		al[0] = 0;
 		return 0;
 	}
-	PLIST* ctxList = &pcListener->ssl_session->hosts;
+	PLIST* ctxList = &ses->hosts;
 	int* type;
 	size_t typelen;
 	size_t n;
@@ -44762,7 +47410,7 @@ static int handleServerName( SSL* ssl, int* al, void* param ) {
 					while( ofs < len ) {
 						int plen = buf[2 + ofs];
 						char const* p = (char const*)buf + 3 + ofs;
-						AddLink( &pcAccept->ssl_session->protocols, SegCreateFromCharLen( p, plen ) );
+						AddLink( &ssl_Accept->ssl_session->protocols, SegCreateFromCharLen( p, plen ) );
 						ofs += plen + 1;
 					}
 				}
@@ -44785,7 +47433,7 @@ static int handleServerName( SSL* ssl, int* al, void* param ) {
 								INDEX idx;
 								struct ssl_hostContext* hostctx;
 								unsigned char const* host = buf + 5;
-								pcAccept->ssl_session->hostname = DupCStrLen( (CTEXTSTR)host, strlen );
+								ssl_Accept->ssl_session->hostname = DupCStrLen( (CTEXTSTR)host, strlen );
 								//lprintf( "Have hostchange: %.*s", strlen, host );
 								LIST_FORALL( ctxList[0], idx, struct ssl_hostContext*, hostctx ) {
 									char* checkName;
@@ -44805,6 +47453,7 @@ static int handleServerName( SSL* ssl, int* al, void* param ) {
 										}
 									}
 								}
+								ses->noHost = TRUE;
 							}
 						}
 					}
@@ -44831,55 +47480,63 @@ static int handleServerName( SSL* ssl, int* al, void* param ) {
 }
 #else
 static int handleServerName( SSL* ssl, int* al, void* param ) {
-	PCLIENT pcListener = (PCLIENT)param;
-	PLIST list = pcListener->ssl_session->accepting;
-	PCLIENT pcAccept;
+	//PCLIENT pcListener = (PCLIENT)param;
+	struct ssl_session* ses = (struct ssl_session*)param;
+	PLIST list = ses->accepting;
+	struct ssl_session *ssl_Accept;
 	INDEX idx;
-	LIST_FORALL( list, idx, PCLIENT, pcAccept ) {
-		if( pcAccept->ssl_session && (pcAccept->ssl_session->ssl == ssl) )
+	LIST_FORALL( list, idx, struct ssl_session*, ssl_Accept ) {
+		if( ssl_Accept->ssl == ssl)
 			break;
 	}
-	if( !pcAccept ) {
+	if( !ssl_Accept ) {
 		lprintf( "FATAL, NO SUCH ACCEPTING SOCKET" );
 		return 0;
 	}
-	SetLink( &pcListener->ssl_session->accepting, idx, NULL );
-	PLIST* ctxList = &pcListener->ssl_session->hosts;
+	SetLink( &ses->accepting, idx, NULL );
+	PLIST* ctxList = &ses->hosts;
 	// if no hosts to check.
 	if( !ctxList[0] ) return SSL_TLSEXT_ERR_OK;
 	int t;
+	// only valid type of name....
 	if( TLSEXT_NAMETYPE_host_name != (t =SSL_get_servername_type( ssl ) ) ) {
-		//lprintf( "Handshake sent bad hostname type... %d", t );
+		//lprintf( "Handshake sent bad hostname type... %d, %d", t, TLSEXT_NAMETYPE_host_name );
 		//return 0;
 	}
 	const char* host = NULL;
-	int strlen = 0;
-	if( t ) {
+	size_t strlen = 0;
+	if( t >= 0 ) {
 		host = SSL_get_servername( ssl, t );
-		strlen = (int)StrLen( host );
-		//lprintf( "ServerName;%s", host );
+		strlen = StrLen( host );
+		//lprintf( "ServerName;%d %s", strlen, host );
 		//lprintf( "Have hostchange: %.*s", strlen, host );
-		pcAccept->ssl_session->hostname = DupCStrLen( host, strlen );
+		if( ssl_Accept->hostname ) Release( ssl_Accept->hostname );
+		ssl_Accept->hostname = DupCStrLen( host, strlen );
 	} else {
 		// allow connection, but without a hostanme set, the application may reject later?
 		// default to what? the client IP as a hostname?
 	}
 	struct ssl_hostContext* hostctx;
-	struct ssl_hostContext* defaultHostctx;
+	struct ssl_hostContext* defaultHostctx = NULL;
 	LIST_FORALL( ctxList[0], idx, struct ssl_hostContext*, hostctx ) {
 		char const* checkName;
 		char const* nextName;
+		size_t maxhosts = StrLen( hostctx->host );
 		if( !hostctx->host ) {
+			//lprintf(" No host - setup default result?" );
 			defaultHostctx = hostctx;
 		}
+		//lprintf( "Host:%s", hostctx->host );
 		for( checkName = hostctx->host; checkName ? (nextName = StrChr( checkName, '~' )), 1 : 0; checkName = nextName ) {
-			int namelen = nextName ? (nextName - checkName) : strlen;
+			//lprintf( "check: %s next: %s %d", checkName, nextName, maxhosts );
+			size_t namelen = nextName ? (nextName - checkName) : maxhosts;
 			if( nextName ) nextName++;
+			maxhosts -= namelen - 1;
 			if( namelen != strlen ) {
-				lprintf( "%.*s is not %.*s", namelen, checkName, strlen, host );
+				//lprintf( "%.*s is not %.*s", (int)namelen, checkName, (int)strlen, host );
 				continue;
 			}
-			//lprintf( "Check:%.*s", )
+			//lprintf( "Check:%.*s  %.*s", strlen, host, namelen, checkName );
 			if( !host || ( StrCaseCmpEx( checkName, (CTEXTSTR)host, strlen ) == 0 ) ) {
 				SSL_set_SSL_CTX( ssl, hostctx->ctx );
 				return SSL_TLSEXT_ERR_OK;
@@ -44889,6 +47546,13 @@ static int handleServerName( SSL* ssl, int* al, void* param ) {
 	if( defaultHostctx ) {
 		SSL_set_SSL_CTX( ssl, defaultHostctx->ctx );
 		return SSL_TLSEXT_ERR_OK;
+	}
+	//lprintf( "NOACK! %p", ssl_Accept );
+	ssl_Accept->noHost = TRUE;
+	if( ses->errorCallback ) {
+		//lprintf( "This should return NOACK!");
+		ses->errorCallback( ses->psvErrorCallback, ssl_Accept->pc, SACK_NETWORK_ERROR_HOST_NOT_FOUND
+			, host, strlen );
 	}
 	//SSL_TLSEXT_ERR_NOACK
 	//SSL_TLSEXT_ERR_ALERT_FATAL
@@ -44909,32 +47573,22 @@ static int pem_password( char *buf, int size, int rwflag, void *u )
 	memcpy( buf, params->password, len = (size<params->passlen ? size : params->passlen) );
 	return len;
 }
-LOGICAL ssl_BeginServer_v2( PCLIENT pc, CPOINTER cert, size_t certlen
-                          , CPOINTER keypair, size_t keylen
-                          , CPOINTER keypass, size_t keypasslen
-                          , char *hosts ) {
-	struct ssl_session * ses;
+struct ssl_hostContext* ssl_setupHost( struct ssl_session* ses, CTEXTSTR hosts, CTEXTSTR cert, size_t certlen, CTEXTSTR keypair, size_t keylen, CTEXTSTR keypass, size_t keypasslen ) {
 	struct internalCert* certStruc;
 	struct ssl_hostContext* ctx;
-	ses = pc->ssl_session;
-	if( !ses ) {
-		ses = New( struct ssl_session );
-		MemSet( ses, 0, sizeof( struct ssl_session ) );
-	}
-	ssl_InitLibrary();
-	pc->flags.bSecure = 1;
+	//lprintf( "Setuphost: %s", hosts );
 	if( !cert ) {
 		if( hosts ) {
 			lprintf( "Ignoring hostname for anonymous, quickshot server certificate" );
 		}
-		certStruc = ses->cert = MakeRequest();
+		// should probably pass smme host names for certificate...
+		certStruc = MakeRequest();
 		ctx = New( struct ssl_hostContext );
+		ctx->defaultHost = FALSE;
 		ctx->host = StrDup( hosts );
 		ctx->ctx = NULL;
-		ctx->cert = certStruc;
+		ctx->certToUse = certStruc;
 		AddLink( &ses->hosts, ctx );
-		if( !ses->cert )
-			ses->cert = certStruc;
 	} else {
 		certStruc = New( struct internalCert );
 		BIO *keybuf = BIO_new( BIO_s_mem() );
@@ -44959,13 +47613,16 @@ LOGICAL ssl_BeginServer_v2( PCLIENT pc, CPOINTER cert, size_t certlen
 		BIO_free( keybuf );
 		{
 			ctx = New( struct ssl_hostContext );
+			ctx->defaultHost = FALSE;
 			ctx->host = StrDup( hosts );
 			ctx->ctx = NULL;
-			ctx->cert = certStruc;
+			ctx->certToUse = certStruc;
 		}
 		AddLink( &ses->hosts, ctx );
-		if( !ses->cert )
-			ses->cert = certStruc;
+	}
+	if( !ses->cert ) {
+		ses->cert = certStruc;
+		ctx->defaultHost = TRUE;
 	}
 	if( !keypair ) {
 		if( !certStruc->pkey )
@@ -44988,7 +47645,7 @@ LOGICAL ssl_BeginServer_v2( PCLIENT pc, CPOINTER cert, size_t certlen
 	ctx->ctx = SSL_CTX_new( TLSv1_2_server_method() );
 #else
 	ctx->ctx = SSL_CTX_new( TLS_server_method() );
-	SSL_CTX_set_min_proto_version( ses->ctx, TLS1_2_VERSION );
+	SSL_CTX_set_min_proto_version( ctx->ctx, TLS1_2_VERSION );
 #endif
 	{
 		int r;
@@ -45033,13 +47690,35 @@ LOGICAL ssl_BeginServer_v2( PCLIENT pc, CPOINTER cert, size_t certlen
 	}
 	// these are set per-context... but only the first context is actually used?
 #if !defined( LIBRESSL_VERSION_NUMBER )
-// &ses->hosts );
-	SSL_CTX_set_client_hello_cb( ctx->ctx, handleServerName, pc );
+	SSL_CTX_set_client_hello_cb( ctx->ctx, handleServerName, ses );
 #else
 	SSL_CTX_set_tlsext_servername_callback( ctx->ctx, handleServerName );
-//&ses->hosts );
-	SSL_CTX_set_tlsext_servername_arg( ctx->ctx, pc );
+	SSL_CTX_set_tlsext_servername_arg( ctx->ctx, ses );
 #endif
+	return ctx;
+}
+struct ssl_hostContext* ssl_setupHostCert( PCLIENT pc, CTEXTSTR hosts, CTEXTSTR cert, size_t certlen, CTEXTSTR keypair, size_t keylen, CTEXTSTR keypass, size_t keypasslen ) {
+	if( !pc ) return NULL;
+	struct ssl_session*	ses = pc->ssl_session;
+	return ssl_setupHost( ses, hosts, cert, certlen, keypair, keylen, keypass, keypasslen );
+}
+LOGICAL ssl_BeginServer_v2( PCLIENT pc, CPOINTER cert, size_t certlen
+                          , CPOINTER keypair, size_t keylen
+                          , CPOINTER keypass, size_t keypasslen
+                          , char *hosts ) {
+	struct ssl_session * ses;
+	struct ssl_hostContext* ctx;
+	if( !pc ) return FALSE;
+	ses = pc->ssl_session;
+	// this can also be used to register additional hosts... the new function SHOULD be used instead though....
+	if( !ses ) {
+		ssl_InitLibrary();
+		ses = New( struct ssl_session );
+		MemSet( ses, 0, sizeof( struct ssl_session ) );
+	}
+	pc->flags.bSecure = 1;
+	// from here down can do
+	ctx = ssl_setupHost( ses, (CTEXTSTR)hosts, (CTEXTSTR)cert, certlen, (CTEXTSTR)keypair, keylen, (CTEXTSTR)keypass, keypasslen );
 	if( !pc->ssl_session ) {
 		ses->ctx = ctx->ctx;
 		ses->dwOriginalFlags = pc->dwFlags;
@@ -45047,6 +47726,8 @@ LOGICAL ssl_BeginServer_v2( PCLIENT pc, CPOINTER cert, size_t certlen
 		ses->cpp_user_connected = pc->connect.CPPClientConnected;
 		pc->connect.ClientConnected = ssl_ClientConnected;
 		pc->dwFlags &= ~CF_CPPCONNECT;
+		ses->errorCallback = pc->errorCallback;
+		ses->psvErrorCallback = pc->psvErrorCallback;
 		pc->ssl_session = ses;
 	}
 	// at this point pretty much have to assume
@@ -45055,6 +47736,11 @@ LOGICAL ssl_BeginServer_v2( PCLIENT pc, CPOINTER cert, size_t certlen
 }
 LOGICAL ssl_BeginServer( PCLIENT pc, CPOINTER cert, size_t certlen, CPOINTER keypair, size_t keylen, CPOINTER keypass, size_t keypasslen ) {
 	return ssl_BeginServer_v2( pc, cert, certlen, keypair, keylen, keypass, keypasslen, NULL );
+}
+void ssl_SetSendRecvCallbacks( struct ssl_session *session, void (*send)(uintptr_t, CPOINTER, size_t), void (* recv)( uintptr_t, POINTER, size_t ), uintptr_t psvSendRecv ) {
+	session->send_callback = send;
+	session->recv_callback = recv;
+	session->psvSendRecv = psvSendRecv;
 }
 LOGICAL ssl_GetPrivateKey( PCLIENT pc, POINTER *keyoutbuf, size_t *keylen ) {
 	if( pc && keyoutbuf && keylen ) {
@@ -45071,21 +47757,104 @@ LOGICAL ssl_GetPrivateKey( PCLIENT pc, POINTER *keyoutbuf, size_t *keylen ) {
 	}
 	return FALSE;
 }
-LOGICAL ssl_BeginClientSession( PCLIENT pc, CPOINTER client_keypair, size_t client_keypairlen, CPOINTER keypass, size_t keypasslen, CPOINTER rootCert, size_t rootCertLen )
+static int verify_cb( int preverify_ok, X509_STORE_CTX *ctx) {
+	char    buf[256];
+	X509   *err_cert;
+	int     err, depth;
+	SSL    *ssl;
+	verify_mydata_t *mydata;
+	err_cert = X509_STORE_CTX_get_current_cert(ctx);
+	err = X509_STORE_CTX_get_error(ctx);
+	depth = X509_STORE_CTX_get_error_depth(ctx);
+	/*
+	 * Retrieve the pointer to the SSL of the connection currently treated
+	 * and the application specific data stored into the SSL object.
+	 */
+	ssl = (SSL*)X509_STORE_CTX_get_ex_data(ctx, SSL_get_ex_data_X509_STORE_CTX_idx());
+	mydata = (verify_mydata_t*)SSL_get_ex_data(ssl, verify_mydata_index);
+	X509_NAME_oneline(X509_get_subject_name(err_cert), buf, 256);
+	/*
+	 * Catch a too long certificate chain. The depth limit set using
+	 * SSL_CTX_set_verify_depth() is by purpose set to "limit+1" so
+	 * that whenever the "depth>verify_depth" condition is met, we
+	 * have violated the limit and want to log this error condition.
+	 * We must do it here, because the CHAIN_TOO_LONG error would not
+	 * be found explicitly; only errors introduced by cutting off the
+	 * additional certificates would be logged.
+	 */
+	if (depth > mydata->verify_depth) {
+		preverify_ok = 0;
+		err = X509_V_ERR_CERT_CHAIN_TOO_LONG;
+		X509_STORE_CTX_set_error(ctx, err);
+	}
+	if( !mydata->always_continue )
+		if (!preverify_ok ) {
+			lprintf("verify error:num=%d:%s:depth=%d:%s", err,
+				   X509_verify_cert_error_string(err), depth, buf);
+		} else if (mydata->verbose_mode) {
+			lprintf("depth=%d:%s", depth, buf);
+		}
+	/*
+	 * At this point, err contains the last verification error. We can use
+	 * it for something special
+	 */
+	if (!preverify_ok && (err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT)) {
+		X509_NAME_oneline(X509_get_issuer_name(err_cert), buf, 256);
+		lprintf("issuer= %s", buf);
+	}
+	if (mydata->always_continue)
+		return 1;
+	else
+		return preverify_ok;
+}
+LOGICAL ssl_BeginClientSession_( struct ssl_session*ses, CPOINTER client_keypair, size_t client_keypairlen, CPOINTER keypass, size_t keypasslen, CPOINTER rootCert, size_t rootCertLen )
 {
-	struct ssl_session * ses;
-	ssl_InitLibrary();
-	ses = New( struct ssl_session );
-	MemSet( ses, 0, sizeof( struct ssl_session ) );
 	{
-#if NODE_MAJOR_VERSION < 10
-		ses->ctx = SSL_CTX_new( TLSv1_2_client_method() );
-#else
-		ses->ctx = SSL_CTX_new( TLS_client_method() );
-		SSL_CTX_set_min_proto_version( ses->ctx, TLS1_2_VERSION );
-#endif
-		SSL_CTX_set_cipher_list( ses->ctx, "ALL:!ADH:!LOW:!EXP:!MD5:@STRENGTH" );
+		int needsKey = 0;
 		ses->cert = New( struct internalCert );
+		if( rootCert ) {
+#if NODE_MAJOR_VERSION < 10
+			ses->ctx = SSL_CTX_new( TLSv1_2_client_method() );
+#else
+			ses->ctx = SSL_CTX_new( TLS_client_method() );
+			SSL_CTX_set_min_proto_version( ses->ctx, TLS1_2_VERSION );
+#endif
+			SSL_CTX_set_cipher_list( ses->ctx, "ALL:!ADH:!LOW:!EXP:!MD5:@STRENGTH" );
+			BIO *keybuf = BIO_new( BIO_s_mem() );
+			X509 *cert;
+			cert = X509_new();
+			BIO_write( keybuf, rootCert, (int)rootCertLen );
+			PEM_read_bio_X509( keybuf, &cert, NULL, NULL );
+			BIO_free( keybuf );
+			X509_STORE *store = SSL_CTX_get_cert_store( ses->ctx );
+			X509_STORE_add_cert( store, cert );
+			if( !client_keypair ){
+			}
+		} else {
+			if( !ssl_global.ctx	) {
+#if NODE_MAJOR_VERSION < 10
+				ssl_global.ctx = SSL_CTX_new( TLSv1_2_client_method() );
+#else
+				ssl_global.ctx = SSL_CTX_new( TLS_client_method() );
+				SSL_CTX_set_min_proto_version( ssl_global.ctx, TLS1_2_VERSION );
+#endif
+				SSL_CTX_set_cipher_list( ssl_global.ctx, "ALL:!ADH:!LOW:!EXP:!MD5:@STRENGTH" );
+				X509_STORE *store = SSL_CTX_get_cert_store( ssl_global.ctx );
+				loadSystemCerts( ssl_global.ctx, store );
+				needsKey = 1;
+			}
+			ses->ctx = ssl_global.ctx;
+			if( needsKey ) {
+				ses->cert->pkey = genKey();
+				SSL_CTX_use_PrivateKey( ses->ctx, ses->cert->pkey );
+			}
+		}
+		//SSL_CTX_set_default_read_buffer_len( ses->ctx, 16384 );
+	}
+	ses->ssl = SSL_new( ses->ctx );
+	if( rootCert ) {
+		// if there's a specified root cert, then we need a new keypair.
+		// otherwise the common context will keep using the same key too.
 		if( !client_keypair )
 			ses->cert->pkey = genKey();
 		else {
@@ -45102,70 +47871,164 @@ LOGICAL ssl_BeginClientSession( PCLIENT pc, CPOINTER client_keypair, size_t clie
 			}
 			BIO_free( keybuf );
 		}
-		SSL_CTX_use_PrivateKey( ses->ctx, ses->cert->pkey );
-		//SSL_CTX_set_default_read_buffer_len( ses->ctx, 16384 );
+		SSL_use_PrivateKey( ses->ssl, ses->cert->pkey );
 	}
-	ses->ssl = SSL_new( ses->ctx );
-	if( rootCert ) {
-		BIO *keybuf = BIO_new( BIO_s_mem() );
-		X509 *cert;
-		cert = X509_new();
-		BIO_write( keybuf, rootCert, (int)rootCertLen );
-		PEM_read_bio_X509( keybuf, &cert, NULL, NULL );
-		BIO_free( keybuf );
-		X509_STORE *store = SSL_CTX_get_cert_store( ses->ctx );
-		X509_STORE_add_cert( store, cert );
-	} else {
-		X509_STORE *store = SSL_CTX_get_cert_store( ses->ctx );
-		loadSystemCerts( ses->ctx, store );
-	}
+	SSL_set_verify( ses->ssl, SSL_VERIFY_PEER, verify_cb );
+	SSL_set_ex_data( ses->ssl, verify_mydata_index, &ses->verify_data );
 	ssl_InitSession( ses );
+#ifdef DEBUG_SSL_IO_VERBOSE
+	SSL_set_info_callback( ses->ssl, infoCallback );
+#endif
+	return TRUE;
+}
+LOGICAL ssl_BeginClientSession( PCLIENT pc, CPOINTER client_keypair, size_t client_keypairlen, CPOINTER keypass, size_t keypasslen, CPOINTER rootCert, size_t rootCertLen ){
+	struct ssl_session * ses;
+	ssl_InitLibrary();
+	ses = New( struct ssl_session );
+	MemSet( ses, 0, sizeof( struct ssl_session ) );
+	//LOGICAL status =
+	ssl_BeginClientSession_( ses, client_keypair, client_keypairlen, keypass, keypasslen, rootCert, rootCertLen );
+	{
+		const char *addr = GetAddrName( pc->saClient );
+		SSL_set_tlsext_host_name( ses->ssl, addr );
+	}
 	//SSL_set_default_read_buffer_len( ses->ssl, 16384 );
 	SSL_set_connect_state( ses->ssl );
 	ses->dwOriginalFlags = pc->dwFlags;
 	ses->user_read = pc->read.ReadComplete;
 	ses->cpp_user_read = pc->read.CPPReadComplete;
+	ses->verify_data = verify_default;
+	ses->psvRead = pc->psvRead;
+	ses->send_callback = ssl_layer_sender;
+	ses->recv_callback = ssl_layer_recver;
+	ses->psvSendRecv = (uintptr_t)pc;
 	pc->read.ReadComplete = ssl_ReadComplete;
 	pc->dwFlags &= ~CF_CPPREAD;
+	ses->errorCallback = pc->errorCallback;
+	ses->psvErrorCallback = pc->psvErrorCallback;
 	pc->ssl_session = ses;
 #ifdef DEBUG_SSL_IO_VERBOSE
-	SSL_set_info_callback( pc->ssl_session->ssl, infoCallback );
+	SSL_set_info_callback( ses->ssl, infoCallback );
 #endif
 	return TRUE;
 }
+struct ssl_session* ssl_BeginClientPipeSession( void (*send)(uintptr_t, CPOINTER, size_t)
+					, void (* recv)( uintptr_t, POINTER, size_t )
+					, void (* read)( uintptr_t, POINTER, size_t )
+					, void (* close)( uintptr_t )
+					, cErrorCallback error, uintptr_t psvSendRecv
+		, CPOINTER client_keypair, size_t client_keypairlen
+		, CPOINTER keypass, size_t keypasslen
+		, CPOINTER rootCert, size_t rootCertLen ){
+	struct ssl_session * ses;
+	ssl_InitLibrary();
+	ses = New( struct ssl_session );
+	MemSet( ses, 0, sizeof( struct ssl_session ) );
+	ssl_BeginClientSession_( ses, client_keypair, client_keypairlen, keypass, keypasslen, rootCert, rootCertLen );
+	ses->dwOriginalFlags = CF_CPPREAD;
+	ses->cpp_user_read = read;
+	ses->psvRead = psvSendRecv;
+	ses->errorCallback = error;
+	ses->psvErrorCallback = psvSendRecv;
+	ses->send_callback = send;
+	ses->recv_callback = recv;
+	ses->psvSendRecv = (uintptr_t)psvSendRecv;
+	return  ses;
+}
 LOGICAL ssl_IsClientSecure( PCLIENT pc ) {
-	return pc->ssl_session != NULL;
+	//lprintf( "Is client secure? %p %d %d", pc, !!pc->ssl_session, (pc->ssl_session&&(pc->ssl_session->ctx != NULL)) );
+//&&(pc->ssl_session->ctx != NULL));
+	return (!!pc->ssl_session) && !pc->ssl_session->deleteInUse;
 }
 void ssl_EndSecure(PCLIENT pc, POINTER buffer, size_t length ) {
 	if( pc && pc->ssl_session ) {
+#if defined( DEBUG_SSL_FALLBACK )
+		lprintf( "Restoring old callbacks %p %p %p", buffer, pc->ssl_session->cpp_user_read, pc->ssl_session->user_read );
+#endif
 		// revert native socket methods.
-		pc->read.ReadComplete = pc->ssl_session->user_read;
-		pc->close.CloseCallback = pc->ssl_session->user_close;
-		pc->connect.ClientConnected = pc->ssl_session->user_connected;
+		if( pc->ssl_session->user_read )
+			pc->read.ReadComplete = pc->ssl_session->user_read;
+		else if( pc->ssl_session->cpp_user_read ) {
+			pc->read.CPPReadComplete = pc->ssl_session->cpp_user_read;
+			pc->psvRead = pc->ssl_session->psvRead;
+		} else
+			pc->read.ReadComplete = NULL;
+		if( pc->ssl_session->user_close)
+			pc->close.CloseCallback = pc->ssl_session->user_close;
+		else if( pc->ssl_session->cpp_user_close ) {
+			pc->close.CPPCloseCallback = pc->ssl_session->cpp_user_close;
+			//pc->psvClose = pc->ssl_session->psvClose;
+		} else
+			pc->close.CloseCallback = NULL;
+		if( pc->ssl_session->user_connected )
+			pc->connect.ClientConnected = pc->ssl_session->user_connected;
+		else if( pc->ssl_session->cpp_user_connected ) {
+			pc->connect.CPPClientConnected = pc->ssl_session->cpp_user_connected;
+			//pc->psvConnect = pc->ssl_session->psvConnect;
+		}
+		else
+			pc->connect.ClientConnected = NULL;
 		// restore all the native specified options for callbacks.
+		(*(uint32_t*)&pc->dwFlags) &= ~(pc->ssl_session->dwOriginalFlags & (CF_CPPCONNECT | CF_CPPREAD | CF_CPPWRITE | CF_CPPCLOSE));
 		(*(uint32_t*)&pc->dwFlags) |= (pc->ssl_session->dwOriginalFlags & (CF_CPPCONNECT | CF_CPPREAD | CF_CPPWRITE | CF_CPPCLOSE));
+		//lprintf( "read: %x", pc->ssl_session->dwOriginalFlags & (CF_CPPCONNECT | CF_CPPREAD | CF_CPPWRITE | CF_CPPCLOSE) );
 		// prevent close event...
 		POINTER tmp;
 		pc->ssl_session->user_close = NULL;
 		pc->ssl_session->cpp_user_close = NULL;
 		tmp = pc->ssl_session->ibuffer;
 		pc->ssl_session->ibuffer = NULL;
-		ssl_CloseCallback( pc );
-		// SSL callback failed, but it may be possible to connect direct.
-		// and if so; setup to return a redirect.
-		if( buffer ) {
-			if( pc->dwFlags & CF_CPPREAD ) {
+#if defined( DEBUG_SSL_FALLBACK )
+		lprintf( "close ssl session?" );
+#endif
+		pc->ssl_session->inUse = 0;
+		//lprintf( "EndSecure, closing SSL pipe...");
+		ssl_ClosePipe( &pc->ssl_session );
+		if( pc->dwFlags & CF_ACTIVE ) {
+			// SSL callback failed, but it may be possible to connect direct.
+			// and if so; setup to return a redirect.
+#if defined( DEBUG_SSL_FALLBACK )
+			lprintf( "is ssl_session gone(yes)? %p %p %d %d %p", pc, pc->ssl_session, pc->ssl_session?pc->ssl_session->deleteInUse:-1, pc->ssl_session?pc->ssl_session->inUse:-1, pc->read.CPPReadComplete );
+#endif
+			pc->dwFlags |= CF_CONNECT_ISSUED;
+			if( pc->pcServer->ssl_session->dwOriginalFlags & CF_CPPCONNECT )
+				pc->pcServer->ssl_session->cpp_user_connected( pc->pcServer->psvConnect, pc );
+			else
+				pc->pcServer->ssl_session->user_connected( pc->pcServer, pc );
+			if( buffer && pc->read.CPPReadComplete ) {
+				if( pc->dwFlags & CF_CPPREAD ) {
   // process read to get data already pending...
-				pc->read.CPPReadComplete( pc->psvRead, NULL, 0 );
-				pc->read.CPPReadComplete( pc->psvRead, buffer, length );
-			}
-			else {
-				pc->read.ReadComplete( pc, NULL, 0 );
-				pc->read.ReadComplete( pc, buffer, length );
+					pc->read.CPPReadComplete( pc->psvRead, NULL, 0 );
+					if( buffer )
+						pc->read.CPPReadComplete( pc->psvRead, buffer, length );
+				}
+				else {
+					pc->read.ReadComplete( pc, NULL, 0 );
+					if( buffer )
+						pc->read.ReadComplete( pc, buffer, length );
+				}
+#if defined( DEBUG_SSL_FALLBACK )
+				lprintf( "Sent buffer to app?");
+#endif
 			}
 		}
 		Release( tmp );
 	}
+}
+void ssl_EndSecurePipe(struct ssl_session** session ) {
+		// revert native socket methods.
+		// restore all the native specified options for callbacks.
+		// prevent close event...
+		POINTER tmp;
+		session[0]->user_close = NULL;
+		session[0]->cpp_user_close = NULL;
+		tmp = session[0]->ibuffer;
+		session[0]->ibuffer = NULL;
+		lprintf( "Also end secure pipe?");
+		ssl_ClosePipe( session );
+		// SSL callback failed, but it may be possible to connect direct.
+		// and if so; setup to return a redirect.
+		Release( tmp );
 }
 CTEXTSTR ssl_GetRequestedHostName( PCLIENT pc ) {
 	if( pc->ssl_session ) {
@@ -45174,8 +48037,10 @@ CTEXTSTR ssl_GetRequestedHostName( PCLIENT pc ) {
 	return NULL;
 }
 void ssl_SetIgnoreVerification( PCLIENT pc ) {
-	if( pc->ssl_session )
+	if( pc->ssl_session ) {
 		pc->ssl_session->ignoreVerification = TRUE;
+		pc->ssl_session->verify_data.always_continue = TRUE;
+	}
 }
 //--------------------- Make Cert Request
 //#include <stdio.h>
@@ -45212,8 +48077,8 @@ struct entry
 struct entry entries[] =
 {
     { "countryName", "US" },
-    { "stateOrProvinceName", "NV" },
-    { "localityName", "Las Vegas" },
+    { "stateOrProvinceName", "FL" },
+    { "localityName", "Fernandina Beach" },
     { "organizationName", "d3x0r.org" },
     { "organizationalUnitName", "Development" },
     { "commonName", "Internal Project" },
@@ -45352,8 +48217,10 @@ struct internalCert * MakeRequest( void )
 				ca = NewArray( char, ca_len + 1 );
 				BIO_read( keybuf, ca, ca_len );
 				ca[ca_len] = 0;
+#ifndef __NO_OPTIONS__
 				SACK_WriteProfileInt( "TLS", "CA Length", ca_len );
 				SACK_WriteProfileString( "TLS", "CA Cert", (TEXTCHAR*)ca );
+#endif
 				Release( ca );
 			}
 		}
@@ -45367,6 +48234,14 @@ void loadSystemCerts( SSL_CTX* ctx,X509_STORE *store )
  // unused;
 	(void)store;
 	SSL_CTX_set_default_verify_paths( ctx );
+	{
+		TEXTCHAR checkpath[256];
+		strcpy( checkpath, "/etc/ssl/certs" );
+#ifndef __NO_OPTIONS__
+		SACK_GetProfileString( "TLS", "Root Path", checkpath, checkpath, 256 );
+#endif
+		SSL_CTX_load_verify_locations( ctx, NULL, checkpath );
+	}
 	return;
 }
 #endif
@@ -45379,6 +48254,7 @@ void loadSystemCerts( SSL_CTX* ctx,X509_STORE *store )
 	HCERTSTORE hStore;
 	PCCERT_CONTEXT pContext = NULL;
 	X509 *x509;
+lprintf( "Loading System Certs");
 	hStore = CertOpenSystemStore((HCRYPTPROV_LEGACY)NULL, "ROOT");
 	if( !hStore ) {
 		lprintf( "FATAL, CANNOT OPEN ROOT STORE" );
@@ -45393,7 +48269,8 @@ void loadSystemCerts( SSL_CTX* ctx,X509_STORE *store )
 		x509 = d2i_X509(NULL, &encoded_cert, pContext->cbCertEncoded);
 		if (x509)
 		{
-			int i = X509_STORE_add_cert(store, x509);
+			//int i =
+			X509_STORE_add_cert(store, x509);
 			//if (i == 1)
 			//	std::cout << "certificate added" << std::endl;
 			//printf( "adde cert to store?", i );
@@ -45404,8 +48281,23 @@ void loadSystemCerts( SSL_CTX* ctx,X509_STORE *store )
 	CertCloseStore(hStore, 0);
 }
 #endif
+void SetSSLPipeErrorCallback( struct ssl_session *session, cErrorCallback callback, uintptr_t psvUser ) {
+		session->errorCallback = callback;
+		session->psvErrorCallback = psvUser;
+}
+void SetNetworkErrorCallback( PCLIENT pc, cErrorCallback callback, uintptr_t psvUser ) {
+	//lprintf( "SetNetworkErrorCallback %p %p", pc, pc->ssl_session );  // a listern had no ssl_session at this point
+	if( pc && pc->ssl_session ) {
+		pc->ssl_session->errorCallback = callback;
+		pc->ssl_session->psvErrorCallback = psvUser;
+	}
+	else if( pc) {
+		pc->errorCallback = callback;
+		pc->psvErrorCallback = psvUser;
+	}
+}
 SACK_NETWORK_NAMESPACE_END
-#endif
+#  endif
 #endif
 #ifndef __LINUX__
 ///////////////////////////////////////////////////////////////////////////
@@ -45526,6 +48418,7 @@ SACK_NETWORK_NAMESPACE_END
 #define WEBSOCKET_COMMON_SOURCE
 #ifndef SACK_HTML5_WEBSOCKET_COMMON_DEFINED
 #define SACK_HTML5_WEBSOCKET_COMMON_DEFINED
+/* Define websocket client interface methods. */
 #ifndef HTML5_WEBSOCKET_CLIENT_INCLUDED
 #define HTML5_WEBSOCKET_CLIENT_INCLUDED
 /*****************************************************
@@ -45541,6 +48434,7 @@ length, and what is received will be exactly like the block that was sent.
 #else
 #define WEBSOCKET_EXPORT IMPORT_METHOD
 #endif
+struct html5_web_socket;
 // the result returned from the web_socket_opened event will
 // become the new value used for future uintptr_t parameters to other events.
 typedef uintptr_t (*web_socket_opened)( PCLIENT pc, uintptr_t psv );
@@ -45550,6 +48444,7 @@ typedef void (*web_socket_error)( PCLIENT pc, uintptr_t psv, int error );
 typedef void (*web_socket_event)( PCLIENT pc, uintptr_t psv, LOGICAL binary, CPOINTER buffer, size_t msglen );
 // protocolsAccepted value set can be released in opened callback, or it may be simply assigned as protocols passed...
 typedef LOGICAL ( *web_socket_accept )(PCLIENT pc, uintptr_t psv, const char *protocols, const char *resource, char **protocolsAccepted);
+typedef void ( *web_socket_accept_async )(PCLIENT pc, uintptr_t psv, const char *protocols, const char *resource );
 typedef void (*web_socket_completion)( PCLIENT pc, uintptr_t psv, int binary, int bytesRead );
  // passed psv used in server create; since it is sort of an open, return a psv for next states(if any)
 typedef uintptr_t ( *web_socket_http_request )(PCLIENT pc, uintptr_t psv);
@@ -45557,6 +48452,10 @@ typedef uintptr_t ( *web_socket_http_request )(PCLIENT pc, uintptr_t psv);
 // options used for WebSocketOpen
 enum WebSocketOptions {
 	WS_DELAY_OPEN = 1,
+ // address type to prefer when opening socket (match TCP options)
+	WS_PREFER_V6 = 4,
+ // address type to prefer when opening socket
+	WS_PREFER_V4 = 8,
 };
 //enum WebSockClientOptions {
 //   WebSockClientOption_Protocols
@@ -45581,24 +48480,39 @@ WEBSOCKET_EXPORT int WebSocketConnect( PCLIENT );
 // end a websocket connection nicely.
 // code must be 1000, or 3000-4999, and reason must be less than 123 characters (125 bytes with code)
 WEBSOCKET_EXPORT void WebSocketClose( PCLIENT, int code, const char *reason );
+// end a websocket connection nicely.
+// used for client and server connections - specifically pipes.
+WEBSOCKET_EXPORT void WebSocketPipeClose( struct html5_web_socket*, int code, const char* reason );
 // there is a control bit for whether the content is text or binary or a continuation
  // UTF8 RFC3629
 WEBSOCKET_EXPORT void WebSocketBeginSendText( PCLIENT, const char *, size_t );
+ // UTF8 RFC3629
+WEBSOCKET_EXPORT void WebSocketPipeBeginSendText( struct html5_web_socket*, const char *, size_t );
 // literal binary sending; this may happen to be base64 encoded too
 WEBSOCKET_EXPORT void WebSocketBeginSendBinary( PCLIENT, const uint8_t *, size_t );
+WEBSOCKET_EXPORT void WebSocketPipeBeginSendBinary( struct html5_web_socket*, const uint8_t *, size_t );
 // there is a control bit for whether the content is text or binary or a continuation
  // UTF8 RFC3629
 WEBSOCKET_EXPORT void WebSocketSendText( PCLIENT, const char *, size_t );
+ // UTF8 RFC3629
+WEBSOCKET_EXPORT void WebSocketPipeSendText( struct html5_web_socket*, const char *, size_t );
 // literal binary sending; this may happen to be base64 encoded too
 WEBSOCKET_EXPORT void WebSocketSendBinary( PCLIENT, const uint8_t *, size_t );
+WEBSOCKET_EXPORT void WebSocketPipeSendBinary( struct html5_web_socket*, const uint8_t *, size_t );
 WEBSOCKET_EXPORT void WebSocketEnableAutoPing( PCLIENT websock, uint32_t delay );
 WEBSOCKET_EXPORT void WebSocketPing( PCLIENT websock, uint32_t timeout );
+WEBSOCKET_EXPORT void WebSocketPipePing( struct html5_web_socket* ws, uint32_t timeout );
 WEBSOCKET_EXPORT void SetWebSocketAcceptCallback( PCLIENT pc, web_socket_accept callback );
 WEBSOCKET_EXPORT void SetWebSocketReadCallback( PCLIENT pc, web_socket_event callback );
 WEBSOCKET_EXPORT void SetWebSocketCloseCallback( PCLIENT pc, web_socket_closed callback );
 WEBSOCKET_EXPORT void SetWebSocketErrorCallback( PCLIENT pc, web_socket_error callback );
 WEBSOCKET_EXPORT void SetWebSocketHttpCallback( PCLIENT pc, web_socket_http_request callback );
 WEBSOCKET_EXPORT void SetWebSocketHttpCloseCallback( PCLIENT pc, web_socket_http_close callback );
+WEBSOCKET_EXPORT void SetWebSocketAcceptAsyncCallback( PCLIENT pc, web_socket_accept_async callback );
+WEBSOCKET_EXPORT void SetWebSocketPipeErrorCallback( struct html5_web_socket* ws, web_socket_error callback );
+WEBSOCKET_EXPORT void SetWebSocketPipeHttpCallback( struct html5_web_socket* ws, web_socket_http_request callback );
+WEBSOCKET_EXPORT void SetWebSocketPipeHttpCloseCallback( struct html5_web_socket* ws, web_socket_http_close callback );
+WEBSOCKET_EXPORT void SetWebSocketPipeAcceptAsyncCallback( struct html5_web_socket* pc, web_socket_accept_async callback );
 // if set in server accept callback, this will return without extension set
 // on client socket (default), does not request permessage-deflate
 #define WEBSOCK_DEFLATE_DISABLE 0
@@ -45611,12 +48525,15 @@ WEBSOCKET_EXPORT void SetWebSocketHttpCloseCallback( PCLIENT pc, web_socket_http
 // set permessage-deflate option for client requests.
 // allow server side to disable this when responding to a client.
 WEBSOCKET_EXPORT void SetWebSocketDeflate( PCLIENT pc, int enable_flags );
+WEBSOCKET_EXPORT void SetWebSocketPipeDeflate( struct html5_web_socket* ws, int enable_flags );
 // default is client masks, server does not
 // this can be used to disable masking on client or enable on server
 // (masked output from server to client is not supported by browsers)
 WEBSOCKET_EXPORT void SetWebSocketMasking( PCLIENT pc, int enable );
+WEBSOCKET_EXPORT void SetWebSocketPipeMasking( struct html5_web_socket* ws, int enable );
 // Set callback to get completed fragment size (total packet size collected so far)
 WEBSOCKET_EXPORT void SetWebSocketDataCompletion( PCLIENT pc, web_socket_completion callback );
+WEBSOCKET_EXPORT void SetWebSocketPipeDataCompletion( struct html5_web_socket* ws, web_socket_completion callback );
 #endif
 #ifdef HAVE_ZLIB
 #  include <zlib.h>
@@ -45645,7 +48562,12 @@ struct web_socket_input_state
 		// I get a close; probably because of the length exception
 		BIT_FIELD expect_masking : 1;
 		BIT_FIELD use_ssl : 1;
-	} flags;
+ // schedule to close (moved from client; client only)
+		BIT_FIELD want_close : 1;
+		BIT_FIELD pipe : 1;
+		BIT_FIELD initial_handshake_done : 1;
+		BIT_FIELD in_open_event : 1;
+	} volatile flags;
  // (last message tick) for automatic ping/keep alive/idle death
 	uint32_t last_reception;
 #ifndef __NO_WEBSOCK_COMPRESSION__
@@ -45687,6 +48609,8 @@ struct web_socket_input_state
 	web_socket_error on_error;
   // server socket event
 	web_socket_accept on_accept;
+  // server socket event
+	web_socket_accept_async on_accept_async;
 	web_socket_http_request on_request;
 	web_socket_completion on_fragment_done;
 	uintptr_t psv_on;
@@ -45694,28 +48618,37 @@ struct web_socket_input_state
 	uintptr_t psv_open;
 	int close_code;
 	char *close_reason;
+	//struct html5_web_socket* socket;
+ // when set by enable auto_ping is the delay between packets to generate a ping
+	uint32_t ping_delay;
+	int (*on_send)( uintptr_t psv, CPOINTER buffer, size_t length );
+	uintptr_t psvSender;
+	void ( *do_close )( uintptr_t psv );
+	uintptr_t psvCloser;
+	void ( *do_eof )( uintptr_t psv );
+	uintptr_t psvEof;
 };
-EXTERN void SendWebSocketMessage( PCLIENT pc, int opcode, int final, int do_mask, const uint8_t* payload, size_t length, int use_ssl );
-EXTERN void ProcessWebSockProtocol( WebSocketInputState websock, PCLIENT pc, const uint8_t* msg, size_t length );
+EXTERN void SendWebSocketMessage( struct web_socket_input_state *input
+			, int opcode, int final, int do_mask, const uint8_t* payload, size_t length);
+EXTERN void ProcessWebSockProtocol( WebSocketInputState websock, const uint8_t* msg, size_t length );
 struct html5_web_socket {
  // this value must be 0x20130912
 	uint32_t Magic;
 	struct web_socket_flags
 	{
-		BIT_FIELD initial_handshake_done : 1;
 		BIT_FIELD rfc6455 : 1;
 		BIT_FIELD accepted : 1;
 		BIT_FIELD http_request_only : 1;
- // set when sent to client, which can write and close before return; no further read must be done.
-		BIT_FIELD in_open_event : 1;
  // was already closed (during in_read_event)
 		BIT_FIELD closed : 1;
-	} flags;
+		BIT_FIELD skip_read : 1;
+	} volatile flags;
 	HTTPState http_state;
 	PCLIENT pc;
 	POINTER buffer;
 	char *protocols;
 	struct web_socket_input_state input_state;
+	// socket wants to send data, use this
 };
 struct web_socket_client
 {
@@ -45725,10 +48658,8 @@ struct web_socket_client
 	{
  // if not connected, then parse data as http, otherwise process as websock protocol.
 		BIT_FIELD connected : 1;
- // schedule to close
-		BIT_FIELD want_close : 1;
 		//BIT_FIELD use_ssl : 1;
-	} flags;
+	} volatile flags;
 	PCLIENT pc;
 	CTEXTSTR host;
 	CTEXTSTR address_url;
@@ -45736,15 +48667,26 @@ struct web_socket_client
 	CTEXTSTR protocols;
 	POINTER buffer;
 	HTTPState pHttpState;
- // when set by enable auto_ping is the delay between packets to generate a ping
-	uint32_t ping_delay;
 	struct web_socket_input_state input_state;
 };
+EXTERN int WebSocketSendTCP( uintptr_t psv, CPOINTER buffer, size_t length );
+EXTERN int WebSocketSendSSL( uintptr_t psv, CPOINTER buffer, size_t length );
 #endif
 #ifdef __ANDROID_OLD_PLATFORM_SUPPORT__
 #define rand lrand48
 #endif
-static void _SendWebSocketMessage( PCLIENT pc, int opcode, int final, int do_mask, const uint8_t* payload, size_t length, int use_ssl )
+int WebSocketSendTCP( uintptr_t psv, CPOINTER buffer, size_t length ){
+	return SendTCP( (PCLIENT)psv, buffer, length );
+}
+int WebSocketSendSSL( uintptr_t psv, CPOINTER buffer, size_t length ) {
+	return ssl_Send( (PCLIENT)psv, buffer, length );
+}
+void WebSocketSetAggregration( PCLIENT pc, LOGICAL enable ) {
+	SetTCPWriteAggregation( pc, enable );
+}
+static void _SendWebSocketMessage( int (*sender)( uintptr_t target, CPOINTER buffer, size_t length )
+		, uintptr_t target
+		, int opcode, int final, int do_mask, const uint8_t* payload, size_t length )
 {
 	uint8_t* msgout;
 	uint8_t* use_mask;
@@ -45847,14 +48789,12 @@ static void _SendWebSocketMessage( PCLIENT pc, int opcode, int final, int do_mas
 			n++;
 		}
 	}
-	if( use_ssl )
-		ssl_Send( pc, msgout, length_out );
-	else
-		SendTCP( pc, msgout, length_out );
+	sender( target, msgout, length_out );
 	Deallocate( uint8_t*, msgout );
 }
-void SendWebSocketMessage( PCLIENT pc, int opcode, int final, int do_mask, const uint8_t* payload, size_t length, int use_ssl ) {
-	struct web_socket_input_state *input = (struct web_socket_input_state *)GetNetworkLong( pc, 1 );
+void SendWebSocketMessage( struct web_socket_input_state *input
+			, int opcode, int final, int do_mask, const uint8_t* payload, size_t length ) {
+	//struct web_socket_input_state *input = (struct web_socket_input_state *)GetNetworkLong( pc, 1 );
 #ifndef __NO_WEBSOCK_COMPRESSION__
 	if( (!input->flags.do_not_deflate) && input->flags.deflate && opcode < 3 ) {
 		int r;
@@ -45867,7 +48807,7 @@ void SendWebSocketMessage( PCLIENT pc, int opcode, int final, int do_mask, const
 			r = deflate( &input->deflater, Z_FINISH );
 			if( r == Z_STREAM_END )
 				break;
-			if( r == Z_BUF_ERROR ) {
+			if( r == Z_BUF_ERROR )	 {
 				lprintf( "Zlib error: buffer error" );
 				//Z_BUF_ERROR( )
 			}
@@ -45885,14 +48825,14 @@ void SendWebSocketMessage( PCLIENT pc, int opcode, int final, int do_mask, const
 				break;
 		} while( 1 );
 		opcode = (final ? 0x80 : 0x00) | opcode;
-		_SendWebSocketMessage( pc, opcode, final, do_mask, (uint8_t*)input->deflateBuf, input->deflater.total_out, use_ssl );
+		_SendWebSocketMessage( input->on_send, input->psvSender, opcode, final, do_mask, (uint8_t*)input->deflateBuf, input->deflater.total_out );
 		deflateReset( &input->deflater );
 	}
 	else
 #endif
 	{
 		opcode = (final ? 0x80 : 0x00) | opcode;
-		_SendWebSocketMessage( pc, opcode, final, do_mask, payload, length, use_ssl );
+		_SendWebSocketMessage( input->on_send, input->psvSender, opcode, final, do_mask, payload, length );
 	}
 }
 static void ResetInputState( WebSocketInputState websock )
@@ -45938,7 +48878,7 @@ static int CPROC inflateBackOutput( void* state, unsigned char *output, unsigned
  *  %xA denotes a pong
  *  %xB-F are reserved for further control frames
 */
-void ProcessWebSockProtocol( WebSocketInputState websock, PCLIENT pc, const uint8_t* msg, size_t length )
+void ProcessWebSockProtocol( WebSocketInputState websock, const uint8_t* msg, size_t length )
 {
 	size_t n;
 	//int oldstate = websock->input_msg_state;
@@ -46095,6 +49035,7 @@ void ProcessWebSockProtocol( WebSocketInputState websock, PCLIENT pc, const uint
 					/// single packet, final...
 					//LogBinary( websock->fragment_collection, websock->fragment_collection_length );
 					if( websock->on_event ) {
+						while( !websock->flags.initial_handshake_done || websock->flags.in_open_event ) Relinquish();
 #ifndef __NO_WEBSOCK_COMPRESSION__
 						if( websock->flags.deflate && ( websock->RSV1 & 0x40 ) ) {
 							int r;
@@ -46122,7 +49063,7 @@ void ProcessWebSockProtocol( WebSocketInputState websock, PCLIENT pc, const uint
 									break;
 							} while( r != Z_STREAM_END || r != Z_BUF_ERROR );
 							websock->inflateBufUsed = websock->inflater.total_out;
-							websock->on_event( pc, websock->psv_open, websock->input_type
+							websock->on_event( webock->socket->pc, websock->psv_open, websock->input_type
 								, websock->inflateBuf, websock->inflateBufUsed );
 							inflateReset( &websock->inflater );
 						}
@@ -46130,7 +49071,7 @@ void ProcessWebSockProtocol( WebSocketInputState websock, PCLIENT pc, const uint
 #endif
 						{
 							//lprintf( "Completed packet; %d %d", websock->input_type, websock->fragment_collection_length );
-							websock->on_event( pc, websock->psv_open, websock->input_type, websock->fragment_collection, websock->fragment_collection_length );
+							websock->on_event( (PCLIENT)websock->psvSender, websock->psv_open, websock->input_type, websock->fragment_collection, websock->fragment_collection_length );
 						}
 					}
 					websock->fragment_collection_length = 0;
@@ -46159,17 +49100,17 @@ void ProcessWebSockProtocol( WebSocketInputState websock, PCLIENT pc, const uint
 					//lprintf( "Got close...%d", websock->flags.closed );
 					if( !websock->flags.closed )
 					{
-						struct web_socket_input_state *output = (struct web_socket_input_state *)GetNetworkLong( pc, 1 );
 						//lprintf( "reply close with same payload." );
-						SendWebSocketMessage( pc, 0x08, 1, output->flags.expect_masking, websock->fragment_collection, websock->frame_length, output->flags.use_ssl );
+						SendWebSocketMessage( websock, 0x08, 1, websock->flags.expect_masking, websock->fragment_collection, websock->frame_length );
 						websock->flags.closed = 1;
 					}
 					if( websock->on_close ) {
 						int code;
 						char buf[128];
 						if( websock->frame_length > 2 ) {
-							StrCpyEx( buf, (char*)(websock->fragment_collection + 2), websock->frame_length - 2 );
-							buf[websock->frame_length - 2] = 0;
+							// assume the buffer is longer by 1 so the NUL terminator gets put after the string
+							StrCpyEx( buf, (char*)(websock->fragment_collection + 2), websock->frame_length - 1 );
+							//buf[websock->frame_length - 2] = 0;
 							code = ((int)websock->fragment_collection[0] << 8) + websock->fragment_collection[1];
 						}
 						else if( websock->frame_length ) {
@@ -46181,21 +49122,27 @@ void ProcessWebSockProtocol( WebSocketInputState websock, PCLIENT pc, const uint
 							buf[0] = 0;
 						}
 						websock->close_code = code;
-						websock->close_reason = StrDup( buf );
-						websock->on_close( pc, websock->psv_open, code, buf );
+						websock->close_reason = DupCStrLen( buf, websock->frame_length - 2 );
+						websock->on_close( (PCLIENT)websock->psvSender, websock->psv_open, code, buf );
 						websock->on_close = NULL;
 					}
 					websock->fragment_collection_length = 0;
+					if( !websock->flags.pipe )
  // this should not linger; client already sent closed, nothing more to receive.
-					RemoveClientEx( pc, 0, 0 );
+						RemoveClientEx( (PCLIENT)websock->psvSender, 0, 0 );
+					else {
+						if( websock->do_close)
+							websock->do_close( websock->psvCloser );
+						else
+							lprintf( "Pipe handle close: This should probably release weboscket and all other stuff" );
+					}
 					// resetInputstate after this would squash next memory....
 					return;
 					break;
  // ping
 				case 0x09:
 					{
-						struct web_socket_input_state *output = (struct web_socket_input_state *)GetNetworkLong(pc, 1);
-						SendWebSocketMessage( pc, 0x0a, 1, output->flags.expect_masking, websock->fragment_collection, websock->frame_length, output->flags.use_ssl );
+						SendWebSocketMessage( websock, 0x0a, 1, websock->flags.expect_masking, websock->fragment_collection, websock->frame_length );
 						websock->fragment_collection_length = 0;
 					}
 					break;
@@ -46209,7 +49156,11 @@ void ProcessWebSockProtocol( WebSocketInputState websock, PCLIENT pc, const uint
 					break;
 				default:
 					lprintf( "Bad WebSocket opcode: %d", websock->opcode );
-					RemoveClient( pc );
+					if( !websock->flags.pipe )
+						RemoveClient( (PCLIENT)websock->psvSender );
+					else {
+						lprintf( "pipe handle bad opcode: again should probably destroy websocket object" );
+					}
 					return;
 				}
 				// after processing any opcode (this is IN final, and length match) we're done, start next message
@@ -46218,17 +49169,16 @@ void ProcessWebSockProtocol( WebSocketInputState websock, PCLIENT pc, const uint
 				//lprintf( "Completed packet; still not final fragment though.... %d  %d", websock->fragment_collection_avail );
 				websock->input_msg_state = 0;
 				if( websock->on_fragment_done )
-					websock->on_fragment_done( pc, websock->psv_open, websock->input_type, (int)websock->fragment_collection_length );
+					websock->on_fragment_done( (PCLIENT)websock->psvSender, websock->psv_open, websock->input_type, (int)websock->fragment_collection_length );
 				//lprintf( "came back" );
 			}
 			break;
 		}
 	}
 }
-void WebSocketPing( PCLIENT pc, uint32_t timeout )
+static void WebSocketPing_( struct web_socket_input_state *input_state, uint32_t timeout )
 {
-	struct web_socket_input_state *input_state = (struct web_socket_input_state*)GetNetworkLong( pc, 1 );
-	SendWebSocketMessage( pc, 9, 1, input_state->flags.expect_masking, NULL, 0, input_state->flags.use_ssl );
+	SendWebSocketMessage( input_state, 9, 1, input_state->flags.expect_masking, NULL, 0 );
 	if( timeout ) {
 		uint32_t start_at = timeGetTime();
 		uint32_t target = start_at + timeout;
@@ -46239,82 +49189,139 @@ void WebSocketPing( PCLIENT pc, uint32_t timeout )
 		input_state->flags.received_pong = 0;
 	}
 }
+void WebSocketPing( PCLIENT pc, uint32_t timeout )
+{
+	struct web_socket_input_state *input_state = (struct web_socket_input_state*)GetNetworkLong( pc, 1 );
+	WebSocketPing_( input_state, timeout );
+}
+void WebSocketPipePing( struct html5_web_socket* ws, uint32_t timeout )
+{
+	WebSocketPing_( &ws->input_state, timeout );
+}
 // there is a control bit for whether the content is text or binary or a continuation
  // UTF8 RFC3629
-void WebSocketSendText( PCLIENT pc, const char *buffer, size_t length )
+static void WebSocketBeginSendText_( struct web_socket_input_state* output, const char* buffer, size_t length )
+{
+	if( length > 8100 ) {
+		size_t sentLen;
+		size_t maxLen = length - 8100;
+		for( sentLen = 0; sentLen < maxLen; sentLen += 8100 )
+			WebSocketBeginSendText_( output, buffer + sentLen, 8100 );
+		length = length - ( sentLen );
+		buffer = buffer + ( sentLen );
+	}
+	SendWebSocketMessage( output, output->flags.sent_type ? 0 : 1, 0, output->flags.expect_masking, (const uint8_t*)buffer, length );
+	output->flags.sent_type = 1;
+}
+ // UTF8 RFC3629
+void WebSocketBeginSendText( PCLIENT pc, const char* buffer, size_t length )
 {
 	if( pc ) {
-		struct web_socket_input_state *input = (struct web_socket_input_state *)GetNetworkLong( pc, 1 );
+		struct web_socket_input_state* output = (struct web_socket_input_state*)GetNetworkLong( pc, 1 );
+		WebSocketBeginSendText_( output, buffer, length );
+	}
+}
+ // UTF8 RFC3629
+void WebSocketPipeBeginSendText( struct html5_web_socket* ws, const char* buffer, size_t length )
+{
+	WebSocketBeginSendText_( &ws->input_state, buffer, length );
+}
+// there is a control bit for whether the content is text or binary or a continuation
+ // UTF8 RFC3629
+static void WebSocketSendText_( struct web_socket_input_state *input, const char *buffer, size_t length )
+{
 		if( !input ) return;
 		if( length > 8100 ) {
 			size_t sentLen;
 			size_t maxLen = length - 8100;
 			for( sentLen = 0; sentLen < maxLen; sentLen += 8100 )
-				WebSocketBeginSendText( pc, buffer + sentLen, 8100 );
+				WebSocketBeginSendText_( input, buffer + sentLen, 8100 );
 			length = length - ( sentLen );
 			buffer = buffer + ( sentLen );
 		}
-		SendWebSocketMessage( pc, input->flags.sent_type?0:1, 1, input->flags.expect_masking, (uint8_t*)buffer, length, input->flags.use_ssl );
+		SendWebSocketMessage( input, input->flags.sent_type?0:1, 1, input->flags.expect_masking, (uint8_t*)buffer, length );
 		input->flags.sent_type = 0;
-	}
 }
-// there is a control bit for whether the content is text or binary or a continuation
  // UTF8 RFC3629
-void WebSocketBeginSendText( PCLIENT pc, const char *buffer, size_t length )
+void WebSocketSendText( PCLIENT pc, const char *buffer, size_t length )
 {
 	if( pc ) {
-		struct web_socket_input_state *output = (struct web_socket_input_state *)GetNetworkLong(pc, 1);
+		struct web_socket_input_state *input = (struct web_socket_input_state *)GetNetworkLong( pc, 1 );
+		WebSocketSendText_( input, buffer, length );
+	}
+}
+ // UTF8 RFC3629
+void WebSocketPipeSendText( struct html5_web_socket *ws, const char *buffer, size_t length )
+{
+	WebSocketSendText_( &ws->input_state, buffer, length );
+}
+// literal binary sending; this may happen to be base64 encoded too
+static void WebSocketBeginSendBinary_( struct web_socket_input_state* output, const uint8_t* buffer, size_t length ) {
+	//struct web_socket_input_state *output = (struct web_socket_input_state *)GetNetworkLong(pc, 1);
+	if( length > 8100 ) {
+		size_t sentLen;
+		size_t maxLen = length - 8100;
+		for( sentLen = 0; sentLen < maxLen; sentLen += 8100 )
+			WebSocketBeginSendBinary_( output, buffer + sentLen, 8100 );
+		length = length - ( sentLen );
+		buffer = buffer + ( sentLen );
+	}
+	SendWebSocketMessage( output, output->flags.sent_type ? 0 : 2, 0, output->flags.expect_masking, (const uint8_t*)buffer, length );
+	output->flags.sent_type = 1;
+}
+void WebSocketBeginSendBinary( PCLIENT pc, const uint8_t* buffer, size_t length ) {
+	if( pc ) {
+		struct web_socket_input_state* output = (struct web_socket_input_state*)GetNetworkLong( pc, 1 );
+		WebSocketBeginSendBinary_( output, buffer, length );
+	}
+}
+void WebSocketPipeBeginSendBinary( struct html5_web_socket* ws, const uint8_t* buffer, size_t length ) {
+	WebSocketBeginSendBinary_( &ws->input_state, buffer, length );
+}
+// literal binary sending; this may happen to be base64 encoded too
+static void WebSocketSendBinary_( struct web_socket_input_state *output, const uint8_t *buffer, size_t length )
+{
 		if( length > 8100 ) {
 			size_t sentLen;
 			size_t maxLen = length - 8100;
 			for( sentLen = 0; sentLen < maxLen; sentLen += 8100 )
-				WebSocketBeginSendText( pc, buffer + sentLen, 8100 );
+				WebSocketBeginSendBinary_( output, buffer + sentLen, 8100 );
 			length = length - ( sentLen );
 			buffer = buffer + ( sentLen );
 		}
-		SendWebSocketMessage( pc, output->flags.sent_type?0:1, 0, output->flags.expect_masking, (const uint8_t*)buffer, length, output->flags.use_ssl );
-		output->flags.sent_type = 1;
-	}
+		SendWebSocketMessage( output, output->flags.sent_type?0:2, 1, output->flags.expect_masking, (const uint8_t*)buffer, length );
+		output->flags.sent_type = 0;
 }
-// literal binary sending; this may happen to be base64 encoded too
 void WebSocketSendBinary( PCLIENT pc, const uint8_t *buffer, size_t length )
 {
 	if( pc ) {
 		struct web_socket_input_state *output = (struct web_socket_input_state *)GetNetworkLong(pc, 1);
-		if( length > 8100 ) {
-			size_t sentLen;
-			size_t maxLen = length - 8100;
-			for( sentLen = 0; sentLen < maxLen; sentLen += 8100 )
-				WebSocketBeginSendBinary( pc, buffer + sentLen, 8100 );
-			length = length - ( sentLen );
-			buffer = buffer + ( sentLen );
-		}
-		SendWebSocketMessage( pc, output->flags.sent_type?0:2, 1, output->flags.expect_masking, (const uint8_t*)buffer, length, output->flags.use_ssl );
-		output->flags.sent_type = 0;
+		WebSocketSendBinary_( output, buffer, length );
 	}
 }
-// literal binary sending; this may happen to be base64 encoded too
-void WebSocketBeginSendBinary( PCLIENT pc, const uint8_t *buffer, size_t length )
+void WebSocketPipeSendBinary( struct html5_web_socket *ws, const uint8_t *buffer, size_t length )
 {
-	if( pc ) {
-		struct web_socket_input_state *output = (struct web_socket_input_state *)GetNetworkLong(pc, 1);
-		if( length > 8100 ) {
-			size_t sentLen;
-			size_t maxLen = length - 8100;
-			for( sentLen = 0; sentLen < maxLen; sentLen += 8100 )
-				WebSocketBeginSendBinary( pc, buffer + sentLen, 8100 );
-			length = length - ( sentLen );
-			buffer = buffer + ( sentLen );
-		}
-		SendWebSocketMessage( pc, output->flags.sent_type?0:2, 0, output->flags.expect_masking, (const uint8_t*)buffer, length, output->flags.use_ssl );
-		output->flags.sent_type = 1;
-	}
+	WebSocketSendBinary_( &ws->input_state, buffer, length );
 }
+//------------------ Setup Callbacks -------------------
 void SetWebSocketAcceptCallback( PCLIENT pc, web_socket_accept callback )
 {
 	if( pc ) {
 		 struct web_socket_input_state *input_state = (struct web_socket_input_state*)GetNetworkLong( pc, 1 );
 		input_state->on_accept = callback;
+	}
+}
+void SetWebSocketPipeAcceptAsyncCallback( struct html5_web_socket* socket, web_socket_accept_async callback )
+{
+	if( socket ) {
+		socket->input_state.on_accept_async = callback;
+	}
+}
+void SetWebSocketAcceptAsyncCallback( PCLIENT pc, web_socket_accept_async callback )
+{
+	if( pc ) {
+		 struct html5_web_socket* socket = (struct html5_web_socket*)GetNetworkLong( pc, 0 );
+		SetWebSocketPipeAcceptAsyncCallback( socket, callback );
 	}
 }
 void SetWebSocketReadCallback( PCLIENT pc, web_socket_event callback )
@@ -46338,12 +49345,20 @@ void SetWebSocketHttpCallback( PCLIENT pc, web_socket_http_request callback )
 		input_state->on_request = callback;
 	}
 }
+void SetWebSocketPipeHttpCallback( struct html5_web_socket* ws, web_socket_http_request callback )
+{
+	ws->input_state.on_request = callback;
+}
 void SetWebSocketHttpCloseCallback( PCLIENT pc, web_socket_http_close callback )
 {
 	if( pc ) {
 		struct web_socket_input_state *input_state = (struct web_socket_input_state*)GetNetworkLong( pc, 1 );
 		input_state->on_http_close = callback;
 	}
+}
+void SetWebSocketPipeHttpCloseCallback( struct html5_web_socket *ws, web_socket_http_close callback )
+{
+	ws->input_state.on_http_close = callback;
 }
 void SetWebSocketErrorCallback( PCLIENT pc, web_socket_error callback )
 {
@@ -46352,6 +49367,10 @@ void SetWebSocketErrorCallback( PCLIENT pc, web_socket_error callback )
 		input_state->on_error = callback;
 	}
 }
+void SetWebSocketPipeErrorCallback( struct html5_web_socket *ws, web_socket_error callback )
+{
+	ws->input_state.on_error = callback;
+}
 void SetWebSocketDeflate( PCLIENT pc, int enable ) {
 	if( pc ) {
 		struct web_socket_input_state *input_state = (struct web_socket_input_state*)GetNetworkLong( pc, 1 );
@@ -46359,11 +49378,18 @@ void SetWebSocketDeflate( PCLIENT pc, int enable ) {
 		input_state->flags.do_not_deflate = enable==2?1:0;
 	}
 }
+void SetWebSocketPipeDeflate( struct html5_web_socket *ws, int enable ) {
+	ws->input_state.flags.deflate = enable?1:0;
+	ws->input_state.flags.do_not_deflate = enable==2?1:0;
+}
 void SetWebSocketMasking( PCLIENT pc, int enable ) {
 	if( pc ) {
 		struct web_socket_input_state *input_state = (struct web_socket_input_state*)GetNetworkLong( pc, 1 );
 		input_state->flags.expect_masking = enable;
 	}
+}
+void SetWebSocketPipeMasking( struct html5_web_socket *ws, int enable ) {
+	ws->input_state.flags.expect_masking = enable;
 }
 void SetWebSocketDataCompletion( PCLIENT pc, web_socket_completion callback ) {
 	if( pc ) {
@@ -46371,10 +49397,14 @@ void SetWebSocketDataCompletion( PCLIENT pc, web_socket_completion callback ) {
 		input_state->on_fragment_done = callback;
 	}
 }
+void SetWebSocketPipeDataCompletion( struct html5_web_socket *ws, web_socket_completion callback ) {
+	ws->input_state.on_fragment_done = callback;
+}
 #define NO_UNICODE_C
 #define HTML5_WEBSOCKET_SOURCE
- // websocketclose is a common...
+ // websocketclose is in client...
 #define SACK_WEBSOCKET_CLIENT_SOURCE
+/* SHA1 Standard library from somewhere... */
 /*
  *  sha1.h
  *
@@ -46443,6 +49473,8 @@ typedef struct SHA1Context
     int Computed;
     int Corrupted;
 } SHA1Context;
+#define SHA1_DIGEST_SIZE SHA1HashSize
+typedef SHA1Context sha1_ctx;
 /*
  *  Function Prototypes
  */
@@ -46518,7 +49550,12 @@ struct web_socket_input_state
 		// I get a close; probably because of the length exception
 		BIT_FIELD expect_masking : 1;
 		BIT_FIELD use_ssl : 1;
-	} flags;
+ // schedule to close (moved from client; client only)
+		BIT_FIELD want_close : 1;
+		BIT_FIELD pipe : 1;
+		BIT_FIELD initial_handshake_done : 1;
+		BIT_FIELD in_open_event : 1;
+	} volatile flags;
  // (last message tick) for automatic ping/keep alive/idle death
 	uint32_t last_reception;
 #ifndef __NO_WEBSOCK_COMPRESSION__
@@ -46560,6 +49597,8 @@ struct web_socket_input_state
 	web_socket_error on_error;
   // server socket event
 	web_socket_accept on_accept;
+  // server socket event
+	web_socket_accept_async on_accept_async;
 	web_socket_http_request on_request;
 	web_socket_completion on_fragment_done;
 	uintptr_t psv_on;
@@ -46567,28 +49606,37 @@ struct web_socket_input_state
 	uintptr_t psv_open;
 	int close_code;
 	char *close_reason;
+	//struct html5_web_socket* socket;
+ // when set by enable auto_ping is the delay between packets to generate a ping
+	uint32_t ping_delay;
+	int (*on_send)( uintptr_t psv, CPOINTER buffer, size_t length );
+	uintptr_t psvSender;
+	void ( *do_close )( uintptr_t psv );
+	uintptr_t psvCloser;
+	void ( *do_eof )( uintptr_t psv );
+	uintptr_t psvEof;
 };
-EXTERN void SendWebSocketMessage( PCLIENT pc, int opcode, int final, int do_mask, const uint8_t* payload, size_t length, int use_ssl );
-EXTERN void ProcessWebSockProtocol( WebSocketInputState websock, PCLIENT pc, const uint8_t* msg, size_t length );
+EXTERN void SendWebSocketMessage( struct web_socket_input_state *input
+			, int opcode, int final, int do_mask, const uint8_t* payload, size_t length);
+EXTERN void ProcessWebSockProtocol( WebSocketInputState websock, const uint8_t* msg, size_t length );
 struct html5_web_socket {
  // this value must be 0x20130912
 	uint32_t Magic;
 	struct web_socket_flags
 	{
-		BIT_FIELD initial_handshake_done : 1;
 		BIT_FIELD rfc6455 : 1;
 		BIT_FIELD accepted : 1;
 		BIT_FIELD http_request_only : 1;
- // set when sent to client, which can write and close before return; no further read must be done.
-		BIT_FIELD in_open_event : 1;
  // was already closed (during in_read_event)
 		BIT_FIELD closed : 1;
-	} flags;
+		BIT_FIELD skip_read : 1;
+	} volatile flags;
 	HTTPState http_state;
 	PCLIENT pc;
 	POINTER buffer;
 	char *protocols;
 	struct web_socket_input_state input_state;
+	// socket wants to send data, use this
 };
 struct web_socket_client
 {
@@ -46598,10 +49646,8 @@ struct web_socket_client
 	{
  // if not connected, then parse data as http, otherwise process as websock protocol.
 		BIT_FIELD connected : 1;
- // schedule to close
-		BIT_FIELD want_close : 1;
 		//BIT_FIELD use_ssl : 1;
-	} flags;
+	} volatile flags;
 	PCLIENT pc;
 	CTEXTSTR host;
 	CTEXTSTR address_url;
@@ -46609,10 +49655,10 @@ struct web_socket_client
 	CTEXTSTR protocols;
 	POINTER buffer;
 	HTTPState pHttpState;
- // when set by enable auto_ping is the delay between packets to generate a ping
-	uint32_t ping_delay;
 	struct web_socket_input_state input_state;
 };
+EXTERN int WebSocketSendTCP( uintptr_t psv, CPOINTER buffer, size_t length );
+EXTERN int WebSocketSendSSL( uintptr_t psv, CPOINTER buffer, size_t length );
 #endif
 /*
  * SACK extension to define methods to render to javascript/HTML5 WebSocket event interface
@@ -46658,17 +49704,66 @@ HTML5_WEBSOCKET_PROC( PCLIENT, WebSocketCreate_v2 )(CTEXTSTR hosturl
 	, uintptr_t psv
 	, int webSocketOptions
 );
+/*
+* Creates a server side websocket/http request socket for an accepted network connection.
+*
+*/
+HTML5_WEBSOCKET_PROC( struct html5_web_socket*, WebSocketCreateServerPipe )( web_socket_opened on_open
+                                        , web_socket_event on_event
+                                        , web_socket_closed on_closed
+                                        , web_socket_error on_error
+                                        , web_socket_accept on_accept
+                                        , web_socket_http_request ws_http
+                                        , web_socket_http_close ws_http_close
+                                        , web_socket_completion ws_completion
+                                        , uintptr_t psv
+);
+// Option Wait
 #define WEBSOCK_SERVER_OPTION_WAIT 1
-	HTML5_WEBSOCKET_PROC( PCLIENT, WebSocketCreate )( CTEXTSTR server_url
+HTML5_WEBSOCKET_PROC( PCLIENT, WebSocketCreate )( CTEXTSTR server_url
 																	, web_socket_opened on_open
 																	, web_socket_event on_event
 																	, web_socket_closed on_closed
 																	, web_socket_error on_error
 																	, uintptr_t psv
 																	);
+/*
+* Write new data to a html5_web_socket pipe connection. (should be accepted socket, not the listener/server socket);
+*/
+HTML5_WEBSOCKET_PROC( void, WebSocketWrite )( struct html5_web_socket* socket, CPOINTER buffer, size_t length );
+/*
+* Set the send callback for a pipe connection.  SSH layer wants to send data to this socket.
+*/
+HTML5_WEBSOCKET_PROC( void, WebSocketPipeSetSend )( struct html5_web_socket* pipe, int ( *on_send )( uintptr_t psv, CPOINTER buffer, size_t length ), uintptr_t psv_send );
+/*
+* An EOF has happened from the other side of the channel this pipe is associated with.
+*/
+HTML5_WEBSOCKET_PROC( void, WebSocketPipeSetEof )( struct html5_web_socket* pipe, void ( *do_eof )( uintptr_t psv ), uintptr_t psv_eof );
+/*
+* A close has been requested from the other side of the channel this pipe is associated with.
+*/
+HTML5_WEBSOCKET_PROC( void, WebSocketPipeSetClose )( struct html5_web_socket* pipe, void ( *do_close )( uintptr_t psv ), uintptr_t psv_close );
+/*
+* Send data to the pipe connection.  This is the same as WebSocketWrite, but is used for the pipe connection.
+*/
+HTML5_WEBSOCKET_PROC( void, WebSocketPipeSend )( struct html5_web_socket* socket, CPOINTER buffer, size_t length );
+/*
+* The underlaying socket connection has been closed. (for SSH that the channel is closed)
+*/
+HTML5_WEBSOCKET_PROC( void, WebSocketPipeSocketClose )( struct html5_web_socket* socket );
+/*
+* A new pipe connection has been accepted, this performs the same operation
+* as accepting a socket internally
+*/
+HTML5_WEBSOCKET_PROC( struct html5_web_socket*, WebSocketPipeConnect )( struct html5_web_socket* pipe, uintptr_t psvNew );
+/*
+* allows changing the user data associated with the callback
+*/
+HTML5_WEBSOCKET_PROC( void, WebSocketPipeSetConnectPSV)( struct html5_web_socket* pipe, uintptr_t psvNew );
 // during open, server may need to switch behavior based on protocols
 // this can be used to return the protocols requested by the client.
 HTML5_WEBSOCKET_PROC( const char *, WebSocketGetProtocols )( PCLIENT pc );
+HTML5_WEBSOCKET_PROC( const char *, WebSocketPipeGetProtocols )( struct html5_web_socket* );
 // after examining protocols, this is a reply to the client which protocol has been accepted.
 HTML5_WEBSOCKET_PROC( PCLIENT, WebSocketSetProtocols )( PCLIENT pc, const char *protocols );
 /* define a callback which uses a HTML5WebSocket collector to build javascipt to render the control.
@@ -46684,8 +49779,19 @@ HTML5_WEBSOCKET_PROC( PLIST, GetWebSocketHeaders )( PCLIENT pc );
 */
 HTML5_WEBSOCKET_PROC( PTEXT, GetWebSocketResource )( PCLIENT pc );
 HTML5_WEBSOCKET_PROC( HTTPState, GetWebSocketHttpState )( PCLIENT pc );
+HTML5_WEBSOCKET_PROC( PLIST, GetWebSocketPipeHeaders )( struct html5_web_socket* socket );
+HTML5_WEBSOCKET_PROC( PTEXT, GetWebSocketPipeResource )( struct html5_web_socket* socket );
+HTML5_WEBSOCKET_PROC( HTTPState, GetWebSocketPipeHttpState )( struct html5_web_socket* socket );
 HTML5_WEBSOCKET_PROC( void, ResetWebsocketRequestHandler )( PCLIENT pc_client );
 HTML5_WEBSOCKET_PROC( uintptr_t, WebSocketGetServerData )( PCLIENT pc );
+// when using async accept - this is used to accept the socket.
+HTML5_WEBSOCKET_PROC( void, WebSocketPipeAccept )( struct html5_web_socket* socket, char *protocols, int yesno );
+// when using async accept - this is used to accept the socket.
+HTML5_WEBSOCKET_PROC( void, WebSocketAccept )( PCLIENT pc, char *protocols, int yesno );
+HTML5_WEBSOCKET_PROC( void, WebSocketPipeSetConnectPSV )( struct html5_web_socket* pipe, uintptr_t psvNew );
+HTML5_WEBSOCKET_PROC( void, WebSocketPipeSetOnPSV )( struct html5_web_socket* pipe, uintptr_t psvNew );
+HTML5_WEBSOCKET_PROC( void, WebSocketSetConnectPSV )( PCLIENT pc, uintptr_t psvNew );
+HTML5_WEBSOCKET_PROC( void, WebSocketSetOnPSV )( PCLIENT pc, uintptr_t psvNew );
 HTML5_WEBSOCKET_NAMESPACE_END
 USE_HTML5_WEBSOCKET_NAMESPACE
 #endif
@@ -46820,7 +49926,7 @@ static LOGICAL ComputeReplyKey2( PVARTEXT pvt_output, HTML5WebSocket socket, PTE
       *  %xA denotes a pong
       *  %xB-F are reserved for further control frames
 */
-static void HandleData( HTML5WebSocket socket, PCLIENT pc, POINTER buffer, size_t length )
+static void HandleData( HTML5WebSocket socket, CPOINTER buffer, size_t length )
 {
 	size_t n;
 	//int randNum;
@@ -46859,7 +49965,14 @@ void ResetWebsocketRequestHandler( PCLIENT pc ) {
 	HTML5WebSocket socket = (HTML5WebSocket)GetNetworkLong( pc, 0 );
  // closing/closed....
 	if( !socket ) return;
-	socket->flags.initial_handshake_done = 0;
+	socket->input_state.flags.initial_handshake_done = 0;
+	socket->flags.http_request_only = 0;
+	EndHttp( socket->http_state );
+}
+void ResetWebsocketPipeRequestHandler( HTML5WebSocket socket ) {
+ // closing/closed....
+	if( !socket ) return;
+	socket->input_state.flags.initial_handshake_done = 0;
 	socket->flags.http_request_only = 0;
 	EndHttp( socket->http_state );
 }
@@ -46869,12 +49982,18 @@ uintptr_t WebSocketGetServerData( PCLIENT pc ) {
 	if( !socket ) return 0;
 	return socket->input_state.psv_on;
 }
+uintptr_t WebSocketPipeGetServerData( HTML5WebSocket socket ) {
+ // closing/closed....
+	if( !socket ) return 0;
+	return socket->input_state.psv_on;
+}
 static void CPROC destroyHttpState( HTML5WebSocket socket, PCLIENT pc_client ) {
 	//HTML5WebSocket socket = (HTML5WebSocket)GetNetworkLong( pc_client, 0 );
-	if( socket->flags.in_open_event ) {
+	if( socket->input_state.flags.in_open_event ) {
 		socket->flags.closed = 1;
 		return;
 	}
+	SetNetworkLong( pc_client, 0, 0 );
 	//lprintf( "ServerWebSocket Connection closed event..." );
 	if( pc_client && socket->input_state.on_close && socket->input_state.psv_open  ) {
 		socket->input_state.on_close( pc_client, socket->input_state.psv_open, socket->input_state.close_code, socket->input_state.close_reason );
@@ -46896,23 +50015,17 @@ static void CPROC destroyHttpState( HTML5WebSocket socket, PCLIENT pc_client ) {
 	DestroyHttpState( socket->http_state );
 	Deallocate( POINTER, socket->buffer );
 	Deallocate( HTML5WebSocket, socket );
-	SetNetworkLong( pc_client, 0, 0 );
 }
-static void CPROC closed( PCLIENT pc_client ) {
-	HTML5WebSocket socket = (HTML5WebSocket)GetNetworkLong( pc_client, 0 );
-	destroyHttpState( socket, pc_client );
-}
-static void CPROC read_complete_process_data( PCLIENT pc ) {
-	HTML5WebSocket socket = (HTML5WebSocket)GetNetworkLong( pc, 0 );
+static void CPROC read_complete_process_data( HTML5WebSocket socket ) {
 	int result;
-	while( ( result = ProcessHttp( pc, socket->http_state ) ) ) {
+	while( ( result = ProcessHttp( socket->http_state, socket->input_state.on_send, socket->input_state.psvSender ) ) ) {
 		switch( result ) {
 		default:
 			lprintf( "unexpected result is %d", result );
 			break;
 		case HTTP_STATE_RESULT_CONTENT:
 		{
-			PVARTEXT pvt_output = VarTextCreate();
+			PVARTEXT pvt_output;
 			PTEXT value, value2;
 			PTEXT key1, key2;
 			value = GetHTTPField( socket->http_state, "Connection" );
@@ -46921,17 +50034,23 @@ static void CPROC read_complete_process_data( PCLIENT pc ) {
 				|| !StrCaseStr( GetText( value ), "upgrade" )
 				|| !TextLike( value2, "websocket" ) ) {
 				//lprintf( "request is not an upgrade for websocket." );
-				socket->flags.initial_handshake_done = 1;
+				socket->input_state.flags.initial_handshake_done = 1;
 				socket->flags.http_request_only = 1;
-				socket->flags.in_open_event = 1;
+				socket->input_state.flags.in_open_event = 1;
 				if( socket->input_state.on_request ) {
-					socket->input_state.on_request( pc, socket->input_state.psv_on );
+					if( socket->Magic == 0x20240310 )
+						socket->input_state.on_request( (PCLIENT)socket, socket->input_state.psv_on );
+					else
+						socket->input_state.on_request( socket->pc, socket->input_state.psv_on );
 				} else {
-					socket->flags.in_open_event = 0;
-					RemoveClient( pc );
+					socket->input_state.flags.in_open_event = 0;
+					if( socket->pc )
+						RemoveClient( socket->pc );
+					else if( socket->input_state.do_close )
+						socket->input_state.do_close( socket->input_state.psvCloser );
 					return;
 				}
-				socket->flags.in_open_event = 0;
+				socket->input_state.flags.in_open_event = 0;
 				if( socket->flags.closed ) {
 					destroyHttpState( socket, NULL );
 					return;
@@ -47016,10 +50135,19 @@ static void CPROC read_complete_process_data( PCLIENT pc ) {
 				socket->protocols = GetText( value );
 			} else socket->protocols = NULL;
 			{
-				PTEXT protocols = GetHTTPField( socket->http_state, "Sec-WebSocket-Protocol" );
+//GetHTTPField( socket->http_state, "Sec-WebSocket-Protocol" );
+				PTEXT protocols = value;
 				PTEXT resource = GetHttpResource( socket->http_state );
 				if( socket->input_state.on_accept ) {
-					socket->flags.accepted = socket->input_state.on_accept( pc, socket->input_state.psv_on, GetText( protocols ), GetText( resource ), &socket->protocols );
+					if( socket->Magic == 0x20240310 )
+						socket->flags.accepted = socket->input_state.on_accept( (PCLIENT)socket, socket->input_state.psv_on, GetText( protocols ), GetText( resource ), &socket->protocols );
+					else
+						socket->flags.accepted = socket->input_state.on_accept( socket->pc, socket->input_state.psv_on, GetText( protocols ), GetText( resource ), &socket->protocols );
+				} else if( socket->input_state.on_accept_async ) {
+					if( socket->Magic == 0x20240310 )
+						socket->input_state.on_accept_async( (PCLIENT)socket, socket->input_state.psv_on, GetText( protocols ), GetText( resource ) );
+					else
+						socket->input_state.on_accept_async( socket->pc, socket->input_state.psv_on, GetText( protocols ), GetText( resource ) );
 				} else
 					socket->flags.accepted = 1;
 			}
@@ -47029,110 +50157,112 @@ static void CPROC read_complete_process_data( PCLIENT pc ) {
 				socket->flags.rfc6455 = 0;
 			else
 				socket->flags.rfc6455 = 1;
-			if( !socket->flags.accepted ) {
-				vtprintf( pvt_output, "HTTP/1.1 403 Connection refused\r\n" );
-			} else {
-				if( key1 && key2 )
-					vtprintf( pvt_output, "HTTP/1.1 101 WebSocket Protocol Handshake\r\n" );
-				else
-					vtprintf( pvt_output, "HTTP/1.1 101 Switching Protocols\r\n" );
-				vtprintf( pvt_output, "Upgrade: WebSocket\r\n" );
-				vtprintf( pvt_output, "content-length: 0\r\n" );
-				vtprintf( pvt_output, "Connection: Upgrade\r\n" );
-			}
-			value = GetHTTPField( socket->http_state, "Origin" );
-			if( value ) {
-				if( key1 && key2 )
-					vtprintf( pvt_output, "Sec-WebSocket-Origin: %s\r\n", GetText( value ) );
-				else
-					vtprintf( pvt_output, "WebSocket-Origin: %s\r\n", GetText( value ) );
-			}
-			if( key1 && key2 ) {
-				vtprintf( pvt_output, "Sec-WebSocket-Location: ws://%s%s\r\n"
-					, GetText( GetHTTPField( socket->http_state, "Host" ) )
-					, GetText( GetHttpRequest( socket->http_state ) )
-				);
-			}
-			if( socket->flags.accepted ) {
-				value = GetHTTPField( socket->http_state, "Sec-webSocket-Key" );
-				if( value ) {
-					{
-						const char guid[] = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-						size_t len;
-						char* resultval = NewArray( char, len = ( GetTextSize( value ) + sizeof( guid ) ) );
-						snprintf( resultval, len, "%s%s"
-							, GetText( value )
-							, guid );
-						{
-							TEXTCHAR output[32];
-							SHA1Context context;
-							int n;
-							uint8_t Message_Digest[SHA1HashSize + 2];
-							SHA1Reset( &context );
-							SHA1Input( &context, (uint8_t*)resultval, len - 1 );
-							SHA1Result( &context, Message_Digest );
-							Message_Digest[SHA1HashSize] = 0;
-							Message_Digest[SHA1HashSize + 1] = 0;
-							for( n = 0; n < ( SHA1HashSize + 2 ) / 3; n++ ) {
-								int blocklen;
-								blocklen = SHA1HashSize - n * 3;
-								if( blocklen > 3 )
-									blocklen = 3;
-								wssencodeblock( Message_Digest + n * 3, output + n * 4, blocklen );
-							}
-							output[n * 4 + 0] = 0;
-							// s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
-							vtprintf( pvt_output, "Sec-WebSocket-Accept: %s\r\n", output );
-						}
-						Deallocate( char*, resultval );
-					}
-				}
-#ifndef __NO_WEBSOCK_COMPRESSION__
-				if( socket->input_state.flags.deflate ) {
-					vtprintf( pvt_output, "Sec-WebSocket-Extensions: permessage-deflate; client_no_context_takeover; server_max_window_bits=%d\r\n", socket->input_state.server_max_bits );
-				}
-#endif
-				if( socket->protocols )
-					vtprintf( pvt_output, "Sec-WebSocket-Protocol: %s\r\n", socket->protocols );
-				vtprintf( pvt_output, "WebSocket-Server: sack\r\n" );
-				vtprintf( pvt_output, "\r\n" );
-				if( key1 && key2 ) {
-					ComputeReplyKey2( pvt_output, socket, key1, key2 );
-				}
-				value = VarTextPeek( pvt_output );
-#ifdef _UNICODE
-				{
-					char* output;
-					output = DupTextToChar( GetText( value ) );
-					//LogBinary( output, GetTextSize( value ) );
-					if( socket->input_state.flags.use_ssl )
-						ssl_Send( pc, output, GetTextSize( value ) );
+			if( !socket->input_state.on_accept_async ) {
+				pvt_output = VarTextCreate();
+				if( !socket->flags.accepted ) {
+					vtprintf( pvt_output, "HTTP/1.1 403 Connection refused\r\n" );
+				} else {
+					if( key1 && key2 )
+						vtprintf( pvt_output, "HTTP/1.1 101 WebSocket Protocol Handshake\r\n" );
 					else
-						SendTCP( pc, output, GetTextSize( value ) );
+						vtprintf( pvt_output, "HTTP/1.1 101 Switching Protocols\r\n" );
+					vtprintf( pvt_output, "Upgrade: WebSocket\r\n" );
+					vtprintf( pvt_output, "content-length: 0\r\n" );
+					vtprintf( pvt_output, "Connection: Upgrade\r\n" );
 				}
-#else
-				if( socket->input_state.flags.use_ssl )
-					ssl_Send( pc, GetText( value ), GetTextSize( value ) );
-				else
-					SendTCP( pc, GetText( value ), GetTextSize( value ) );
-#endif
-				//lprintf( "Sent http reply." );
-				VarTextDestroy( &pvt_output );
-				socket->flags.in_open_event = 1;
-				if( socket->input_state.on_open )
-					socket->input_state.psv_open = socket->input_state.on_open( pc, socket->input_state.psv_on );
-				socket->flags.in_open_event = 0;
-				if( socket->flags.closed ) {
-					destroyHttpState( socket, NULL );
+				value = GetHTTPField( socket->http_state, "Origin" );
+				if( value ) {
+					if( key1 && key2 )
+						vtprintf( pvt_output, "Sec-WebSocket-Origin: %s\r\n", GetText( value ) );
+					else
+						vtprintf( pvt_output, "WebSocket-Origin: %s\r\n", GetText( value ) );
+				}
+				if( key1 && key2 ) {
+					vtprintf( pvt_output, "Sec-WebSocket-Location: ws://%s%s\r\n"
+						, GetText( GetHTTPField( socket->http_state, "Host" ) )
+						, GetText( GetHttpRequest( socket->http_state ) )
+					);
+				}
+				if( socket->flags.accepted ) {
+					value = GetHTTPField( socket->http_state, "Sec-webSocket-Key" );
+					if( value ) {
+						{
+							const char guid[] = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+							size_t len;
+							char* resultval = NewArray( char, len = ( GetTextSize( value ) + sizeof( guid ) ) );
+							snprintf( resultval, len, "%s%s"
+								, GetText( value )
+								, guid );
+							{
+								TEXTCHAR output[32];
+								SHA1Context context;
+								int n;
+								uint8_t Message_Digest[SHA1HashSize + 2];
+								SHA1Reset( &context );
+								SHA1Input( &context, (uint8_t*)resultval, len - 1 );
+								SHA1Result( &context, Message_Digest );
+								Message_Digest[SHA1HashSize] = 0;
+								Message_Digest[SHA1HashSize + 1] = 0;
+								for( n = 0; n < ( SHA1HashSize + 2 ) / 3; n++ ) {
+									int blocklen;
+									blocklen = SHA1HashSize - n * 3;
+									if( blocklen > 3 )
+										blocklen = 3;
+									wssencodeblock( Message_Digest + n * 3, output + n * 4, blocklen );
+								}
+								output[n * 4 + 0] = 0;
+								// s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
+								vtprintf( pvt_output, "Sec-WebSocket-Accept: %s\r\n", output );
+							}
+							Deallocate( char*, resultval );
+						}
+					}
+	#ifndef __NO_WEBSOCK_COMPRESSION__
+					if( socket->input_state.flags.deflate ) {
+						vtprintf( pvt_output, "Sec-WebSocket-Extensions: permessage-deflate; client_no_context_takeover; server_max_window_bits=%d\r\n", socket->input_state.server_max_bits );
+					}
+	#endif
+					if( socket->protocols )
+						vtprintf( pvt_output, "Sec-WebSocket-Protocol: %s\r\n", socket->protocols );
+					vtprintf( pvt_output, "WebSocket-Server: sack\r\n" );
+					vtprintf( pvt_output, "\r\n" );
+					if( key1 && key2 ) {
+						ComputeReplyKey2( pvt_output, socket, key1, key2 );
+					}
+					value = VarTextPeek( pvt_output );
+					if( socket->input_state.on_send )
+						socket->input_state.on_send( socket->input_state.psvSender, GetText( value ), GetTextSize( value ) );
+					// the following are actually unreachable code.... (probably?)
+					else if( socket->input_state.flags.use_ssl )
+						ssl_Send( socket->pc, GetText( value ), GetTextSize( value ) );
+					else
+						SendTCP( socket->pc, GetText( value ), GetTextSize( value ) );
+					//lprintf( "Sent http reply." );
+					VarTextDestroy( &pvt_output );
+					socket->input_state.flags.in_open_event = 1;
+					if( socket->input_state.on_open ) {
+						if( socket->Magic == 0x20240310 ) {
+							socket->input_state.psv_open = socket->input_state.on_open( (PCLIENT)socket, socket->input_state.psv_on );
+						} else {
+							socket->input_state.psv_open = socket->input_state.on_open( socket->pc, socket->input_state.psv_on );
+						}
+					}
+					socket->input_state.flags.in_open_event = 0;
+					if( socket->flags.closed ) {
+						destroyHttpState( socket, NULL );
+						return;
+					}
+				} else {
+					if( socket->pc )
+						WebSocketClose( socket->pc, 1006, "Protocol or resource not accepted" );
+					else
+						WebSocketPipeClose( socket, 1006, "Protocol or resource not accepted" );
 					return;
 				}
-			} else {
-				WebSocketClose( pc, 0, NULL );
-				return;
+				// keep this until close, application might want resource and/or headers from this.
+				//EndHttp( socket->http_state );
+				socket->input_state.flags.initial_handshake_done = 1;
 			}
-			// keep this until close, application might want resource and/or headers from this.
-			//EndHttp( socket->http_state );
-			socket->flags.initial_handshake_done = 1;
 			break;
 		}
 		case HTTP_STATE_RESULT_CONTINUE:
@@ -47140,56 +50270,82 @@ static void CPROC read_complete_process_data( PCLIENT pc ) {
 		}
 	}
 }
-static void CPROC read_complete( PCLIENT pc, POINTER buffer, size_t length )
+void WebSocketWrite( HTML5WebSocket socket, CPOINTER buffer, size_t length )
 {
-	HTML5WebSocket socket = (HTML5WebSocket)GetNetworkLong( pc, 0 );
- // closing/closed....
-	if( !socket ) return;
 	if( buffer )
 	{
-#ifdef _UNICODE
-		TEXTSTR tmp = CharWConvertExx( (const char*)buffer, length DBG_SRC );
-#else
-		TEXTSTR tmp = (TEXTSTR)buffer;
-#endif
-		//LogBinary( buffer, length );
-		//lprintf( "handle data: handshake: %d",socket->flags.initial_handshake_done );
-		if( !socket->flags.initial_handshake_done || socket->flags.http_request_only )
+		CTEXTSTR tmp = (CTEXTSTR)buffer;
+		if( !( socket->input_state.flags.initial_handshake_done
+             || socket->input_state.flags.in_open_event )
+          || socket->flags.http_request_only )
 		{
-			//lprintf( "Initial handshake is not done..." );
 			if( AddHttpData( socket->http_state, tmp, length ) )
-				read_complete_process_data( pc );
+				read_complete_process_data( socket );
 		}
 		else
 		{
+			// should always be rfc6455
 			if( socket->flags.rfc6455 )
-				ProcessWebSockProtocol( &socket->input_state, pc, (uint8_t*)buffer, length );
+				ProcessWebSockProtocol( &socket->input_state, (uint8_t*)buffer, length );
 			else
-				HandleData( socket, pc, buffer, length );
+				HandleData( socket, buffer, length );
 		}
-		if( !socket->input_state.flags.use_ssl )
-			ReadTCP( pc, socket->buffer, WSS_DEFAULT_BUFFER_SIZE );
 	}
 	else
 	{
 		// it's possible that we ended SSL on first read and are falling back...
 		// re-check here to see if it's still SSL.
+		// buffer is allocated by SSL layer if it is enabled.
 		// this has to be complicated, because otherwise we can get partial out of order reads.
 		// first read after is no-long SSL needs to not generate a real read because there's
 		// already pending data to receive.
-		if( socket->input_state.flags.use_ssl ) {
-			socket->input_state.flags.use_ssl = ssl_IsClientSecure( pc );
-			if( !socket->input_state.flags.use_ssl )
-				buffer = socket->buffer = Allocate( WSS_DEFAULT_BUFFER_SIZE );
-		}
-		else {
-			socket->input_state.flags.use_ssl = ssl_IsClientSecure( pc );
-			if( !socket->input_state.flags.use_ssl ) {
-				buffer = socket->buffer = Allocate( WSS_DEFAULT_BUFFER_SIZE );
-				ReadTCP( pc, socket->buffer, WSS_DEFAULT_BUFFER_SIZE );
+		if( socket->pc ) {
+			if( socket->input_state.flags.use_ssl ) {
+				socket->input_state.flags.use_ssl = ssl_IsClientSecure( socket->pc );
+				if( !socket->input_state.flags.use_ssl ) {
+					socket->input_state.on_send = WebSocketSendTCP;
+ // if this is initial buffer, definitely read.
+					socket->flags.skip_read = !!buffer;
+					// otherwise next time the buffer failed ssl handshake, and is still the current buffer, so do not
+					// read now, but when that packet is done (we're actually in a slight resursive state at that point)
+				}
+			} else {
+				//socket->input_state.flags.use_ssl = ssl_IsClientSecure( socket->pc );
+				// ssl is default - if that didn't work, then it won't become secure.
 			}
 		}
+		if( !socket->input_state.flags.use_ssl ) {
+			buffer = socket->buffer = Allocate( WSS_DEFAULT_BUFFER_SIZE );
+		}
 	}
+}
+static void CPROC read_complete( PCLIENT pc, POINTER buffer, size_t length )
+{
+	HTML5WebSocket socket = (HTML5WebSocket)GetNetworkLong( pc, 0 );
+	if( !socket ) {
+		lprintf( "read wasn't initilaized yet with socket %p %p", pc, socket );
+ // closing/closed....
+		return;
+	}
+	WebSocketWrite( socket, buffer, length );
+	if( socket->input_state.flags.use_ssl  && !ssl_IsClientSecure( pc ) ) {
+		socket->input_state.flags.use_ssl = 0;
+		socket->input_state.on_send = WebSocketSendTCP;
+	}
+	if( !socket->input_state.flags.use_ssl ) {
+		if( socket->flags.skip_read )
+			socket->flags.skip_read = 0;
+		else
+			ReadTCP( pc, socket->buffer, WSS_DEFAULT_BUFFER_SIZE );
+	}
+}
+static void CPROC closed( PCLIENT pc_client ) {
+	// this better be the last operation - this is a network socket close callback.
+	HTML5WebSocket socket = (HTML5WebSocket)GetNetworkLong( pc_client, 0 );
+ // does all of the memory cleanup (lower case d)
+	destroyHttpState( socket, pc_client );
+	SetNetworkLong( pc_client, 0, 0 );
+	SetNetworkLong( pc_client, 1, 0 );
 }
 static void CPROC connected( PCLIENT pc_server, PCLIENT pc_new )
 {
@@ -47198,11 +50354,19 @@ static void CPROC connected( PCLIENT pc_server, PCLIENT pc_new )
 	MemSet( socket, 0, sizeof( struct html5_web_socket ) );
 	socket->Magic = 0x20130912;
 	socket->pc = pc_new;
+#ifdef __cplusplus
+ // clone callback methods and config flags )
+	MemCpy( &socket->input_state, &server_socket->input_state, sizeof( socket->input_state ) );
+#else
  // clone callback methods and config flags
 	socket->input_state = server_socket->input_state;
+#endif
 	socket->input_state.close_code = 1006;
-	if( ssl_IsClientSecure( pc_new ) )
-		socket->input_state.flags.use_ssl = 1;
+	socket->input_state.close_reason = StrDup( "Because I don't Like You?");
+	socket->input_state.psvSender = (uintptr_t)pc_new;
+	// assume secure, when the handshake fails, it demotes to insecure
+	socket->input_state.flags.use_ssl = 1;
+	socket->input_state.on_send = WebSocketSendSSL;
  // start a new http state collector
 	socket->http_state = CreateHttpState( &socket->pc );
 	//lprintf( "Init socket: handshake: %p %p  %d", pc_new, socket, socket->flags.initial_handshake_done );
@@ -47212,15 +50376,13 @@ static void CPROC connected( PCLIENT pc_server, PCLIENT pc_new )
 	SetNetworkCloseCallback( pc_new, closed );
 }
 PCLIENT WebSocketCreate_v2( CTEXTSTR hosturl
-							, web_socket_opened on_open
-							, web_socket_event on_event
-							, web_socket_closed on_closed
-							, web_socket_error on_error
-							, uintptr_t psv
-							, int webSocketOptions
-						)
-{
-	struct url_data *url;
+                          , web_socket_opened on_open
+                          , web_socket_event on_event
+                          , web_socket_closed on_closed
+                          , web_socket_error on_error
+                          , uintptr_t psv
+                          , int webSocketOptions
+                          ) {
 	HTML5WebSocket socket = New( struct html5_web_socket );
 	MemSet( socket, 0, sizeof( struct html5_web_socket ) );
 	socket->Magic = 0x20130912;
@@ -47231,7 +50393,7 @@ PCLIENT WebSocketCreate_v2( CTEXTSTR hosturl
 	socket->input_state.on_error = on_error;
 	socket->input_state.psv_on = psv;
 	socket->input_state.close_code = 1006;
-	url = SACK_URLParse( hosturl );
+	struct url_data *url = SACK_URLParse( hosturl );
 	socket->pc = OpenTCPListenerAddr_v2( CreateSockAddress( url->host, url->port?url->port:url->default_port )
 		, connected
 		, (webSocketOptions & WEBSOCK_SERVER_OPTION_WAIT)?TRUE:FALSE );
@@ -47240,10 +50402,239 @@ PCLIENT WebSocketCreate_v2( CTEXTSTR hosturl
 		Deallocate( HTML5WebSocket, socket );
 		return NULL;
 	}
-	socket->http_state = CreateHttpState( &socket->pc );
+	// an accepted socket should have an http state - the listener itself doesn't use one.
+// CreateHttpState( &socket->pc );
+	socket->http_state = NULL;
 	SetNetworkLong( socket->pc, 0, (uintptr_t)socket );
 	SetNetworkLong( socket->pc, 1, (uintptr_t)&socket->input_state );
 	return socket->pc;
+}
+// a pipe connection for the server happened.
+HTML5WebSocket WebSocketPipeConnect( HTML5WebSocket pipe, uintptr_t psvNew ) {
+	HTML5WebSocket server_socket = pipe;
+	HTML5WebSocket socket = New( struct html5_web_socket );
+	MemSet( socket, 0, sizeof( struct html5_web_socket ) );
+	socket->Magic = 0x20240310;
+	socket->pc = NULL;
+#ifdef __cplusplus
+ // clone callback methods and config flags )
+	MemCpy( &socket->input_state, &server_socket->input_state, sizeof( socket->input_state ) );
+#else
+ // clone callback methods and config flags
+	socket->input_state = server_socket->input_state;
+#endif
+	socket->input_state.psvSender = psvNew;
+	// this new socket gets a http state.
+ // start a new http state collector
+	socket->http_state = CreateHttpState( &socket->pc );
+	//lprintf( "Init socket: handshake: %p %p  %d", pc_new, socket, socket->flags.initial_handshake_done );
+	return socket;
+}
+void WebSocketPipeSetConnectPSV( struct html5_web_socket* pipe, uintptr_t psvNew ) {
+	pipe->input_state.psvSender = psvNew;
+}
+void WebSocketSetConnectPSV( PCLIENT pc, uintptr_t psvNew ) {
+	struct html5_web_socket* socket = (struct html5_web_socket*)GetNetworkLong( pc, 0 );
+	if( socket && socket->Magic == 0x20130912 )
+		socket->input_state.psvSender = psvNew;
+	else
+		lprintf( "Socket is not a server socket %p", psvNew );
+}
+void WebSocketPipeSetOnPSV( struct html5_web_socket* pipe, uintptr_t psvNew ) {
+	pipe->input_state.psv_on = psvNew;
+}
+void WebSocketSetOnPSV( PCLIENT pc, uintptr_t psvNew ) {
+	struct html5_web_socket* socket = (struct html5_web_socket*)GetNetworkLong( pc, 0 );
+	if( socket && socket->Magic == 0x20130912 )
+		socket->input_state.psv_on = psvNew;
+	else
+		lprintf( "socket isn't a server side pipe..." );
+}
+HTML5WebSocket WebSocketCreateServerPipe( web_socket_opened on_open
+                                        , web_socket_event on_event
+                                        , web_socket_closed on_closed
+                                        , web_socket_error on_error
+                                        , web_socket_accept on_accept
+                                        , web_socket_http_request ws_http
+                                        , web_socket_http_close ws_http_close
+                                        , web_socket_completion ws_completion
+                                        , uintptr_t psv
+                                        )
+{
+	HTML5WebSocket socket = New( struct html5_web_socket );
+	MemSet( socket, 0, sizeof( struct html5_web_socket ) );
+	socket->Magic = 0x20240310;
+	socket->input_state.flags.deflate = 0;
+	socket->input_state.flags.pipe = 1;
+	socket->input_state.on_open = on_open;
+	socket->input_state.on_event = on_event;
+	socket->input_state.on_close = on_closed;
+	socket->input_state.on_error = on_error;
+	socket->input_state.on_accept = on_accept;
+	socket->input_state.on_request = ws_http;
+	socket->input_state.on_http_close = ws_http_close;
+	socket->input_state.on_fragment_done = ws_completion;
+	socket->input_state.psv_on = psv;
+	socket->input_state.close_code = 1006;
+	socket->input_state.flags.use_ssl = 0;
+	// an accepted socket should have an http state - the listener itself doesn't use one.
+ // CreateHttpState( &socket->pc ); // start a new http state collector
+	socket->http_state = NULL;
+	//lprintf( "Init socket: handshake: %p %p  %d", pc_new, socket, socket->flags.initial_handshake_done );
+	//socket->input_state.on_send = on_send;
+	//socket->input_state.psvSender = psv_send;
+	return socket;
+}
+void WebSocketPipeSetSend( HTML5WebSocket pipe, int (*on_send)( uintptr_t psv, CPOINTER buffer, size_t length ), uintptr_t psv_send ) {
+	pipe->input_state.on_send = on_send;
+	pipe->input_state.psvSender = psv_send;
+}
+void WebSocketPipeSetClose( HTML5WebSocket pipe, void ( *do_close )( uintptr_t psv ), uintptr_t psv_close ) {
+	pipe->input_state.do_close = do_close;
+	pipe->input_state.psvCloser = psv_close;
+}
+void WebSocketPipeSetEof( HTML5WebSocket pipe, void ( *do_eof )( uintptr_t psv ), uintptr_t psv_eof ) {
+	pipe->input_state.do_eof = do_eof;
+	pipe->input_state.psvEof = psv_eof;
+}
+void WebSocketPipeSend( HTML5WebSocket socket, CPOINTER buffer, size_t length ) {
+	socket->input_state.on_send( socket->input_state.psvSender, buffer, length );
+}
+// just the command to do a close.
+void WebSocketPipeSocketClose( HTML5WebSocket socket ) {
+	//lprintf( "Need to close this channel of ssh" );
+	socket->input_state.do_close( socket->input_state.psvCloser );
+}
+void WebSocketPipeEof( HTML5WebSocket pipe ) {
+	pipe->input_state.do_eof( pipe->input_state.psvEof );
+}
+void WebSocketPipeAccept( HTML5WebSocket socket, char *protocols, int yesno ) {
+	PVARTEXT pvt_output = VarTextCreate();
+	PTEXT key1, key2, value;
+	if( !(socket->flags.accepted = yesno) ) {
+		vtprintf( pvt_output, "HTTP/1.1 403 Connection refused\r\n" );
+		value = VarTextPeek( pvt_output );
+		if( socket->input_state.on_send )
+			socket->input_state.on_send( socket->input_state.psvSender, GetText( value ), GetTextSize( value ) );
+		// the following are actually unreachable code.... (probably?)
+		else if( socket->input_state.flags.use_ssl )
+			ssl_Send( socket->pc, GetText( value ), GetTextSize( value ) );
+		else
+			SendTCP( socket->pc, GetText( value ), GetTextSize( value ) );
+		VarTextDestroy( &pvt_output );
+		// this can't use protocol to close - we're rejecting the websocket connection.
+		if( socket->pc )
+			RemoveClientEx( socket->pc, TRUE, TRUE );
+		else {
+			lprintf( "On Accept rejected connection... this is just a pipe connection (event to SSH to close the channel, without closing the socket?)");
+		}
+		/*
+		if( socket->pc )
+			WebSocketClose( socket->pc, 1006, "Protocol or resource not accepted" );
+		else
+			WebSocketPipeClose( socket, 1006, "Protocol or resource not accepted" );
+		*/
+		return;
+	} else {
+		socket->protocols = protocols;
+		//lprintf( "Is socket dying or something? %p %p", key1, key2 );
+		key1 = GetHTTPField( socket->http_state, "Sec-WebSocket-Key1" );
+		key2 = GetHTTPField( socket->http_state, "Sec-WebSocket-Key2" );
+		if( key1 && key2 )
+			vtprintf( pvt_output, "HTTP/1.1 101 WebSocket Protocol Handshake\r\n" );
+		else
+			vtprintf( pvt_output, "HTTP/1.1 101 Switching Protocols\r\n" );
+		vtprintf( pvt_output, "Upgrade: WebSocket\r\n" );
+		vtprintf( pvt_output, "content-length: 0\r\n" );
+		vtprintf( pvt_output, "Connection: Upgrade\r\n" );
+		value = GetHTTPField( socket->http_state, "Origin" );
+		if( value ) {
+			if( key1 && key2 )
+				vtprintf( pvt_output, "Sec-WebSocket-Origin: %s\r\n", GetText( value ) );
+			else
+				vtprintf( pvt_output, "WebSocket-Origin: %s\r\n", GetText( value ) );
+		}
+		if( key1 && key2 ) {
+			vtprintf( pvt_output, "Sec-WebSocket-Location: ws://%s%s\r\n"
+				, GetText( GetHTTPField( socket->http_state, "Host" ) )
+				, GetText( GetHttpRequest( socket->http_state ) )
+			);
+		}
+		value = GetHTTPField( socket->http_state, "Sec-webSocket-Key" );
+		if( value ) {
+			const char guid[] = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+			size_t len;
+			char* resultval = NewArray( char, len = ( GetTextSize( value ) + sizeof( guid ) ) );
+			snprintf( resultval, len, "%s%s"
+				, GetText( value )
+				, guid );
+			{
+				TEXTCHAR output[32];
+				SHA1Context context;
+				int n;
+				uint8_t Message_Digest[SHA1HashSize + 2];
+				SHA1Reset( &context );
+				SHA1Input( &context, (uint8_t*)resultval, len - 1 );
+				SHA1Result( &context, Message_Digest );
+				Message_Digest[SHA1HashSize] = 0;
+				Message_Digest[SHA1HashSize + 1] = 0;
+				for( n = 0; n < ( SHA1HashSize + 2 ) / 3; n++ ) {
+					int blocklen;
+					blocklen = SHA1HashSize - n * 3;
+					if( blocklen > 3 )
+						blocklen = 3;
+					wssencodeblock( Message_Digest + n * 3, output + n * 4, blocklen );
+				}
+				output[n * 4 + 0] = 0;
+				// s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
+				vtprintf( pvt_output, "Sec-WebSocket-Accept: %s\r\n", output );
+			}
+			Deallocate( char*, resultval );
+		}
+#ifndef __NO_WEBSOCK_COMPRESSION__
+		if( socket->input_state.flags.deflate ) {
+			vtprintf( pvt_output, "Sec-WebSocket-Extensions: permessage-deflate; client_no_context_takeover; server_max_window_bits=%d\r\n", socket->input_state.server_max_bits );
+		}
+#endif
+		if( socket->protocols )
+			vtprintf( pvt_output, "Sec-WebSocket-Protocol: %s\r\n", socket->protocols );
+		vtprintf( pvt_output, "WebSocket-Server: sack\r\n" );
+		vtprintf( pvt_output, "\r\n" );
+		if( key1 && key2 ) {
+			ComputeReplyKey2( pvt_output, socket, key1, key2 );
+		}
+		value = VarTextPeek( pvt_output );
+		if( socket->input_state.on_send )
+			socket->input_state.on_send( socket->input_state.psvSender, GetText( value ), GetTextSize( value ) );
+		// the following are actually unreachable code.... (probably?)
+		else if( socket->input_state.flags.use_ssl )
+			ssl_Send( socket->pc, GetText( value ), GetTextSize( value ) );
+		else
+			SendTCP( socket->pc, GetText( value ), GetTextSize( value ) );
+		//lprintf( "Sent http reply." );
+		VarTextDestroy( &pvt_output );
+		socket->input_state.flags.in_open_event = 1;
+		if( socket->input_state.on_open ) {
+			//lprintf( "Doing open event too (this will be in the self-JS thread)");
+			if( socket->Magic == 0x20240310 ) {
+				socket->input_state.psv_open = socket->input_state.on_open( (PCLIENT)socket, socket->input_state.psv_on );
+			} else {
+				socket->input_state.psv_open = socket->input_state.on_open( socket->pc, socket->input_state.psv_on );
+			}
+		}
+		socket->input_state.flags.in_open_event = 0;
+		if( socket->flags.closed ) {
+			destroyHttpState( socket, NULL );
+			return;
+		}
+		socket->input_state.flags.initial_handshake_done = 1;
+	}
+}
+void WebSocketAccept( PCLIENT pc, char *protocols, int yesno ) {
+	HTML5WebSocket socket = (HTML5WebSocket)GetNetworkLong( pc, 0 );
+ // closing/closed....
+	if( !socket ) return;
+	WebSocketPipeAccept( socket, protocols, yesno );
 }
 PCLIENT WebSocketCreate( CTEXTSTR hosturl
 	, web_socket_opened on_open
@@ -47277,11 +50668,34 @@ HTTPState GetWebSocketHttpState( PCLIENT pc ) {
 	}
 	return NULL;
 }
+PLIST GetWebSocketPipeHeaders( HTML5WebSocket socket ) {
+	if( socket && socket->Magic == 0x20240310 ) {
+		return GetHttpHeaderFields( socket->http_state );
+	}
+	return NULL;
+}
+PTEXT GetWebSocketPipeResource( HTML5WebSocket socket ) {
+	if( socket && socket->Magic == 0x20240310 ) {
+		return GetHttpResource( socket->http_state );
+	}
+	return NULL;
+}
+HTTPState GetWebSocketPipeHttpState( HTML5WebSocket socket ) {
+	if( socket && socket->Magic == 0x20240310 ) {
+		return socket->http_state;
+	}
+	return NULL;
+}
 HTML5_WEBSOCKET_NAMESPACE_END
 #define SACK_WEBSOCKET_CLIENT_SOURCE
+/* Salty Random Generator is a random bitstream generator. It
+   generates blobs
+   of randomness, and provides an interface to get a number of
+   bits from 1 to N of the random stream.                      */
 #ifdef SALTY_RANDOM_GENERATOR_SOURCE
 #define SRG_EXPORT EXPORT_METHOD
 #else
+/* Defines export method for SaltyRandomGenerator functions. */
 #define SRG_EXPORT IMPORT_METHOD
 #endif
 //
@@ -47543,7 +50957,9 @@ static void SendRequestHeader( WebSocketClient websock )
 	{
  // just leave the buffer in-place
 		PTEXT text = VarTextPeek( pvtHeader );
-		if( websock->input_state.flags.use_ssl )
+		if( websock->input_state.on_send )
+			websock->input_state.on_send( websock->input_state.psvSender, GetText( text ), GetTextSize( text ) );
+		else if( websock->input_state.flags.use_ssl )
 			ssl_Send( websock->pc, GetText( text ), GetTextSize( text ) );
 		else
 			SendTCP( websock->pc, GetText( text ), GetTextSize( text ) );
@@ -47554,8 +50970,8 @@ static void CPROC WebSocketTimer( uintptr_t psv )
 {
 	uint32_t now;
 	INDEX idx;
-	WebSocketClient websock;
-	LIST_FORALL( wsc_local.clients, idx, WebSocketClient, websock )
+	WebSocketInputState websock;
+	LIST_FORALL( wsc_local.clients, idx, WebSocketInputState, websock )
 	{
 		now = timeGetTime();
 		// close is delay notified
@@ -47566,23 +50982,23 @@ static void CPROC WebSocketTimer( uintptr_t psv )
 			} msg;
  // normal
 			msg.reason = 1000;
-			websock->input_state.flags.closed = 1;
-			SendWebSocketMessage( websock->pc, 8, 1, 0, (uint8_t*)&msg, 2, websock->input_state.flags.use_ssl );
+			websock->flags.closed = 1;
+			SendWebSocketMessage( websock, 8, 1, 0, (uint8_t*)&msg, 2 );
 		}
 		// do auto ping...
-		if( !websock->input_state.flags.closed )
+		if( !websock->flags.closed )
 		{
 			if( websock->ping_delay ) {
-				if( !websock->input_state.flags.sent_ping )
+				if( !websock->flags.sent_ping )
 				{
-					if( ( now - websock->input_state.last_reception ) > websock->ping_delay )
+					if( ( now - websock->last_reception ) > websock->ping_delay )
 					{
-						SendWebSocketMessage( websock->pc, 0x09, 1, 0, NULL, 0, websock->input_state.flags.use_ssl );
+						SendWebSocketMessage( websock, 0x09, 1, 0, NULL, 0 );
 					}
 				}
 				else
 				{
-					if( ( now - websock->input_state.last_reception ) > ( websock->ping_delay * 2 ) )
+					if( ( now - websock->last_reception ) > ( websock->ping_delay * 2 ) )
 					{
 						websock->flags.want_close = 1;
 						// send close immediately
@@ -47625,17 +51041,18 @@ static void CPROC WebSocketClientReceive( PCLIENT pc, POINTER buffer, size_t len
 			int result;
 			// this is HTTP state...
 			AddHttpData( websock->pHttpState, buffer, len );
-			result = ProcessHttp( pc, websock->pHttpState );
+			result = ProcessHttp( websock->pHttpState, websock->input_state.on_send, websock->input_state.psvSender );
 			//lprintf( "reply is %d", result );
 			if( (int)result == 101 )
 			{
+				websock->input_state.flags.initial_handshake_done = 1;
 				websock->flags.connected = 1;
 				{
 					PTEXT content = GetHttpContent( websock->pHttpState );
 					if( websock->input_state.on_open )
 						websock->input_state.psv_open = websock->input_state.on_open( pc, websock->input_state.psv_on );
 					if( content )
-						ProcessWebSockProtocol( &websock->input_state, websock->pc, (uint8_t*)GetText( content ), GetTextSize( content ) );
+						ProcessWebSockProtocol( &websock->input_state, (uint8_t*)GetText( content ), GetTextSize( content ) );
 				}
 			}
 			else if( (int)result >= 300 && (int)result < 400 )
@@ -47654,7 +51071,7 @@ static void CPROC WebSocketClientReceive( PCLIENT pc, POINTER buffer, size_t len
 		}
 		else
 		{
-			ProcessWebSockProtocol( &websock->input_state, websock->pc, (uint8_t*)buffer, len );
+			ProcessWebSockProtocol( &websock->input_state, (uint8_t*)buffer, len );
 		}
 		// process buffer?
 	}
@@ -47665,12 +51082,15 @@ static void CPROC WebSocketClientReceive( PCLIENT pc, POINTER buffer, size_t len
 static void CPROC WebSocketClientClosed( PCLIENT pc )
 {
 	WebSocketClient websock = (WebSocketClient)GetNetworkLong( pc, 0 );
-   //lprintf( "WebSocketClientClosed event." );
+	//lprintf( "WebSocketClientClosed event." );
 	if( websock )
 	{
-		//lprintf( "Send to application." );
+		//lprintf( "Send close to application." );
 		if( websock->input_state.on_close ) {
-			websock->input_state.on_close( pc, websock->input_state.psv_on, websock->input_state.close_code, websock->input_state.close_reason );
+			if( websock->flags.connected )
+				websock->input_state.on_close( pc, websock->input_state.psv_on, websock->input_state.close_code, websock->input_state.close_reason );
+			else
+				websock->input_state.on_close( pc, websock->input_state.psv_on, 1006, "Connection Failed" );
 			websock->input_state.on_close = NULL;
 		}
 		if( websock->input_state.close_reason )
@@ -47689,6 +51109,7 @@ static void CPROC WebSocketClientConnected( PCLIENT pc, int error )
 	WebSocketClient websock;
 	while( !( websock = (WebSocketClient)GetNetworkLong( pc, 0 ) ) )
 		Relinquish();
+	//lprintf( "Connection websocket event: %p %d", websock, error );
 	if( !error )
 	{
 		if( websock->input_state.flags.use_ssl && !ssl_IsClientSecure( websock->pc ) )
@@ -47696,7 +51117,12 @@ static void CPROC WebSocketClientConnected( PCLIENT pc, int error )
 	}
 	else
 	{
+		//lprintf( "Connect error: %d", error );
+		if(websock->input_state.on_error )
+			websock->input_state.on_error( pc, websock->input_state.psv_on, error );
+		//lprintf( "Connection failed. (removeclient!)" );
 		wsc_local.opening_client = NULL;
+		//lprintf( "This is a normal remove client... after onerrror....");
 		RemoveClient( pc );
 	}
 }
@@ -47711,13 +51137,13 @@ static void getRandomSalt( uintptr_t inst, POINTER *salt, size_t *salt_size ) {
 //  since these packets are collected at a lower layer, buffers passed to receive event are allocated for
 //  the application, and the application does not need to setup an  initial read.
 PCLIENT WebSocketOpen( CTEXTSTR url_address
-							, enum WebSocketOptions options
-							, web_socket_opened on_open
-							, web_socket_event on_event
-							, web_socket_closed on_closed
-							, web_socket_error on_error
-							, uintptr_t psv
-	, const char *protocols )
+                     , enum WebSocketOptions options
+                     , web_socket_opened on_open
+                     , web_socket_event on_event
+                     , web_socket_closed on_closed
+                     , web_socket_error on_error
+                     , uintptr_t psv
+                     , const char *protocols )
 {
 	WebSocketClient websock = New( struct web_socket_client );
 	if( !wsc_local.rng ) {
@@ -47738,6 +51164,7 @@ PCLIENT WebSocketOpen( CTEXTSTR url_address
  // client to server is MUST mask because of proxy handling in that direction
 	websock->input_state.flags.expect_masking = 1;
 	websock->input_state.close_code = 1006;
+	websock->input_state.close_reason = StrDup( "Socket Close" );
 	websock->url = SACK_URLParse( url_address );
 	if( !websock->url->host ) {
 		SACK_ReleaseURL( websock->url );
@@ -47749,16 +51176,18 @@ PCLIENT WebSocketOpen( CTEXTSTR url_address
 	EnterCriticalSec( &wsc_local.cs_opening );
 	wsc_local.opening_client = websock;
 	{
-		SOCKADDR *lpsaDest = CreateSockAddress( websock->url->host, websock->url->port ? websock->url->port : websock->url->default_port );
+		SOCKADDR *lpsaDest = CreateSockAddressV2( websock->url->host, websock->url->port ? websock->url->port : websock->url->default_port
+		                                        , (enum NetworkAddressFlags)(((options&WS_PREFER_V4)?(int)NETWORK_ADDRESS_FLAG_PREFER_V4:0)
+		                                          | ((options&WS_PREFER_V6)?(int)NETWORK_ADDRESS_FLAG_PREFER_V6:0)) );
 		websock->pc = OpenTCPClientAddrExxx( lpsaDest
-												, WebSocketClientReceive
-												, WebSocketClientClosed
-												, NULL
+		                                   , WebSocketClientReceive
+		                                   , WebSocketClientClosed
+		                                   , NULL
  // if there is an on-open event, then register for async open
-												, WebSocketClientConnected
-												, (options&WS_DELAY_OPEN)?OPEN_TCP_FLAG_DELAY_CONNECT:0
-												DBG_SRC
-												);
+		                                   , WebSocketClientConnected
+		                                   , ((options&WS_DELAY_OPEN)?OPEN_TCP_FLAG_DELAY_CONNECT:0)
+		                                     DBG_SRC
+		                                   );
 		if( websock->pc )
 		{
 			SetNetworkLong( websock->pc, 0, (uintptr_t)websock );
@@ -47776,6 +51205,11 @@ PCLIENT WebSocketOpen( CTEXTSTR url_address
 		else
 			wsc_local.opening_client = NULL;
 	}
+	if( websock->input_state.flags.use_ssl )
+		websock->input_state.on_send = WebSocketSendSSL;
+	else
+		websock->input_state.on_send = WebSocketSendTCP;
+	websock->input_state.psvSender = (uintptr_t)websock->pc;
 	LeaveCriticalSec( &wsc_local.cs_opening );
 	return  websock->pc;
 }
@@ -47783,11 +51217,13 @@ int WebSocketConnect( PCLIENT pc ) {
 	return NetworkConnectTCP( pc );
 }
 // end a websocket connection nicely.
-void WebSocketClose( PCLIENT pc, int code, const char *reason )
+static void WebSocketClose_( WebSocketClient wsc, int code, const char *reason )
 {
-	WebSocketClient websock = (WebSocketClient)GetNetworkLong( pc, 0 );
+// (WebSocketClient)GetNetworkLong( pc, 0 );
+	WebSocketClient websock = wsc;
 	char buf[130];
 	size_t buflen;
+	//lprintf( "Close on socket received... should come from removeclient");
   // maybe already closed?
 	if( !websock )
 		return;
@@ -47803,48 +51239,68 @@ void WebSocketClose( PCLIENT pc, int code, const char *reason )
  // struct html5_web_socket
 	if( websock->Magic == 0x20130912 ) {
 		struct html5_web_socket *serverSock = (struct html5_web_socket*)websock;
-		if( serverSock->flags.initial_handshake_done ) {
+		if( serverSock->input_state.flags.initial_handshake_done ) {
 			//lprintf( "Send server side close with no payload." );
-			SendWebSocketMessage( pc, 8, 1, serverSock->input_state.flags.expect_masking, (const uint8_t*)buf, buflen, serverSock->input_state.flags.use_ssl );
+			SendWebSocketMessage( &serverSock->input_state, 8, 1, serverSock->input_state.flags.expect_masking, (const uint8_t*)buf, buflen );
 			serverSock->input_state.flags.closed = 1;
 		}
 		else {
-			//lprintf( "Negotiation incomplete, don't send close; just close." );
-			RemoveClientEx( pc, 0, 1 );
+			// handshake not done, was rejected... can't send websock protocol, and shouldn't emit close, connect/open never happened.
+			/*
+			if( serverSock->input_state.on_close )
+				serverSock->input_state.on_close( NULL, serverSock->input_state.psv_on, 1006, "Negotiation incomplete" );
+			else
+			*/
+			if( serverSock->pc )
+				RemoveClientEx( serverSock->pc, 1, 0 );
 		}
 	}
-	else {
  // struct web_socket_client
-		if( websock->Magic == 0x20130911 ) {
-			//lprintf( "send client side close?" );
-			if( websock->flags.connected ) {
-				while( !NetworkLockEx( pc, 1 DBG_SRC ) ){
-					// closing closed socket....
-					if( !sack_network_is_active(pc) )
-						return;
-					Relinquish();
-				}
-				SendWebSocketMessage( pc, 8, 1, websock->input_state.flags.expect_masking, (const uint8_t*)buf, buflen, websock->input_state.flags.use_ssl );
-				websock->input_state.flags.closed = 1;
-				NetworkUnlock( pc, 1 );
+	else if( websock->Magic == 0x20130911 ) {
+		//lprintf( "send client side close?" );
+		if( websock->flags.connected ) {
+			while( !NetworkLockEx( websock->pc, 1 DBG_SRC ) ){
+				// closing closed socket....
+				if( !sack_network_is_active( websock->pc) )
+					return;
+				Relinquish();
 			}
-			else {
-				//lprintf( "Negotiation incomplete, don't send close; just close." );
-				RemoveClientEx( pc, 0, 1 );
-			}
+			SendWebSocketMessage( &websock->input_state, 8, 1, websock->input_state.flags.expect_masking, (const uint8_t*)buf, buflen );
+			websock->input_state.flags.closed = 1;
+			NetworkUnlock( websock->pc, 1 );
+		}
+		else {
+			RemoveClientEx( websock->pc, 0, 1 );
 		}
 	}
+}
+void WebSocketClose( PCLIENT pc, int code, const char* reason ) {
+	WebSocketClient websock = (WebSocketClient)GetNetworkLong( pc, 0 );
+	WebSocketClose_( websock, code, reason );
+}
+void WebSocketPipeClose( struct html5_web_socket* wss, int code, const char* reason ) {
+	WebSocketClose_( (WebSocketClient)wss, code, reason );
+}
+static void WebSocketEnableAutoPing_( WebSocketInputState input , uint32_t delay )
+{
+		if( !wsc_local.timer )
+			wsc_local.timer = AddTimer( 2000, WebSocketTimer, 0 );
+		input->ping_delay = delay;
 }
 void WebSocketEnableAutoPing( PCLIENT pc, uint32_t delay )
 {
 	WebSocketClient websock = (WebSocketClient)GetNetworkLong( pc, 0 );
  // only allow auto ping on clients....
-	if( websock->Magic == 0x20130911 )
-	{
-		if( !wsc_local.timer )
-			wsc_local.timer = AddTimer( 2000, WebSocketTimer, 0 );
-		websock->ping_delay = delay;
+	if( websock->Magic == 0x20130911 ) {
+		WebSocketEnableAutoPing_( &websock->input_state, delay );
 	}
+	else if( websock->Magic == 0x20130912 ) {
+		WebSocketEnableAutoPing_( &( (struct html5_web_socket*)websock )->input_state, delay );
+	}
+}
+void WebSocketPipeEnableAutoPing( struct html5_web_socket* ws, uint32_t delay )
+{
+	WebSocketEnableAutoPing_( &ws->input_state, delay );
 }
 PRELOAD( InitWebSocketServer )
 {
@@ -47857,6 +51313,7 @@ PRELOAD( InitWebSocketServer )
 #ifndef JSON_PARSER_MAIN_SOURCE
 #  define JSON_PARSER_MAIN_SOURCE
 #endif
+/* In theory - emits JSON, but isn't printf good enough? */
 #ifndef JSON_EMITTER_HEADER_INCLUDED
 #define JSON_EMITTER_HEADER_INCLUDED
 #ifdef JSON_EMITTER_SOURCE
@@ -47865,7 +51322,7 @@ PRELOAD( InitWebSocketServer )
 #define JSON_EMITTER_PROC(type,name) IMPORT_METHOD type CPROC name
 #endif
 #ifdef __cplusplus
-SACK_NAMESPACE namespace network { namespace json {
+namespace sack { namespace network { namespace json {
 #endif
 enum JSON_ObjectElementTypes
 {
@@ -48325,7 +51782,7 @@ typedef PLINKQUEUE *PPLINKQUEUE;
 #define MAXPLINKQUEUESPERSET 256
 DeclareSet( PLINKQUEUE );
 typedef PDATALIST *PPDATALIST;
-#define MAXPDATALISTSPERSET 256
+#define MAXPDATALISTSPERSET 8192
 DeclareSet( PDATALIST );
 struct pendingParser {
 	PDATALIST* pdlMessage;
@@ -49294,6 +52751,7 @@ void json_dispose_message( PDATALIST *msg_data ) {
 	msg_data[0] = NULL;
 }
 // puts the current collected value into the element; assumes conversion was correct
+/*
 static void FillDataToElement( struct json_context_object_element *element
 							    , size_t object_offset
 								, struct json_value_container *val
@@ -49507,6 +52965,7 @@ static void FillDataToElement( struct json_context_object_element *element
       break;
 	}
 }
+*/
 LOGICAL json_decode_message( struct json_context *format
 								, PDATALIST msg_data
 								, struct json_context_object **result_format
@@ -51792,67 +55251,69 @@ void json6_dispose_message( PDATALIST *msg_data )
 #define JSOX_PARSER_SOURCE
 #define JSOX_PARSER_MAIN_SOURCE
 #define DEADSTART_ROOT_OPTION_THING
-/***************************************************************
- * JSOX Parser
- *
- * Parses JSOX (github.com/d3x0r/jsox)
- *
- * This function is meant for a simple utility to just take a known completed packet,
- * and get the values from it.  There may be mulitple top level values, although
- * the JSON standard will only supply a single object or array as the first value.
- * jsox_parse_message( "utf8 data", sizeof( "utf8 data" )-1, &pdlMessage );
- *
- *
- * Example :
- // call to parse a message... and iterate through each value.
- {
-parse_message
-    PDATALIST pdlMessage;
-    LOGICAL gotMessage;
-	 if( jsox_parse_message( "utf8 data", sizeof( "utf8 data" )-1, &pdlMessage ) ) {
-		  int index;
-        struct jsox_value_container *value;
-		  DATALIST_FORALL( pdlMessage, index, struct jsox_value_container *. value ) {
-           // for each value in the result.... the first layer will
-           // always be just one element, either a simple type, or a VALUE_ARRAY or VALUE_OBJECT, which
-           // then for each value->contains (as a datalist like above), process each of those values.
-		  }
-        jsox_dispose_mesage( &pdlMessage );
-    }
- }
- *
- *  This is a streaming setup, where a data block can be added,
- *  and the stream of objects can be returned from it....
- *
- *  Example 2:
- // allocate a parser to keep track of the parsing state...
- struct jsox_parse_state *parser = jsox_begin_parse();
- // at some point later, add some data to it...
- jsox_parse_add_data( parser, "utf8-data", sizeof( "utf8-data" ) - 1 );
- // and then get any objects that have been parsed from the stream so far...
- {
-    PDATALIST pdlMessage;
-	 pdlMessage = jsox_parse_get_data( parser );
-    if( pdlMessage )
-	 {
-        int index;
-        struct jsox_value_container *value;
-        DATALIST_FORALL( pdlMessage, index, struct jsox_value_container *. value ) {
-           // for each value in the result.... the first layer will
-           // always be just one element, either a simple type, or a VALUE_ARRAY or VALUE_OBJECT, which
-           // then for each value->contains (as a datalist like above), process each of those values.
-        }
-        jsox_dispose_mesage( &pdlMessage );
-		  jsox_parse_add_data( parser, NULL, 0 ); // trigger parsing next message.
-	 }
- }
- *
- ***************************************************************/
+/* JSOX Parser
+   Parses JSOX (github.com/d3x0r/jsox)
+   This function is meant for a simple utility to just take a
+   known completed packet, and get the values from it. There may
+   be mulitple top level values, although the JSON standard will
+   only supply a single object or array as the first value.
+   jsox_parse_message( "utf8 data", sizeof( "utf8 data" )-1,
+   &amp;pdlMessage );
+   \Example :
+   <code>
+   // call to parse a message... and iterate through each value
+   {
+     PDATALIST pdlMessage;
+     LOGICAL gotMessage;
+     if( jsox_parse_message( "utf8 data", sizeof( "utf8 data" )-1, &amp;pdlMessage ) )
+     {
+       int index;
+       struct jsox_value_container *value;
+       DATALIST_FORALL( pdlMessage, index, struct jsox_value_container *. value )
+       {
+          // for each value in the result.... the first layer will
+          // always be just one element, either a simple type, or a VALUE_ARRAY or VALUE_OBJECT, which
+		  // then for each value-\>contains (as a datalist like above),
+          // process each of those values.
+       }
+       jsox_dispose_mesage( &amp;pdlMessage );
+     }
+   }
+   </code>
+   This is a streaming setup, where a data block can be added, and
+   the stream of objects can be returned from it....
+   \Example 2:
+   <code lang="c++">
+   // allocate a parser to keep track of the parsing state... struct jsox_parse_state *parser = jsox_begin_parse();
+   // at some point later, add some data to it... jsox_parse_add_data( parser, "utf8-data", sizeof( "utf8-data" ) - 1 );
+   // and then get any objects that have been parsed from the stream so far...
+   {
+     PDATALIST pdlMessage;
+     pdlMessage = jsox_parse_get_data( parser );
+     if( pdlMessage )
+     {
+       int index;
+       struct jsox_value_container *value;
+       DATALIST_FORALL( pdlMessage, index, struct jsox_value_container *. value )
+       {
+         // for each value in the result.... the first layer will
+         // always be just
+         // one element, either a simple type, or a VALUE_ARRAY or VALUE_OBJECT, which
+         // then for each value-\>contains (as a datalist like above), process each of those values.
+       }
+       jsox_dispose_mesage( &amp;pdlMessage );
+       jsox_parse_add_data( parser, NULL, 0 );
+       // trigger parsing next message.
+     }
+   }
+   </code>                                                                                                                                                                                                                    */
 #ifndef JSOX_PARSER_HEADER_INCLUDED
 #define JSOX_PARSER_HEADER_INCLUDED
 // include types to get namespace, and, well PDATALIST types
 #ifdef __cplusplus
-SACK_NAMESPACE namespace network {
+namespace sack { namespace network {
+	/* <combinewith jsox_parser.h>
+	   \ \                         */
 	namespace jsox {
 #endif
 #ifdef JSOX_PARSER_SOURCE
@@ -51985,7 +55446,8 @@ JSOX_PARSER_PROC( struct jsox_value_container *, jsox_get_parsed_array_value )(s
 	, void( *callback )(uintptr_t psv, struct jsox_value_container *val), uintptr_t psv
 	);
 #ifdef __cplusplus
-} } SACK_NAMESPACE_END
+//SACK_NAMESPACE_END
+} } }
 using namespace sack::network::jsox;
 #endif
 #endif
@@ -52182,7 +55644,7 @@ typedef PLINKQUEUE *PPLINKQUEUE;
 #define MAXPLINKQUEUESPERSET 256
 DeclareSet( PLINKQUEUE );
 typedef PDATALIST *PPDATALIST;
-#define MAXPDATALISTSPERSET 256
+#define MAXPDATALISTSPERSET 8192
 DeclareSet( PDATALIST );
 #endif
 // this is the stack state that can be saved between parsing for streaming.
@@ -52264,6 +55726,7 @@ struct jsox_parser_shared_data {
 	PPLINKSTACKSET linkStacks;
 	PPLINKQUEUESET linkQueues;
 	PPDATALISTSET dataLists;
+	PLINKQUEUE elementDataLists;
  // static parsing state for simple message interface.
 	struct jsox_parse_state *_state;
 };
@@ -52316,14 +55779,12 @@ static void registerKnownArrayTypeNames(void) {
 }
 static void jsox_state_init( struct jsox_parse_state *state )
 {
-	PPDATALIST ppElements;
 	PPLIST ppList;
 	PPLINKQUEUE ppQueue;
 	PPLINKSTACK ppStack;
-	ppElements = GetFromSet( PDATALIST, &jxpsd.dataLists );
-	if( !ppElements[0] ) ppElements[0] = CreateDataList( sizeof( state->val ) );
-	state->elements = ppElements;
-	state->elements[0]->Cnt = 0;
+	state->elements = GetFromSet( PDATALIST, &jxpsd.dataLists );
+	if( !state->elements[0] ) state->elements[0] = (PDATALIST)DequeLinkNL( &jxpsd.elementDataLists );
+	if( !state->elements[0] ) state->elements[0] = CreateDataList( sizeof( state->val ) );
 	ppStack = GetFromSet( PLINKSTACK, &jxpsd.linkStacks );
 	if( !ppStack[0] ) ppStack[0] = CreateLinkStack();
 	state->outBuffers = ppStack;
@@ -52818,9 +56279,12 @@ static int openObject( struct jsox_parse_state *state, struct jsox_output_buffer
 		EnterCriticalSec( &jxpsd.cs_states );
 // CreateDataList( sizeof( state->val ) );
 		state->elements = GetFromSet( PDATALIST, &jxpsd.dataLists );
+		if( !state->elements[0] ) state->elements[0] = (PDATALIST)DequeLinkNL( &jxpsd.elementDataLists );
 		LeaveCriticalSec( &jxpsd.cs_states );
-		if( !state->elements[0] ) state->elements[0] = CreateDataList( sizeof( state->val ) );
-		else state->elements[0]->Cnt = 0;
+		if( !state->elements[0] ) {
+			state->elements[0] = CreateDataList( sizeof( state->val ) );
+			//lprintf( "CreateDataList3 : %p", state->elements[0] );
+		}
 		PushLink( state->context_stack, old_context );
 		JSOX_RESET_STATE_VAL();
 		state->parse_context = nextMode;
@@ -52928,9 +56392,12 @@ static LOGICAL openArray( struct jsox_parse_state *state, struct jsox_output_buf
 		EnterCriticalSec( &jxpsd.cs_states );
 // CreateDataList( sizeof( state->val ) );
 		state->elements = GetFromSet( PDATALIST, &jxpsd.dataLists );
+		if( !state->elements[0] ) state->elements[0] = (PDATALIST)DequeLinkNL( &jxpsd.elementDataLists );
 		LeaveCriticalSec( &jxpsd.cs_states );
-		if( !state->elements[0] ) state->elements[0] = CreateDataList( sizeof( state->val ) );
-		else state->elements[0]->Cnt = 0;
+		if( !state->elements[0] ) {
+			state->elements[0] = CreateDataList( sizeof( state->val ) );
+			//lprintf( "CreateDataList4 : %p", state->elements[0] );
+		}
 		PushLink( state->context_stack, old_context );
 		JSOX_RESET_STATE_VAL();
 		state->parse_context = JSOX_CONTEXT_IN_ARRAY;
@@ -53253,9 +56720,14 @@ int recoverIdent( struct jsox_parse_state *state, struct jsox_output_buffer* out
 /*'}'*/
 /*']'*/
 /*':'*/
-		else if( cInt == 44 || cInt == 125 || cInt == 93 || cInt == 58 )
-			vtprintf( state->pvtError, "invalid character; unexpected %c at %" _size_f "  %" _size_f ":%" _size_f, cInt, state->n, state->line, state->col );
-		else {
+		else if( cInt == 44 || cInt == 125 || cInt == 93 || cInt == 58 ) {
+			if( !state->val.string )  state->val.string = output->pos;
+			state->val.value_type = JSOX_VALUE_STRING;
+			state->word = JSOX_WORD_POS_END;
+			state->val.stringLen = output->pos - state->val.string;
+			// don't add the cInt; but do commit the rest of the string.
+			//vtprintf( state->pvtError, "invalid character; unexpected %c at %" _size_f "  %" _size_f ":%" _size_f, cInt, state->n, state->line, state->col );
+		} else {
 			if( !state->val.string )  state->val.string = output->pos;
 			state->val.value_type = JSOX_VALUE_STRING;
 			state->word = JSOX_WORD_POS_END;
@@ -53295,6 +56767,7 @@ static void pushValue( struct jsox_parse_state *state, PDATALIST *pdl, struct js
 	val->className = NULL;
 	val->classNameLen = 0;
 }
+/*
 static LOGICAL isNonIdentifier( TEXTRUNE c ) {
 	if( c < 0xFF ) {
 		if( nonIdentifiers8[c] ) {
@@ -53312,6 +56785,7 @@ static LOGICAL isNonIdentifier( TEXTRUNE c ) {
 	}
 	return FALSE;
 }
+*/
 int jsox_parse_add_data( struct jsox_parse_state *state
                             , const char * msg
                             , size_t msglen )
@@ -53558,13 +57032,7 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 				recoverIdent(state,output,c);
 				if( state->parse_context == JSOX_CONTEXT_OBJECT_FIELD )
 				{
-					if( state->val.stringLen == 0 ) {
-						// allow starting a new word
-						state->status = FALSE;
-						if( !state->pvtError ) state->pvtError = VarTextCreate();
-						vtprintf( state->pvtError, "unquoted keyword used as object field name:parsing fault; unexpected %c at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
-						break;
-					}
+					// 0 length strings are OK.
 					if( state->objectContext == JSOX_OBJECT_CONTEXT_CLASS_FIELD ) {
 						if( GetLinkCount( state->current_class->fields ) == 0 ) {
 							DeleteLink( &state->classes, state->current_class );
@@ -53662,9 +57130,14 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 						if( state->val.value_type != JSOX_VALUE_UNSET )
 							pushValue( state, state->elements, &state->val );
 						else {
-							if( !state->pvtError ) state->pvtError = VarTextCreate();
-							vtprintf( state->pvtError, "Fault while parsing(2); unexpected %c at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
-							state->status = FALSE;
+							if( state->word != JSOX_WORD_POS_RESET ) {
+								recoverIdent( state, output, c );
+								pushValue( state, state->elements, &state->val );
+							} else {
+								if( !state->pvtError ) state->pvtError = VarTextCreate();
+								vtprintf( state->pvtError, "Fault while parsing no value on field object before closing '}'; unexpected %c at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
+								state->status = FALSE;
+							}
 						}
 					}
 					else {
@@ -53682,39 +57155,43 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 						//if( _DEBUG_PARSING_STACK ) console.log( "object pop stack (close obj)", context_stack.length, old_context );
 						state->val.contains = state->elements[0];
 						state->val._contains = state->elements;
+						if( old_context ) {
  // this will restore as IN_ARRAY or OBJECT_FIELD
-						state->parse_context = old_context->context;
-						// lose current class in the pop; have; have to report completed status before popping.
-						if( state->parse_context == JSOX_CONTEXT_UNKNOWN ) {
-							if( !state->current_class )
-								state->completed = TRUE;
-						}
-						state->elements = old_context->elements;
-						state->val.name = old_context->name;
-						state->val.nameLen = old_context->nameLen;
-						state->val.className = old_context->className;
-						state->val.classNameLen = old_context->classNameLen;
-						state->current_class = old_context->current_class;
-						state->current_class_item = old_context->current_class_item;
-						state->arrayType = old_context->arrayType;
+							state->parse_context = old_context->context;
+							// lose current class in the pop; have; have to report completed status before popping.
+							if( state->parse_context == JSOX_CONTEXT_UNKNOWN ) {
+								if( !state->current_class )
+									state->completed = TRUE;
+							}
+							state->elements = old_context->elements;
+							state->val.name = old_context->name;
+							state->val.nameLen = old_context->nameLen;
+							state->val.className = old_context->className;
+							state->val.classNameLen = old_context->classNameLen;
+							state->current_class = old_context->current_class;
+							state->current_class_item = old_context->current_class_item;
+							state->arrayType = old_context->arrayType;
 #ifdef DEBUG_ARRAY_TYPE
-						lprintf( "close object restore arrayType:%d",state->arrayType );
+							lprintf( "close object restore arrayType:%d",state->arrayType );
 #endif
-						state->objectContext = old_context->objectContext;
+							state->objectContext = old_context->objectContext;
 #ifdef DEBUG_CLASS_STATES
-						lprintf( "POP CLASS NAME %s %s %p", state->val.className, state->current_class ? state->current_class->name : "", state->current_class ? state->current_class->fields : 0 );
+							lprintf( "POP CLASS NAME %s %s %p", state->val.className, state->current_class ? state->current_class->name : "", state->current_class ? state->current_class->fields : 0 );
 #endif
-						DeleteFromSet( JSOX_PARSE_CONTEXT, state->parseContexts, old_context );
-						if( emitObject )
-							state->val.value_type = JSOX_VALUE_OBJECT;
-						else
-							state->val.value_type = JSOX_VALUE_UNSET;
-						state->val.string = NULL;
+							DeleteFromSet( JSOX_PARSE_CONTEXT, state->parseContexts, old_context );
+							if( emitObject )
+								state->val.value_type = JSOX_VALUE_OBJECT;
+							else
+								state->val.value_type = JSOX_VALUE_UNSET;
+							state->val.string = NULL;
+						} else {
+							vtprintf( state->pvtError, "Close } without open: %c at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
+							state->status = FALSE;
+						}
 					}
 				}
 				break;
 			case ']':
-				state->word = JSOX_WORD_POS_RESET;
 				if( state->parse_context == JSOX_CONTEXT_IN_ARRAY )
 				{
 #ifdef DEBUG_PARSING
@@ -53735,6 +57212,17 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 						}
 						pushValue( state, state->elements, &state->val );
 						JSOX_RESET_STATE_VAL();
+						state->word = JSOX_WORD_POS_RESET;
+					} else {
+						if( state->word != JSOX_WORD_POS_RESET ) {
+							recoverIdent( state, output, c );
+							pushValue( state, state->elements, &state->val );
+							JSOX_RESET_STATE_VAL();
+							state->word = JSOX_WORD_POS_RESET;
+						} else {
+							// probaby a `,]` sort of thing, empty value, trailing comma, no extra element pushed
+							// but not a syntax error
+						}
 					}
 					if( state->arrayType >= 0 ) {
 						state->val.value_type = (enum jsox_value_types)(JSOX_VALUE_TYPED_ARRAY + state->arrayType);
@@ -53909,7 +57397,7 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 								state->status = FALSE;
 								if( !state->pvtError ) state->pvtError = VarTextCreate();
 // fault
-								vtprintf( state->pvtError, "?? This is like doublestring revival; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
+								vtprintf( state->pvtError, "? This is like doublestring revival; '%c' unexpected at %" _size_f "  %" _size_f ":%" _size_f, c, state->n, state->line, state->col );
 								break;
 							}
 							lprintf( "THIS IS WRONG!" );
@@ -54406,6 +57894,7 @@ int jsox_parse_add_data( struct jsox_parse_state *state
 							}
 						}
 						if( input ) {
+							state->col -= input->pos - _msg_input;
 							input->pos = _msg_input;
 							state->n = (input->pos - input->buf);
 							if( state->n > input->size ) DebugBreak();
@@ -54532,9 +58021,12 @@ PDATALIST jsox_parse_get_data( struct jsox_parse_state *state ) {
 	EnterCriticalSec( &jxpsd.cs_states );
 // CreateDataList( sizeof( state->val ) );
 	state->elements = GetFromSet( PDATALIST, &jxpsd.dataLists );
+	if( !state->elements[0] ) state->elements[0] = (PDATALIST)DequeLinkNL( &jxpsd.elementDataLists );
 	LeaveCriticalSec( &jxpsd.cs_states );
-	if( !state->elements[0] ) state->elements[0] = CreateDataList( sizeof( state->val ) );
-	else state->elements[0]->Cnt = 0;
+	if( !state->elements[0] ) {
+		state->elements[0] = CreateDataList( sizeof( state->val ) );
+		//lprintf( "CreateDataList1 : %p", state->elements[0] );
+	}
 	return result[0];
 }
 const char *jsox_get_parse_buffer( struct jsox_parse_state *pState, const char *buf ) {
@@ -54551,9 +58043,12 @@ const char *jsox_get_parse_buffer( struct jsox_parse_state *pState, const char *
 }
 void _jsox_dispose_message( PDATALIST *msg_data )
 {
+	//static int level;
 	struct jsox_value_container *val;
 	INDEX idx;
 	if( !msg_data ) return;
+	//level++;
+	//if( level > 100 ) DebugBreak();
 	DATA_FORALL( (*msg_data), idx, struct jsox_value_container*, val )
 	{
 		// names and string buffers for JSON parsed values in a single buffer
@@ -54564,20 +58059,56 @@ void _jsox_dispose_message( PDATALIST *msg_data )
 			_jsox_dispose_message( val->_contains );
 	}
 	// quick method
-	DeleteDataList( msg_data );
 	EnterCriticalSec( &jxpsd.cs_states );
+	msg_data[0]->Cnt = 0;
+	if( GetQueueLength( jxpsd.elementDataLists ) > 64 )
+		Release( msg_data[0] );
+	else
+		EnqueLinkNL( &jxpsd.elementDataLists, (POINTER)msg_data[0] );
+	//lprintf( "Drop DataList(clearing list holder) : %p %p", msg_data, msg_data[0] );
+	msg_data[0] = NULL;
 	DeleteFromSet( PDATALIST, jxpsd.dataLists, msg_data );
 	LeaveCriticalSec( &jxpsd.cs_states );
+	//level--;
 }
 static uintptr_t jsox_FindDataList( void*p, uintptr_t psv ) {
+	//lprintf( "Compare list: %p %p with %p", p, ((PPDATALIST)p)[0], (PDATALIST)psv );
 	if( ((PPDATALIST)p)[0] == (PDATALIST)psv )
 		return (uintptr_t)p;
 	return 0;
 }
+static PLINKQUEUE dispose_queue;
+static PTHREAD dispose_thread;
+static uintptr_t jsox_dispose_thread( PTHREAD thread ) {
+	PDATALIST msg_data;
+	while( 1 ) {
+		while( msg_data = (PDATALIST)DequeLink( &dispose_queue ) ) {
+			/*
+			INDEX listIndex = GetMemberIndex( PDATALIST, &jxpsd.dataLists, (POINTER)msg_data );
+			if( listIndex != INVALID_INDEX ) {
+				PDATALIST* actual = GetSetMember( PDATALIST, &jxpsd.dataLists, listIndex );
+				_jsox_dispose_message( actual );
+				DeleteSetMember( PDATALIST, &jxpsd.dataLists, listIndex );
+			} else
+			*/
+			{
+				uintptr_t actual = ForAllInSet( PDATALIST, jxpsd.dataLists, jsox_FindDataList, (uintptr_t)msg_data );
+				//lprintf( "Disposing message: %p %p", msg_data, actual );
+				if( actual )
+					_jsox_dispose_message( (PDATALIST*)actual );
+				else
+					lprintf( "Failed to find message to dispose (not from JSOX parsing?) %p", msg_data );
+			}
+		}
+		WakeableSleep( 100000 );
+	}
+	return 0;
+}
 void jsox_dispose_message( PDATALIST *msg_data ) {
-	uintptr_t actual = ForAllInSet( PDATALIST, jxpsd.dataLists, jsox_FindDataList, (uintptr_t)msg_data[0] );
-	_jsox_dispose_message( (PDATALIST*)actual );
-	msg_data[0] = NULL;
+	if( !dispose_queue ) dispose_queue = CreateLinkQueue();
+	EnqueLink( &dispose_queue, (POINTER)(msg_data[0]) );
+	if( !dispose_thread ) dispose_thread = ThreadTo( jsox_dispose_thread, 0 );
+	else                  WakeThread( dispose_thread );
 }
 void jsox_parse_clear_state( struct jsox_parse_state *state ) {
 	if( state ) {
@@ -54626,10 +58157,16 @@ void jsox_parse_clear_state( struct jsox_parse_state *state ) {
 		state->val.string = NULL;
 		{
 			PDATALIST *result = state->elements;
+			//lprintf( "elements is something %p %p", result, result[0] );
+			// ininitialize a blank list...
 // CreateDataList( sizeof( state->val ) );
 			state->elements = GetFromSet( PDATALIST, &jxpsd.dataLists );
-			if( !state->elements[0] ) state->elements[0] = CreateDataList( sizeof( state->val ) );
-			else state->elements[0]->Cnt = 0;
+			if( !state->elements[0] ) state->elements[0] = (PDATALIST)DequeLinkNL( &jxpsd.elementDataLists );
+			if( !state->elements[0] ) {
+				state->elements[0] = CreateDataList( sizeof( state->val ) );
+				//lprintf( "CreateDataList2 : %p", state->elements[0] );
+			}
+			//lprintf( "set state new message: %p %p (from state elements)", state->elements, state->elements[0] );
 			jsox_dispose_message( result );
 		}
 	}
@@ -54651,7 +58188,6 @@ void jsox_parse_dispose_state( struct jsox_parse_state **ppState ) {
 	PJSOX_PARSE_BUFFER buffer;
 	EnterCriticalSec( &jxpsd.cs_states );
 	_jsox_dispose_message( state->elements );
-	//DeleteDataList( &state->elements );
 	while( buffer = (PJSOX_PARSE_BUFFER)PopLink( state->outBuffers ) ) {
 		Deallocate( const char *, buffer->buf );
 		DeleteFromSet( JSOX_PARSE_BUFFER, state->parseBuffers, buffer );
@@ -54822,10 +58358,10 @@ struct jsox_value_container *jsox_get_parsed_value( PDATALIST pdlMessage, const 
 FILESYS_NAMESPACE
 // have to include this in-namespace
 #ifdef _WIN32
-#define LONG_PATHCHAR '\\'
+#define LONG_PATHCHAR L'\\'
 #define SYS_PATHCHAR "\\"
 #else
-#define LONG_PATHCHAR 0
+#define LONG_PATHCHAR '/'
 #define SYS_PATHCHAR "/"
 #endif
 #define PATHCHAR "/"
@@ -54861,11 +58397,17 @@ extern
 		BIT_FIELD bLogOpenClose : 1;
 		BIT_FIELD bInitialized : 1;
 		BIT_FIELD bDeallocateClosedFiles : 1;
+		BIT_FIELD have_default_groups : 1;
+		BIT_FIELD finished_default_groups : 1;
 	} flags;
+ // windows user local data
 	TEXTSTR local_data_file_root;
+ // windows /programdata/freedom collective/ProgramName/ root
 	TEXTSTR data_file_root;
 	TEXTSTR producer;
 	TEXTSTR application;
+ // install_dir/share/SACK
+	TEXTSTR share_data_root;
  }
 #ifdef __STATIC_GLOBALS__
 winfile_local__;
@@ -54897,15 +58439,44 @@ extern
 #endif
 	;
 //#define l (*winfile_local)
-	static char *currentPath
 #ifdef __EMSCRIPTEN__
+static char *currentPath
        = "/home/web_user"
 #endif
 	;
 #ifndef __NO_SACK_FILESYS__
-extern TEXTSTR ExpandPath( CTEXTSTR path );
+//extern TEXTSTR ExpandPath( CTEXTSTR path );
 #endif
- CTEXTSTR  pathrchr ( CTEXTSTR path )
+int PathCmpEx( CTEXTSTR s1, CTEXTSTR s2, int maxlen ) {
+	TEXTCHAR l1;
+	TEXTCHAR l2;
+	if( !s1 )
+		if( s2 )
+			return -1;
+		else
+			return 0;
+	else
+		if( !s2 )
+			return 1;
+	if( s1 == s2 )
+ // ==0 is success.
+		return 0;
+	for( ; maxlen && s1[0] && s2[0]
+		&& ( ( ( s1[0] == '/' || s1[1] == '\\' )
+			&& ( s2[0] == '/' || s2[0] == '\\' ) )
+			|| ( ( l1 = ( s1[0] >= 'a' && s1[0] <= 'z' ) ? s1[0] - ( 'a' - 'A' ) : s1[0] )
+				== ( l2 = ( s2[0] >= 'a' && s2[0] <= 'z' ) ? s2[0] - ( 'a' - 'A' ) : s2[0] ) ) );
+		s1++, s2++, maxlen-- ) {
+		//lprintf( "Continue... compared %c(%d) vs %c(%d)", s1[0]<32?'?':s1[0], s1[0], s2[0]<32?'?':s2[0], s2[0] );
+	}
+	if( !maxlen )
+		return 0;
+	return l1 - l2;
+}
+int PathCmp( CTEXTSTR s1, CTEXTSTR s2 ) {
+	return PathCmpEx( s1, s2, 65535 );
+}
+CTEXTSTR  pathrchr ( CTEXTSTR path )
 {
 	CTEXTSTR end1, end2;
 	end1 = StrRChr( path, '\\' );
@@ -54914,12 +58485,28 @@ extern TEXTSTR ExpandPath( CTEXTSTR path );
 		return end1;
 	return end2;
 }
+const wchar_t* pathrchrW( const wchar_t* path ) {
+	const wchar_t* end1, *end2;
+	 end1 = StrRChrW( path, '\\' );
+	 end2 = StrRChrW( path, '/' );
+	 if( end1 > end2 )
+		 return end1;
+	 return end2;
+ }
 #ifdef __cplusplus
- TEXTSTR  pathrchr ( TEXTSTR path )
+TEXTSTR  pathrchr ( TEXTSTR path )
 {
 	TEXTSTR end1, end2;
 	end1 = StrRChr( path, '\\' );
 	end2 = StrRChr( path, '/' );
+	if( end1 > end2 )
+		return end1;
+	return end2;
+}
+wchar_t* pathrchrW( wchar_t* path ) {
+	wchar_t* end1, * end2;
+	end1 = StrRChrW( path, '\\' );
+	end2 = StrRChrW( path, '/' );
 	if( end1 > end2 )
 		return end1;
 	return end2;
@@ -55230,20 +58817,27 @@ int  MakePath ( CTEXTSTR path )
 	if( !path )
 		return 0;
 #ifdef _WIN32
-	status = CreateDirectory( path, NULL );
+	wchar_t* wpath = CharWConvert( path );
+	{ wchar_t* tmp; if( LONG_PATHCHAR ) for( tmp = wpath; tmp[0]; tmp++ ) if( tmp[0] == '/' ) tmp[0] = LONG_PATHCHAR; }
+	status = CreateDirectoryW( wpath, NULL );
 	if( !status )
 	{
 		uint32_t err = GetLastError();
+		if( err == ERROR_ALREADY_EXISTS ){
+			Release( wpath );
+			return TRUE;
+		}
 		TEXTSTR tmppath = StrDup( path );
 		TEXTSTR last = (TEXTSTR)pathrchr( tmppath );
 		if( last )
 		{
 			last[0] = 0;
 			if( MakePath( tmppath ) )
-				status = CreateDirectory( path, NULL );
+				status = CreateDirectoryW( wpath, NULL );
 		}
 		Release( tmppath );
 	}
+	Release( wpath );
 	return status;
 #else
 #  ifdef UNICODE
@@ -55361,6 +58955,7 @@ FILESYS_NAMESPACE_END
 //-----------------------------------------------------------------------
 // #define _FILE_OFFSET_BTIS	64
 //[02:03 : 43] <significant> #define _LARGEFILE64_SOURCE
+#define UNDEF_FILESYS_DEFS
 #define FILESYSTEM_LIBRARY_SOURCE
 #define NO_UNICODE_C
 #define WINFILE_COMMON_SOURCE
@@ -55455,7 +59050,10 @@ struct file_interface_tracker
 struct Group {
 	TEXTSTR name;
 	TEXTSTR base_path;
+ // base is already expanded from this.
+	TEXTSTR default_path;
 };
+extern struct file_system_interface native_fsi;
 #ifdef _WIN32
 #  ifndef SHGFP_TYPE_CURRENT
 #    define SHGFP_TYPE_CURRENT 0
@@ -55474,39 +59072,75 @@ static size_t CPROC sack_filesys_seek( void* file, size_t pos, int whence ) { re
 static int CPROC sack_filesys_unlink( uintptr_t psv, const char* filename );
 static void UpdateLocalDataPath( void )
 {
+	if( ( *winfile_local ).data_file_root )ReleaseEx( ( *winfile_local ).data_file_root DBG_SRC );
+	if( ( *winfile_local ).local_data_file_root )ReleaseEx( ( *winfile_local ).local_data_file_root DBG_SRC );
 #ifdef _WIN32
-	TEXTCHAR path[MAX_PATH];
+	wchar_t path[MAX_PATH];
+	TEXTCHAR* u8path;
 	TEXTCHAR* realpath;
 	size_t len;
-	SHGetFolderPathA( NULL, CSIDL_COMMON_APPDATA, NULL, SHGFP_TYPE_CURRENT, path );
-	realpath = NewArray( TEXTCHAR, len = StrLen( path )
+	SHGetFolderPathW( NULL, CSIDL_COMMON_APPDATA, NULL, SHGFP_TYPE_CURRENT, path );
+	u8path = WcharConvert( path );
+	realpath = NewArray( TEXTCHAR, len = StrLen( u8path )
 		+ StrLen( ( *winfile_local ).producer ? ( *winfile_local ).producer : "" )
  // worse case +3
 		+ StrLen( ( *winfile_local ).application ? ( *winfile_local ).application : "" ) + 3 );
-	tnprintf( realpath, len, "%s%s%s%s%s", path
+	tnprintf( realpath, len, "%s%s%s%s%s", u8path
 		, ( *winfile_local ).producer ? "\\" : "", ( *winfile_local ).producer ? ( *winfile_local ).producer : ""
 		, ( *winfile_local ).application ? "\\" : "", ( *winfile_local ).application ? ( *winfile_local ).application : ""
 	);
-	if( ( *winfile_local ).data_file_root )
-		Deallocate( TEXTSTR, ( *winfile_local ).data_file_root );
 	( *winfile_local ).data_file_root = realpath;
 	MakePath( ( *winfile_local ).data_file_root );
-	SHGetFolderPathA( NULL, CSIDL_LOCAL_APPDATA, NULL, SHGFP_TYPE_CURRENT, path );
-	realpath = NewArray( TEXTCHAR, len = StrLen( path )
+	ReleaseEx( u8path DBG_SRC );
+	SHGetFolderPathW( NULL, CSIDL_LOCAL_APPDATA, NULL, SHGFP_TYPE_CURRENT, path );
+	u8path = WcharConvert( path );
+	realpath = NewArray( TEXTCHAR, len = StrLen( u8path )
 		+ StrLen( ( *winfile_local ).producer ? ( *winfile_local ).producer : "" )
  // worse case +3
 		+ StrLen( ( *winfile_local ).application ? ( *winfile_local ).application : "" ) + 3 );
-	tnprintf( realpath, len, "%s%s%s%s%s", path
+	tnprintf( realpath, len, "%s%s%s%s%s", u8path
 		, ( *winfile_local ).producer ? "\\" : "", ( *winfile_local ).producer ? ( *winfile_local ).producer : ""
 		, ( *winfile_local ).application ? "\\" : "", ( *winfile_local ).application ? ( *winfile_local ).application : ""
 	);
-	if( ( *winfile_local ).local_data_file_root )
-		Deallocate( TEXTSTR, ( *winfile_local ).local_data_file_root );
 	( *winfile_local ).local_data_file_root = realpath;
 	MakePath( ( *winfile_local ).local_data_file_root );
+	ReleaseEx( u8path DBG_SRC );
 #else
-	( *winfile_local ).data_file_root = StrDup( "." );
-	( *winfile_local ).local_data_file_root = StrDup( "." );
+	TEXTCHAR path[MAXPATH];
+	tnprintf( path, sizeof(path), "~/%s%s%s%s"
+		, ( *winfile_local ).producer ? "." : "", ( *winfile_local ).producer ? ( *winfile_local ).producer : ""
+		, ( *winfile_local ).application ? SYSPATHCHAR : "", ( *winfile_local ).application ? ( *winfile_local ).application : ""
+	);
+	( *winfile_local ).local_data_file_root = StrDup( path );;
+#if !defined( __STATIC__ ) && !defined( __STATIC_GLOBALS__ )
+	if( strcmp( GetInstallPath(), "/usr" ) == 0 )
+		tnprintf( path, sizeof(path), "/var/%s%s%s%s"
+			, ( *winfile_local ).producer ? "" : "", ( *winfile_local ).producer ? ( *winfile_local ).producer : ""
+			, ( *winfile_local ).application ? SYSPATHCHAR : "", ( *winfile_local ).application ? ( *winfile_local ).application : ""
+		);
+	else
+		tnprintf( path, sizeof(path),  "%s/var/%s%s%s%s"
+			, GetInstallPath()
+			, ( *winfile_local ).producer ? "" : "", ( *winfile_local ).producer ? ( *winfile_local ).producer : ""
+			, ( *winfile_local ).application ? SYSPATHCHAR : "", ( *winfile_local ).application ? ( *winfile_local ).application : ""
+		);
+	( *winfile_local ).data_file_root = StrDup( path );
+#else
+	// this is a case of a portable project with __STATIC__ and __STATIC_GLOBALS__
+	( *winfile_local ).data_file_root = (TEXTSTR)Hold( winfile_local[0].local_data_file_root );
+#endif
+	//lprintf( "initialized:%s %s", ( *winfile_local ).data_file_root, ( *winfile_local ).local_data_file_root );
+#endif
+#if !defined( __STATIC__ ) && !defined( __STATIC_GLOBALS__ )
+	if( !( *winfile_local ).share_data_root ) {
+		PVARTEXT pvt = VarTextCreate(); vtprintf( pvt, "%s/share/SACK", GetInstallPath() );
+		TEXTSTR path = ExpandPath( GetText(VarTextPeek( pvt )));
+		VarTextDestroy( &pvt );
+		( *winfile_local ).share_data_root = path;
+	}
+#else
+	if( !( *winfile_local ).share_data_root )
+		( *winfile_local ).share_data_root = StrDup( "." );
 #endif
 }
 void sack_set_common_data_producer( CTEXTSTR name )
@@ -55522,10 +59156,15 @@ void sack_set_common_data_application( CTEXTSTR name )
 static void threadInit( void ) {
  // edge case the main thread might init twice.
 	if( !FileSysThreadInfo.cwd ) {
-		FileSysThreadInfo.cwd = StrDup( "." );
+		FileSysThreadInfo.cwd = ExpandPath( "." );
 		FileSysThreadInfo.default_mount = ( *winfile_local )._default_mount;
 		FileSysThreadInfo._mounted_file_systems = &( *winfile_local )._mounted_file_systems;
 		//FileSysThreadInfo.mounted_file_systems = ( *winfile_local )._mounted_file_systems;
+	}
+}
+static void threadExit( void ) {
+	if( FileSysThreadInfo.cwd ) {
+		Deallocate( char*, FileSysThreadInfo.cwd );
 	}
 }
 static void LocalInit( void )
@@ -55535,31 +59174,38 @@ static void LocalInit( void )
 		SimpleRegisterAndCreateGlobal( winfile_local );
 #endif
 	if( !( *winfile_local ).flags.bInitialized ) {
+		if( !sack_get_filesystem_interface( "native" ) )
+			sack_register_filesystem_interface( "native", &native_fsi );
+		if( !( *winfile_local )._default_mount )
+			( *winfile_local )._default_mount = sack_mount_filesystem( "native", &native_fsi, 1000, (uintptr_t)NULL, TRUE );
 		OnThreadCreate( threadInit );
-  // this might or might not get dispatched already on this thread.
-		threadInit();
+		OnThreadExit( threadExit );
 		InitializeCriticalSec( &( *winfile_local ).cs_files );
 		( *winfile_local ).flags.bInitialized = 1;
+  // this might or might not get dispatched already on this thread.
+		threadInit();
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
 		( *winfile_local ).flags.bLogOpenClose = 0;
 #endif
-		{
-#ifdef _WIN32
-			if( !( *winfile_local ).producer )
-				sack_set_common_data_producer( "Freedom Collective" );
-			if( !( *winfile_local ).application )
-				sack_set_common_data_application( GetProgramName() );
-#else
-			{
-				char tmpPath[256];
-				snprintf( tmpPath, 256, "%s/%s", getenv( "HOME" ), ".Freedom Collective" );
-				( *winfile_local ).data_file_root = StrDup( tmpPath );
-				MakePath( tmpPath );
-			}
-			UpdateLocalDataPath();
-#endif
-		}
+		if( !( *winfile_local ).producer )
+			sack_set_common_data_producer( "Freedom Collective" );
+		if( !( *winfile_local ).application )
+			sack_set_common_data_application( GetProgramName() );
 		UpdateLocalDataPath();
+		{
+			TEXTSTR check;
+			char tmpPath[256];
+			snprintf( tmpPath, 256, "%s/%s", getenv( "HOME" ), ".Freedom Collective" );
+			//( *winfile_local ).data_file_root = StrDup( "~" );
+			check = ExpandPath( "*/" );
+			//lprintf( "checking path:%s", check );
+			MakePath( check );
+			ReleaseEx( check DBG_SRC );
+			check = ExpandPath( ";/" );
+			//lprintf( "checking path:%s", check );
+			MakePath( check );
+			ReleaseEx( check DBG_SRC );
+		}
 	}
 }
 static void InitGroups( void )
@@ -55568,11 +59214,13 @@ static void InitGroups( void )
 	TEXTCHAR tmp[256];
 	// known handle '0' is 'default' which is CurrentWorkingDirectory at load.
 	group = New( struct Group );
+	group->default_path = NULL;
 	group->base_path = StrDup( GetCurrentPath( tmp, sizeof( tmp ) ) );
 	group->name = StrDup( "Default" );
 	AddLink( &( *winfile_local ).groups, group );
 	// known handle '1' is the program's load path.
 	group = New( struct Group );
+	group->default_path = NULL;
 #ifdef __ANDROID__
 	// assets and other files are in the data directory
 	group->base_path = StrDup( GetStartupPath() );
@@ -55583,10 +59231,62 @@ static void InitGroups( void )
 	AddLink( &( *winfile_local ).groups, group );
 	// known handle '1' is the program's start path.
 	group = New( struct Group );
+	group->default_path = NULL;
 	group->base_path = StrDup( GetStartupPath() );
 	group->name = StrDup( "Startup Path" );
 	AddLink( &( *winfile_local ).groups, group );
 	( *winfile_local ).have_default = TRUE;
+}
+static void commitFileGroup( struct Group* filegroup ) {
+	TEXTCHAR tmp_ent[256];
+	TEXTCHAR tmp[256];
+	tnprintf( tmp_ent, sizeof( tmp_ent ), "file group/%s", filegroup->name );
+	//lprintf( "option to save is %s", tmp );
+#ifdef __NO_OPTIONS__
+	tmp[0] = 0;
+#else
+	SACK_GetProfileString( GetProgramName(), tmp_ent, filegroup->default_path, tmp, sizeof( tmp ) );
+#endif
+	if( !tmp[0] && filegroup->default_path ) {
+#ifndef __NO_OPTIONS__
+		SACK_WriteProfileString( GetProgramName(), tmp_ent, filegroup->default_path );
+#endif
+	}
+	ReleaseEx( filegroup->default_path DBG_SRC );
+	filegroup->default_path = NULL;
+}
+static void InitMoreGroups( void ) {
+	if( !( *winfile_local ).flags.have_default_groups ) {
+		( *winfile_local ).flags.have_default_groups = 1;
+#if !defined( __STATIC__ ) && !defined( __STATIC_GLOBALS__ )
+		PVARTEXT pvt = VarTextCreate();
+		vtprintf( pvt, "%s/share/SACK", GetInstallPath() );
+		TEXTSTR path = ExpandPath( GetText(VarTextPeek( pvt )));
+		GetFileGroup( "resources", path );
+		ReleaseEx( path DBG_SRC ); VarTextEmpty( pvt );
+		vtprintf( pvt, "%s/share/SACK/frames", GetInstallPath() );
+		path = ExpandPath( GetText(VarTextPeek( pvt )));
+		GetFileGroup( "frames", path );
+		ReleaseEx( path DBG_SRC ); VarTextEmpty( pvt );
+		vtprintf( pvt, "%s/share/SACK/images", GetInstallPath() );
+		path = ExpandPath( GetText(VarTextPeek( pvt )));
+		GetFileGroup( "images", path );
+		ReleaseEx( path DBG_SRC ); VarTextEmpty( pvt );
+		vtprintf( pvt, "%s/share/SACK/fonts", GetInstallPath() );
+		path = ExpandPath( GetText(VarTextPeek( pvt )));
+		GetFileGroup( "fonts", path );
+		ReleaseEx( path DBG_SRC );
+		VarTextDestroy( &pvt );
+#endif
+		( *winfile_local ).flags.finished_default_groups = 1;
+		{
+			struct Group* filegroup;
+			INDEX idx;
+			LIST_FORALL( ( *winfile_local ).groups, idx, struct Group*, filegroup ) {
+				commitFileGroup( filegroup );
+			}
+		}
+	}
 }
 static struct Group* GetGroupFilePath( CTEXTSTR group )
 {
@@ -55607,32 +59307,38 @@ INDEX  GetFileGroup( CTEXTSTR groupname, CTEXTSTR default_path )
 {
 	struct Group* filegroup = GetGroupFilePath( groupname );
 	if( !filegroup ) {
+		filegroup = New( struct Group );
+		filegroup->default_path = NULL;
 		{
 			TEXTCHAR tmp_ent[256];
 			TEXTCHAR tmp[256];
+			InitMoreGroups();
 			tnprintf( tmp_ent, sizeof( tmp_ent ), "file group/%s", groupname );
 			//lprintf( "option to save is %s", tmp );
 #ifdef __NO_OPTIONS__
 			tmp[0] = 0;
 #else
-			if( ( *winfile_local ).have_default ) {
+			if( ( *winfile_local ).have_default && ( *winfile_local ).flags.finished_default_groups ) {
 				SACK_GetProfileString( GetProgramName(), tmp_ent, default_path ? default_path : NULL, tmp, sizeof( tmp ) );
 			}
 			else
 				tmp[0] = 0;
 #endif
-			if( tmp[0] )
+			if( tmp[0] ) {
 				default_path = tmp;
-			else if( default_path ) {
+			} else if( default_path ) {
+				if( ( *winfile_local ).flags.finished_default_groups ) {
 #ifndef __NO_OPTIONS__
-				SACK_WriteProfileString( GetProgramName(), tmp_ent, default_path );
+					SACK_WriteProfileString( GetProgramName(), tmp_ent, default_path );
 #endif
+				}
+				else
+					filegroup->default_path = StrDup( default_path );
 			}
 		}
-		filegroup = New( struct Group );
 		filegroup->name = StrDup( groupname );
 		if( default_path )
-			filegroup->base_path = StrDup( default_path );
+			filegroup->base_path = ExpandPath( default_path );
 		else
 			filegroup->base_path = StrDup( "." );
 		AddLink( &( *winfile_local ).groups, filegroup );
@@ -55728,10 +59434,52 @@ TEXTSTR ExpandPathVariable( CTEXTSTR path )
 	}
 	return tmp_path;
 }
-TEXTSTR ExpandPathEx( CTEXTSTR path, struct file_system_interface* fsi )
+static void squash_dotdot( TEXTSTR path ) {
+	int pathchar;
+	TEXTSTR cur;
+	TEXTSTR out;
+	do {
+		pathchar = -1;
+		out = NULL;
+		for( cur = path; cur[0]; cur++ ) {
+			if( out ) (out++)[0] = cur[0];
+			else if( cur[0] == '/' || cur[0] == '\\' ){
+				if( pathchar < 0 ) {
+					if( cur[1] !='.' || cur[2]!='.' || !( cur[3] == '\\' || cur[3] == '/' ) )
+  // this will be a short diff (re int conversion)
+						pathchar = (int)( cur - path );
+				}  else {
+					if( cur[1] ) {
+						if( cur[1] == '.' ) {
+							if( cur[2] ) {
+								if( cur[2] == '.' ) {
+									if( cur[3] ) {
+										if( cur[3] == '/' || cur[3] == '\\' ) {
+ // copy the rest of the path to good start.
+											out = path + pathchar;
+ // loop will increment 1... so this is 3.
+											cur += 2;
+										} else pathchar = (int)( cur - path );
+									} else {
+										path[pathchar] = 0;
+										break;
+									}
+								} else pathchar = (int)( cur - path );
+							} else break;
+						} else pathchar = (int)( cur - path );
+					} else break;
+				}
+			}
+		}
+		if( out ) out[0] = 0;
+	} while( out );
+}
+TEXTSTR ExpandPathExx( CTEXTSTR path, struct file_system_interface* fsi DBG_PASS )
 {
-	TEXTSTR tmp_path = NULL;
-	LocalInit();
+	TEXTSTR tmp_path;
+	if( !path ) return NULL;
+	tmp_path = StrDupEx( path DBG_RELAY );
+	//LocalInit();
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
 	if( ( *winfile_local ).flags.bLogOpenClose )
 		lprintf( "input path is [%s]", path );
@@ -55742,59 +59490,84 @@ TEXTSTR ExpandPathEx( CTEXTSTR path, struct file_system_interface* fsi )
 				TEXTCHAR here[256];
 				size_t len;
 				GetCurrentPath( here, sizeof( here ) );
+				ReleaseEx( tmp_path DBG_SRC );
 				tmp_path = NewArray( TEXTCHAR, len = ( StrLen( here ) + StrLen( path ) ) );
 				tnprintf( tmp_path, len, "%s%s%s"
 					, here
 					, path[1] ? SYS_PATHCHAR : ""
 					, path[1] ? ( path + 2 ) : "" );
 			}
-			else if( ( path[0] == '@' ) && ( ( path[1] == '/' ) || ( path[1] == '\\' ) ) ) {
+			else if( ( path[0] == '@' ) && ( ( path[1] == 0 ) || ( path[1] == '/' ) || ( path[1] == '\\' ) ) ) {
 				CTEXTSTR here;
 				size_t len;
 				here = GetLibraryPath();
+				ReleaseEx( tmp_path DBG_SRC );
 				tmp_path = NewArray( TEXTCHAR, len = ( StrLen( here ) + StrLen( path ) ) );
-				tnprintf( tmp_path, len, "%s" SYS_PATHCHAR "%s", here, path + 2 );
+				tnprintf( tmp_path, len, "%s%s%s", here?here:""
+				        , path[1] ? SYS_PATHCHAR : ""
+				        , path[1]?path + 2:(path+1) );
 			}
-			else if( ( path[0] == '#' ) && ( ( path[1] == '/' ) || ( path[1] == '\\' ) ) ) {
+//#if !defined( __STATIC__ ) && !defined( __STATIC_GLOBALS__ )
+			else if( ( path[0] == ',' ) && ( ( path[1] == 0 ) || ( path[1] == '/' ) || ( path[1] == '\\' ) ) ) {
+				CTEXTSTR here;
+				size_t len;
+				here = GetInstallPath();
+				ReleaseEx( tmp_path DBG_SRC );
+				tmp_path = NewArray( TEXTCHAR, len = ( StrLen( here ) + StrLen( path ) ) );
+				tnprintf( tmp_path, len, "%s%s%s", here
+				        , path[1] ? SYS_PATHCHAR : ""
+				        , path[1]?path + 2:(path+1) );
+			}
+//#endif
+			else if( ( path[0] == '#' ) && ( ( path[1] == 0 ) || ( path[1] == '/' ) || ( path[1] == '\\' ) ) ) {
 				CTEXTSTR here;
 				size_t len;
 				here = GetProgramPath();
+				ReleaseEx( tmp_path DBG_SRC );
 				tmp_path = NewArray( TEXTCHAR, len = ( StrLen( here ) + StrLen( path ) ) );
-				tnprintf( tmp_path, len, "%s" SYS_PATHCHAR "%s", here, path + 2 );
-			}
-			else if( ( path[0] == '~' ) && ( ( path[1] == '/' ) || ( path[1] == '\\' ) ) ) {
+				tnprintf( tmp_path, len, "%s%s%s", here
+				        , path[1] ? SYS_PATHCHAR : ""
+				        , path[1]?path + 2:(path+1) );
+			} else if( ( path[0] == '~' ) && ( ( path[1] == '/' ) || ( path[1] == '\\' ) ) ) {
 				CTEXTSTR here;
 				size_t len;
+#ifdef _WIN32
+				here = OSALOT_GetEnvironmentVariable( "USERPROFILE" );
+#else
 				here = OSALOT_GetEnvironmentVariable( "HOME" );
+#endif
+				ReleaseEx( tmp_path DBG_SRC );
 				tmp_path = NewArray( TEXTCHAR, len = ( StrLen( here ) + StrLen( path ) ) );
-				tnprintf( tmp_path, len, "%s" SYS_PATHCHAR "%s", here, path + 2 );
-			}
-			else if( ( path[0] == '*' ) && ( ( path[1] == '/' ) || ( path[1] == '\\' ) ) ) {
+				tnprintf( tmp_path, len, "%s%s%s", here
+				        , path[1] ? SYS_PATHCHAR : ""
+				        , path[1]?path + 2:(path+1) );
+			} else if( ( path[0] == '*' ) && ( ( path[1] == 0 ) || ( path[1] == '/' ) || ( path[1] == '\\' ) ) ) {
 				CTEXTSTR here;
 				size_t len;
 				here = ( *winfile_local ).data_file_root;
+				ReleaseEx( tmp_path DBG_SRC );
 				tmp_path = NewArray( TEXTCHAR, len = ( StrLen( here ) + StrLen( path ) ) );
-				tnprintf( tmp_path, len, "%s" SYS_PATHCHAR "%s", here, path + 2 );
-			}
-			else if( ( path[0] == ';' ) && ( ( path[1] == '/' ) || ( path[1] == '\\' ) ) ) {
+				tnprintf( tmp_path, len, "%s%s%s", here
+				        , path[1] ? SYS_PATHCHAR : ""
+				        , path[1]?path + 2:(path+1) );
+			} else if( ( path[0] == ';' ) && ( ( path[1] == 0 ) || ( path[1] == '/' ) || ( path[1] == '\\' ) ) ) {
 				CTEXTSTR here;
 				size_t len;
 				here = ( *winfile_local ).local_data_file_root;
+				ReleaseEx( tmp_path DBG_SRC );
 				tmp_path = NewArray( TEXTCHAR, len = ( StrLen( here ) + StrLen( path ) ) );
-				tnprintf( tmp_path, len, "%s" SYS_PATHCHAR "%s", here, path + 2 );
-			}
-			else if( path[0] == '^' && ( ( path[1] == '/' ) || ( path[1] == '\\' ) ) ) {
+				tnprintf( tmp_path, len, "%s%s%s", here
+				        , path[1] ? SYS_PATHCHAR : ""
+				        , path[1]?path + 2:(path+1) );
+			} else if( path[0] == '?' && ( ( path[1] == 0 ) || ( path[1] == '/' ) || ( path[1] == '\\' ) ) ) {
 				CTEXTSTR here;
 				size_t len;
-				here = GetStartupPath();
+				here = ( *winfile_local ).share_data_root;
+				ReleaseEx( tmp_path DBG_SRC );
 				tmp_path = NewArray( TEXTCHAR, len = ( StrLen( here ) + StrLen( path ) ) );
-				tnprintf( tmp_path, len, "%s" SYS_PATHCHAR "%s", here, path + 2 );
-			}
-			else if( path[0] == '%' ) {
-				tmp_path = ExpandPathVariable( path );
-			}
-			else {
-				tmp_path = StrDup( path );
+				tnprintf( tmp_path, len, "%s%s%s", here
+				        , path[1] ? SYS_PATHCHAR : ""
+				        , path[1]?path + 2:(path+1) );
 			}
 #if __ANDROID__
 			{
@@ -55822,24 +59595,62 @@ TEXTSTR ExpandPathEx( CTEXTSTR path, struct file_system_interface* fsi )
 					*/
 			}
 #endif
-		}
-		else if( StrChr( path, '%' ) != NULL ) {
+			if( tmp_path[0] == '~' && ( ( tmp_path[1] == '/' ) || ( tmp_path[1] == '\\' ) ) ) {
+				CTEXTSTR here;
+				size_t len;
+				TEXTSTR tmp_;
+#ifdef _WIN32
+				here = OSALOT_GetEnvironmentVariable( "HOMEPATH" );
+#else
+				here = OSALOT_GetEnvironmentVariable( "HOME" );
+#endif
+				tmp_ = NewArray( TEXTCHAR, len = ( StrLen( here ) + StrLen( tmp_path ) ) );
+				tnprintf( tmp_, len, "%s%s%s", here
+				        , tmp_path[1] ? SYS_PATHCHAR : ""
+				        , tmp_path[1]?tmp_path + 2:(tmp_path+1) );
+				ReleaseEx( tmp_path DBG_SRC );
+				tmp_path = tmp_;
+			}
+			if( tmp_path && StrChr( tmp_path, '%' ) != NULL ) {
+				TEXTSTR freePath = tmp_path;
+				tmp_path = ExpandPathVariable( tmp_path );
+				ReleaseEx( freePath DBG_SRC );
+			} else if( path && StrChr( path, '%' ) != NULL ) {
+				tmp_path = ExpandPathVariable( path );
+			}
+		} else if( StrChr( path, '%' ) != NULL ) {
 			tmp_path = ExpandPathVariable( path );
-		}
-		else {
-			tmp_path = StrDup( path );
+		} else {
+			// is already duplicated, no changes were made.
+			//tmp_path = StrDupEx( path DBG_RELAY );
 		}
 	}
+	{
+		TEXTSTR p = tmp_path;
+		while( p[0] ) {
+			if( p[0] == '/' || p[0] == '\\' )
+				p[0] = SYSPATHCHAR[0];
+			p++;
+		}
+	}
+	squash_dotdot( tmp_path );
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
 	if( ( *winfile_local ).flags.bLogOpenClose )
 		lprintf( "output path is [%s]", tmp_path );
 #endif
 	return tmp_path;
 }
+#undef ExpandPathEx
+TEXTSTR ExpandPathEx( CTEXTSTR path, struct file_system_interface* fsi ) {
+	return ExpandPathExx( path, fsi DBG_SRC );
+}
+#define ExpandPathEx( path, fsi )  ExpandPathExx( path, fsi DBG_SRC )
+#undef ExpandPath
 TEXTSTR ExpandPath( CTEXTSTR path )
 {
 	return ExpandPathEx( path, NULL );
 }
+#define ExpandPath(path) ExpandPathExx( path, NULL DBG_SRC )
 INDEX  SetGroupFilePath( CTEXTSTR group, CTEXTSTR path )
 {
 	struct Group* filegroup = GetGroupFilePath( group );
@@ -55974,7 +59785,7 @@ TEXTSTR sack_prepend_path( INDEX group, CTEXTSTR filename )
 #define HANDLE int
 #define INVALID_HANDLE_VALUE -1
 #endif
-static void DetectUnicodeBOM( FILE* file ) {
+void DetectUnicodeBOM( FILE* file ) {
 	//00 00 FE FF     UTF-32, big-endian
 	//FF FE 00 00     UTF-32, little-endian
 	//FE FF           UTF-16, big-endian
@@ -56002,7 +59813,6 @@ static void DetectUnicodeBOM( FILE* file ) {
 	// can result in conversion based on UNICODE (utf-16) compilation flag is set or not (UTF8).
 	if( _file->textmode == TM_UNKNOWN ) {
 		uint8_t bytes[5];
-		enum textModes textmode = _file->textmode;
 		size_t bytelength;
 		_file->textmode = TM_BINARY;
 		bytelength = sack_fread( bytes, 1, 5, file );
@@ -56234,7 +60044,8 @@ struct file* FindFileByFILE( FILE* file_file )
 {
 	struct file* file;
 	INDEX idx;
-	LocalInit();
+	// this should have initialized a long time before here...
+	//LocalInit();
 	EnterCriticalSec( &( *winfile_local ).cs_files );
 	LIST_FORALL( ( *winfile_local ).files, idx, struct file*, file )
 	{
@@ -56258,10 +60069,12 @@ struct file* FindFileByName( INDEX group, char const* filename, struct file_syst
 	INDEX idx;
 	LocalInit();
 	EnterCriticalSec( &( *winfile_local ).cs_files );
+	//lprintf( "Find file: %s in %p", filename, winfile_local->files );
 	LIST_FORALL( ( *winfile_local ).files, idx, struct file*, file )
 	{
+		//lprintf( "Is it %d %d %s?", !mount, file->mount == mount, file->name );
 		if( ( file->group == group )
-			&& ( StrCmp( file->name, filename ) == 0 )
+			&& ( PathCmp( file->name, filename ) == 0 )
 			&& ( ( !mount ) || file->mount == mount ) ) {
 			if( allocedIndex ) {
 				AddLink( &file->files, allocedIndex );
@@ -56271,6 +60084,7 @@ struct file* FindFileByName( INDEX group, char const* filename, struct file_syst
 		}
 	}
 	LeaveCriticalSec( &( *winfile_local ).cs_files );
+	//if( file ) lprintf( "found file" ); else lprintf( "file not found" );
 	return file;
 }
 //----------------------------------------------------------------------------
@@ -56538,6 +60352,25 @@ int sack_unlink( INDEX group, CTEXTSTR filename )
 	return sack_unlinkEx( group, filename, FileSysThreadInfo.mounted_file_systems );
 }
 //----------------------------------------------------------------------------
+int sack_chdirEx( INDEX group, CTEXTSTR filename, struct file_system_mounted_interface* mount ) {
+	struct Group* filegroup;
+	int okay = 0;
+	if( mount ) {
+		if( mount->fsi && mount->fsi->_chdir ) {
+			okay = mount->fsi->_chdir( mount->psvInstance, filename );
+		}
+	} else {
+		filegroup = ( struct Group* )GetLink( &( *winfile_local ).groups, group );
+		if( ( *winfile_local ).groups && filegroup ) {
+			Deallocate( TEXTSTR, filegroup->base_path );
+			filegroup->base_path = StrDup( filename );
+			okay = 1;
+		}
+		okay |= SetCurrentPath( filename );
+	}
+	return okay;
+}
+//----------------------------------------------------------------------------
 int sack_mkdirEx( INDEX group, CTEXTSTR filename, struct file_system_mounted_interface* mount ) {
 	TEXTSTR tmp = PrependBasePath( group, NULL, filename );
 	while( mount ) {
@@ -56631,6 +60464,9 @@ int sack_rmdir( INDEX group, CTEXTSTR filename ) {
 	if( !FileSysThreadInfo._mounted_file_systems ) threadInit();
 	return sack_rmdirEx( group, filename, FileSysThreadInfo.mounted_file_systems );
 }
+static int sack_filesys_chdir( uintptr_t psv, CTEXTSTR filename ){
+	return SetCurrentPath( filename );
+}
 static int sack_filesys_rmdir( uintptr_t psv, CTEXTSTR filename )
 {
 #ifdef __LINUX__
@@ -56674,7 +60510,7 @@ FILE* sack_fopenEx( INDEX group, CTEXTSTR filename, CTEXTSTR opts, struct file_s
 		}
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
 	if( ( *winfile_local ).flags.bLogOpenClose )
-		lprintf( "open %s %p(%s) %s (%d)", filename, mount, mount->name, opts, mount ? mount->writeable : 1 );
+		lprintf( "open %s %p(%s) %s (%d)", filename, mount, mount?mount->name:"", opts, mount ? mount->writeable : 1 );
 #endif
 	file = FindFileByName( group, filename, mount, &allocedIndex );
 	LeaveCriticalSec( &( *winfile_local ).cs_files );
@@ -56704,10 +60540,10 @@ FILE* sack_fopenEx( INDEX group, CTEXTSTR filename, CTEXTSTR opts, struct file_s
 		}
 		else {
 			if( mount && group == 0 ) {
-				file->fullname = StrDup( file->name );
+				file->fullname = ExpandPath( file->name );
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
-				if( ( *winfile_local ).flags.bLogOpenClose )
-					lprintf( "full is %s", file->fullname );
+//				if( ( *winfile_local ).flags.bLogOpenClose )
+//					lprintf( "full is %s", file->fullname );
 #endif
 			}
 			else {
@@ -56715,36 +60551,44 @@ FILE* sack_fopenEx( INDEX group, CTEXTSTR filename, CTEXTSTR opts, struct file_s
 				tmp = PrependBasePathEx( group, filegroup, file->name, !mount );
 				file->fullname = ExpandPath( tmp );
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
-				if( ( *winfile_local ).flags.bLogOpenClose )
-					lprintf( "full is %s %d", file->fullname, (int)group );
+//				if( ( *winfile_local ).flags.bLogOpenClose )
+//					lprintf( "full is %s %d", file->fullname, (int)group );
 #endif
 				Deallocate( TEXTSTR, tmp );
 			}
 			//file->fullname = file->name;
 		}
 		file->group = group;
-		if( ( file->fullname[0] == '@' ) || ( file->fullname[0] == '*' ) || ( file->fullname[0] == '~' ) ) {
-			TEXTSTR tmpname = ExpandPathEx( file->fullname, NULL );
-			Deallocate( TEXTSTR, file->fullname );
-			file->fullname = tmpname;
-		}
 		if( !StrChr( opts, 'n' ) && StrChr( file->fullname, '%' ) ) {
 			if( allocedIndex != INVALID_INDEX )
 				SetLink( &file->files, allocedIndex, NULL );
+ // was a brand new file anway
 			if( memalloc ) {
 				DeleteLink( &( *winfile_local ).files, file );
 				Deallocate( TEXTCHAR*, file->name );
 				Deallocate( TEXTCHAR*, file->fullname );
+				DeleteListEx( &file->files DBG_SRC );
 				Deallocate( struct file*, file );
 			}
 			//DebugBreak();
 			return NULL;
 		}
+		{
+			char* name;
+			for( name = file->name; name[0]; name++ ) {
+				if( name[0] == '/' ) name[0] = SYSPATHCHAR[0];
+			}
+		}
+		{
+			char* name;
+			for( name = file->fullname; name[0]; name++ ) {
+				if( name[0] == '/' ) name[0] = SYSPATHCHAR[0];
+			}
+		}
 		EnterCriticalSec( &( *winfile_local ).cs_files );
-		if( allocedIndex != INVALID_INDEX )
-			SetLink( &( *winfile_local ).files, allocedIndex, file );
-		else
-			AddLink( &( *winfile_local ).files, file );
+		//lprintf( "Adding file to winfile_local.files... %p", winfile_local->files);
+		AddLink( &( *winfile_local ).files, file );
+		allocedIndex = 0;
 		LeaveCriticalSec( &( *winfile_local ).cs_files );
 	}
 	else {
@@ -56762,8 +60606,8 @@ FILE* sack_fopenEx( INDEX group, CTEXTSTR filename, CTEXTSTR opts, struct file_s
 				if( test_mount->fsi ) {
 					file->mount = test_mount;
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
-					if( ( *winfile_local ).flags.bLogOpenClose )
-						lprintf( "Call mount %s to check if file exists %s", test_mount->name, file->fullname );
+//					if( ( *winfile_local ).flags.bLogOpenClose )
+//						lprintf( "Call mount %s to check if file exists %s", test_mount->name, file->fullname );
 #endif
 					if( test_mount->fsi->exists( test_mount->psvInstance, file->fullname ) ) {
 						handle = (FILE*)test_mount->fsi->open( test_mount->psvInstance, file->fullname, opts );
@@ -56779,6 +60623,7 @@ FILE* sack_fopenEx( INDEX group, CTEXTSTR filename, CTEXTSTR opts, struct file_s
 				}
 				test_mount = test_mount->nextLayer;
 			}
+			SetLink( &file->files, allocedIndex, handle );
 		}
 		else {
 			struct file_system_mounted_interface* test_mount = mount;
@@ -56787,16 +60632,17 @@ FILE* sack_fopenEx( INDEX group, CTEXTSTR filename, CTEXTSTR opts, struct file_s
 				file->mount = test_mount;
 				if( test_mount->fsi && test_mount->writeable ) {
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
-					if( ( *winfile_local ).flags.bLogOpenClose )
-						lprintf( "Call mount %s to open file %s", test_mount->name, file->fullname );
+//					if( ( *winfile_local ).flags.bLogOpenClose )
+//						lprintf( "Call mount %s to open file %s", test_mount->name, file->fullname );
 #endif
 					handle = (FILE*)test_mount->fsi->open( test_mount->psvInstance, file->fullname, opts );
 				}
 				test_mount = test_mount->nextLayer;
 			}
+			SetLink( &file->files, allocedIndex, handle );
 		}
 	}
-	if( !handle ) {
+	if( !GetLinkCount( file->files ) ) {
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
 		if( ( *winfile_local ).flags.bLogOpenClose )
 			lprintf( "Failed to open file [%s]=[%s]", file->name, file->fullname );
@@ -56804,11 +60650,11 @@ FILE* sack_fopenEx( INDEX group, CTEXTSTR filename, CTEXTSTR opts, struct file_s
 		DeleteLink( &( *winfile_local ).files, file );
 		Deallocate( TEXTCHAR*, file->name );
 		Deallocate( TEXTCHAR*, file->fullname );
+		DeleteListEx( &file->files DBG_SRC );
 		Deallocate( struct file*, file );
-		SetLink( &file->files, allocedIndex, NULL );
 		return NULL;
 	}
-	AddLink( &file->files, handle );
+	//AddLink( &file->files, handle );
 	return handle;
 }
 //----------------------------------------------------------------------------
@@ -56893,8 +60739,8 @@ FILE* sack_fsopenEx( INDEX group
 				file->mount = test_mount;
 				if( test_mount->fsi && test_mount->writeable ) {
 #if !defined( __FILESYS_NO_FILE_LOGGING__ )
-					if( ( *winfile_local ).flags.bLogOpenClose )
-						lprintf( "Call mount %s to open file %s", test_mount->name, file->fullname );
+//					if( ( *winfile_local ).flags.bLogOpenClose )
+//						lprintf( "Call mount %s to open file %s", test_mount->name, file->fullname );
 #endif
 					handle = (FILE*)test_mount->fsi->open( test_mount->psvInstance, file->fullname, opts );
 				}
@@ -57033,11 +60879,13 @@ int  sack_fclose( FILE* file_file )
 	return fclose( file_file );
 }
 //----------------------------------------------------------------------------
+/*
 static void transcodeOutputText( struct file* file, POINTER buffer, size_t size, POINTER* outbuf, size_t* outsize ) {
 }
 //----------------------------------------------------------------------------
 static void transcodeInputText( struct file* file, POINTER buffer, size_t size, POINTER* outbuf, size_t* outsize ) {
 }
+*/
 //----------------------------------------------------------------------------
 size_t  sack_fread( POINTER buffer, size_t size, int count, FILE* file_file )
 {
@@ -57124,10 +60972,11 @@ LOGICAL sack_existsEx( const char* filename, struct file_system_mounted_interfac
 #ifdef WIN32
 		wchar_t* wfilename = CharWConvert( filename );
 		{ wchar_t* tmp; if( LONG_PATHCHAR ) for( tmp = wfilename; tmp[0]; tmp++ ) if( tmp[0] == '/' ) tmp[0] = LONG_PATHCHAR; }
-		if( ( tmp = _wfopen( wfilename, L"rb" ) ) ) {
+		if( ( tmp = _wfopen( wfilename, L"rb" ) ) )
 #else
-		if( ( tmp = fopen( filename, "rb" ) ) ) {
+		if( ( tmp = fopen( filename, "rb" ) ) )
 #endif
+		{
 			fclose( tmp );
 #ifdef WIN32
 			Deallocate( wchar_t*, wfilename );
@@ -57137,9 +60986,9 @@ LOGICAL sack_existsEx( const char* filename, struct file_system_mounted_interfac
 #ifdef WIN32
 		Deallocate( wchar_t*, wfilename );
 #endif
-		}
-	return FALSE;
 	}
+	return FALSE;
+}
 //----------------------------------------------------------------------------
 LOGICAL sack_exists( const char* filename )
 {
@@ -57331,7 +61180,7 @@ void sack_register_filesystem_interface( CTEXTSTR name, struct file_system_inter
 	struct file_interface_tracker* fit = New( struct file_interface_tracker );
 	fit->name = StrDup( name );
 	fit->fsi = fsi;
-	LocalInit();
+	//LocalInit();
 	AddLink( &( *winfile_local ).file_system_interface, fit );
 }
 #ifdef WIN32
@@ -57463,7 +61312,7 @@ LOGICAL windowDeepDelete( const char* path )
 	}
 	if( info.dwFileAttributes & FILE_ATTRIBUTE_READONLY ) {
 		/* Remove read-only attribute */
-		FILE_BASIC_INFORMATION basic = { 0 };
+		FILE_BASIC_INFORMATION basic = {};
 		basic.FileAttributes = ( info.dwFileAttributes & ~FILE_ATTRIBUTE_READONLY ) |
 			FILE_ATTRIBUTE_ARCHIVE;
 		status = pNtSetInformationFile( handle,
@@ -57570,10 +61419,9 @@ static	struct find_cursor* CPROC sack_filesys_find_create_cursor( uintptr_t psvI
 	cursor->mask = StrDup( filemask );
 	cursor->root = StrDup( root ? root : "." );
 	{
-// StrDup( filemask ? filemask : "*" );
-		char* mask = ExpandPath( maskbuf );
-		cursor->filemask = CharWConvertLen( mask, strlen( mask ) );
-		Deallocate( char*, mask );
+		//char* mask = ExpandPath( maskbuf );// StrDup( filemask ? filemask : "*" );
+		cursor->filemask = CharWConvertLen( maskbuf, strlen( maskbuf ) );
+		//Deallocate( char*, mask );
 	}
 #ifdef WIN32
 	// windows mode is delayed until findfirst
@@ -57586,6 +61434,7 @@ static	int CPROC sack_filesys_find_first( struct find_cursor* _cursor ) {
 	struct find_cursor_data* cursor = ( struct find_cursor_data* )_cursor;
 #ifdef WIN32
 	cursor->findHandle = _wfindfirst( cursor->filemask, &cursor->fileinfo );
+	//lprintf( "findFirst %p %p", cursor->findHandle, cursor );
 	return ( cursor->findHandle != -1 );
 #else
 	if( cursor->handle ) {
@@ -57605,7 +61454,9 @@ static	int CPROC sack_filesys_find_first( struct find_cursor* _cursor ) {
 static	int CPROC sack_filesys_find_close( struct find_cursor* _cursor ) {
 	struct find_cursor_data* cursor = ( struct find_cursor_data* )_cursor;
 #ifdef WIN32
+	//int r =
 	findclose( cursor->findHandle );
+	//lprintf( "findClose %d %p", r, cursor );
 #else
 	if( cursor->handle )
 		closedir( cursor->handle );
@@ -57621,6 +61472,7 @@ static	int CPROC sack_filesys_find_next( struct find_cursor* _cursor ) {
 	struct find_cursor_data* cursor = ( struct find_cursor_data* )_cursor;
 #ifdef WIN32
 	r = !_wfindnext( cursor->findHandle, &cursor->fileinfo );
+	//lprintf( "findNext %d %p", r, cursor );
 #else
 	do {
 		cursor->de = readdir( cursor->handle );
@@ -57722,6 +61574,7 @@ static	LOGICAL CPROC sack_filesys_find_is_directory( struct find_cursor* _cursor
 #  ifdef UNDER_CE
 	return ( cursor->fileinfo.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY );
 #  else
+	//lprintf( "isDir %d %08x %p", ( cursor->fileinfo.attrib & _A_SUBDIR ), cursor->fileinfo.attrib, cursor );
 	return ( cursor->fileinfo.attrib & _A_SUBDIR );
 #  endif
 #else
@@ -57733,7 +61586,17 @@ static	LOGICAL CPROC sack_filesys_find_is_directory( struct find_cursor* _cursor
 static	LOGICAL CPROC sack_filesys_is_directory( uintptr_t psvInstance, const char* buffer ) {
 	return IsPath( buffer );
 }
-static struct file_system_interface native_fsi = {
+int sack_make_public( uintptr_t psvInstance, CTEXTSTR filename ) {
+#ifdef __LINUX__
+	TEXTSTR tmp = ExpandPath( filename );
+	int r = chmod( tmp, 0777 );
+	ReleaseEx( tmp DBG_SRC );
+	return r;
+#else
+	return 0;
+#endif
+}
+struct file_system_interface native_fsi = {
 	sack_filesys_open
 		, sack_filesys_close
 		, sack_filesys_read
@@ -57767,14 +61630,16 @@ static struct file_system_interface native_fsi = {
 		, sack_filesys_mkdir
  // legacy support
 		, sack_filesys_rmdir
+ // lock( FILE* )
+		, NULL
+ // unlock( FILE* )
+		, NULL
+		, sack_make_public
+		, sack_filesys_chdir
 } ;
 PRIORITY_PRELOAD( InitWinFileSysEarly, OSALOT_PRELOAD_PRIORITY - 1 )
 {
 	LocalInit();
-	if( !sack_get_filesystem_interface( "native" ) )
-		sack_register_filesystem_interface( "native", &native_fsi );
-	if( !( *winfile_local )._default_mount )
-		( *winfile_local )._default_mount = sack_mount_filesystem( "native", &native_fsi, 1000, (uintptr_t)NULL, TRUE );
 	FileSysThreadInfo.default_mount = ( *winfile_local )._default_mount;
 #ifdef WIN32
 	pNtSetInformationFile = (sNtSetInformationFile)LoadFunction(
@@ -57799,8 +61664,25 @@ static void* CPROC sack_filesys_open( uintptr_t psv, const char* filename, const
 	result = _wfopen( wfilename, wopts );
 	Deallocate( wchar_t*, wfilename );
 	Deallocate( wchar_t*, wopts );
+	if( result )
+	{
+		int h = fileno( (FILE*)result );
+		if( h >= 0 ) {
+			SetHandleInformation( (HANDLE)_get_osfhandle(h), HANDLE_FLAG_INHERIT, 0 );
+		}
+	}
 #else
-	result = fopen( filename, opts );
+	char *tmpFilename = StrDup( filename );
+	{ char* tmp; if( LONG_PATHCHAR ) for( tmp = tmpFilename; tmp[0]; tmp++ ) if( tmp[0] == '\\' ) tmp[0] = LONG_PATHCHAR; }
+	result = fopen( tmpFilename, opts );
+	{
+		int h = fileno( (FILE*)result );
+		if( h >= 0 ) {
+			int flags = fcntl( h, F_GETFD, 0 );
+			if( flags >= 0 ) fcntl( h, F_SETFD, flags | FD_CLOEXEC );
+		}
+	}
+	Deallocate( char*, tmpFilename );
 #endif
 	return result;
 }
@@ -57811,13 +61693,18 @@ static int CPROC sack_filesys_exists( uintptr_t psv, const char* filename ) {
 #ifdef WIN32
 	wchar_t* wfilename = CharWConvert( filename );
 	{ wchar_t* tmp; if( LONG_PATHCHAR ) for( tmp = wfilename; tmp[0]; tmp++ ) if( tmp[0] == '/' ) tmp[0] = LONG_PATHCHAR; }
-	if( ( tmp = _wfopen( wfilename, L"rb" ) ) ) {
+	if( ( tmp = _wfopen( wfilename, L"rb" ) ) )
 #else
-	if( ( tmp = fopen( filename, "rb" ) ) ) {
+	char *tmpFilename = StrDup( filename );
+	{ char* tmp; if( LONG_PATHCHAR ) for( tmp = tmpFilename; tmp[0]; tmp++ ) if( tmp[0] == '\\' ) tmp[0] = LONG_PATHCHAR; }
+	if( ( tmp = fopen( filename, "rb" ) ) )
 #endif
+	{
 		fclose( tmp );
 #ifdef WIN32
 		Deallocate( wchar_t*, wfilename );
+#else
+		Deallocate( char*, tmpFilename );
 #endif
 		return TRUE;
 	}
@@ -57825,7 +61712,7 @@ static int CPROC sack_filesys_exists( uintptr_t psv, const char* filename ) {
 	Deallocate( wchar_t*, wfilename );
 #endif
 	return FALSE;
-	}
+}
 struct file_system_mounted_interface* sack_get_default_mount( void ) {
 	return FileSysThreadInfo.default_mount;
 }
@@ -58026,11 +61913,29 @@ int sack_funlock( FILE* file_ ) {
 	}
 	return 0;
 }
+int make_public( CTEXTSTR filename ) {
+	struct file_system_mounted_interface*mount =sack_get_default_mount();
+	if( mount && mount->fsi->_make_public ) return mount->fsi->_make_public( mount->psvInstance, filename );
+	errno = ENOENT;
+	return -1;
+}
+int make_public_mount( CTEXTSTR filename, struct file_system_mounted_interface*mount ) {
+	if( mount && mount->fsi->_make_public ) return mount->fsi->_make_public( mount->psvInstance, filename );
+	errno = ENOENT;
+	return -1;
+}
 FILESYS_NAMESPACE_END
 #ifdef _MSC_VER
 #  pragma warning( default: 6387 )
  // disable ignoring return value of chsize; nothing to do if it fails.
 #  pragma warning( default: 6031 )
+#endif
+#ifdef UNDEF_FILESYS_DEFS
+#   undef UNDEF_FILESYS_DEFS
+#   undef FILESYSTEM_LIBRARY_SOURCE
+#   undef NO_UNICODE_C
+#   undef WINFILE_COMMON_SOURCE
+#   undef FIX_RELEASE_COM_COLLISION
 #endif
 #define NO_UNICODE_C
 #ifdef _MSC_VER
@@ -58657,22 +62562,23 @@ getnext:
 #else
 #  define pDataBuffer pData->buffer
 #endif
-	//lprintf( "Check if %s is a directory...", pData->buffer );
-	if( ((flags & (SFF_DIRECTORIES | SFF_SUBCURSE))
-		&& (pData->scanning_mount && pData->scanning_mount->fsi
-			&& (pData->scanning_mount->fsi->is_directory
-				&& pData->scanning_mount->fsi->is_directory( pData->scanning_mount->psvInstance, pDataBuffer ))))
-		|| (!(pData->scanning_mount ? pData->scanning_mount->fsi : NULL)
+	int isDir = ( ( pData->scanning_mount && pData->scanning_mount->fsi
+			&& ( pData->scanning_mount->fsi->find_is_directory
+				&& pData->scanning_mount->fsi->find_is_directory( findcursor( pInfo ) ) ) )
+			|| ( !( pData->scanning_mount ? pData->scanning_mount->fsi : NULL )
 #ifdef WIN32
 #  ifdef UNDER_CE
-			&& (finddata( pInfo )->dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+				&& ( finddata( pInfo )->dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY )
 #  else
-			&& (finddata( pInfo )->attrib & _A_SUBDIR)
+				&& ( finddata( pInfo )->attrib & _A_SUBDIR )
 #  endif
 #else
-			&& IsPath( pData->buffer )
+				&& IsPath( pData->buffer )
 #endif
-			) )
+				) );
+	//lprintf( "Check if %s is a directory...", pData->buffer );
+	if( ( flags & ( SFF_DIRECTORIES | SFF_SUBCURSE ) )
+		&& isDir )
 	{
 #ifdef UNICODE
 		Deallocate( char *, pDataBuffer );
@@ -58700,21 +62606,21 @@ getnext:
 				if( pData->scanning_mount && pData->scanning_mount->fsi )
 				{
 					/*ofs = */
-tnprintf( tmpbuf, sizeof( tmpbuf ), "%s" PATHCHAR "%s", findbasename( pInfo ), pData->scanning_mount->fsi->find_get_name( findcursor( pInfo ) ) );
+tnprintf( tmpbuf, sizeof( tmpbuf ), "%s" SYSPATHCHAR "%s", findbasename( pInfo ), pData->scanning_mount->fsi->find_get_name( findcursor( pInfo ) ) );
 				}
 				else
 				{
 #ifdef WIN32
 #  ifdef UNDER_CE
 					/*ofs = */
-tnprintf( tmpbuf, sizeof( tmpbuf ), "%s" PATHCHAR "%s", findbasename( pInfo ), finddata( pInfo )->cFileName );
+tnprintf( tmpbuf, sizeof( tmpbuf ), "%s" SYSPATHCHAR "%s", findbasename( pInfo ), finddata( pInfo )->cFileName );
 #  else
 					/*ofs = */
-tnprintf( tmpbuf, sizeof( tmpbuf ), "%s" PATHCHAR "%ls", findbasename( pInfo ), finddata( pInfo )->name );
+tnprintf( tmpbuf, sizeof( tmpbuf ), "%s" SYSPATHCHAR "%ls", findbasename( pInfo ), finddata( pInfo )->name );
 #  endif
 #else
 					/*ofs = */
-tnprintf( tmpbuf, sizeof( tmpbuf ), "%s" PATHCHAR "%s", findbasename( pInfo ), de->d_name );
+tnprintf( tmpbuf, sizeof( tmpbuf ), "%s" SYSPATHCHAR "%s", findbasename( pInfo ), de->d_name );
 #endif
 				}
 				//lprintf( "process sub... %s %s", tmpbuf, findmask(pInfo)  );
@@ -58738,17 +62644,8 @@ tnprintf( tmpbuf, sizeof( tmpbuf ), "%s" PATHCHAR "%s", findbasename( pInfo ), d
 #else
 #  undef pDataBuffer
 #endif
-	if( ( sendflags = SFF_DIRECTORY, ( ( flags & SFF_DIRECTORIES )
-#ifdef WIN32
-#  ifdef UNDER_CE
-												 && ( finddata(pInfo)->dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY )
-#  else
-												 && ( finddata(pInfo)->attrib & _A_SUBDIR )
-#  endif
-#else
-												 && ( IsPath( pData->buffer ) )
-#endif
-												) ) || ( (sendflags = (enum ScanFileProcessFlags)0), CompareMask( findmask( pInfo )
+	if( ( sendflags = SFF_DIRECTORY, ( ( flags & SFF_DIRECTORIES ) && isDir ) )
+	  || ( (sendflags = (enum ScanFileProcessFlags)0), CompareMask( findmask( pInfo )
 #ifdef WIN32
 #  ifdef UNDER_CE
 																							  , finddata(pInfo)->cFileName
@@ -58762,8 +62659,10 @@ tnprintf( tmpbuf, sizeof( tmpbuf ), "%s" PATHCHAR "%s", findbasename( pInfo ), d
 																							  , (flags & SFF_IGNORECASE)?0:0 ) ) )
 	{
 		//lprintf( "Send %s", pData->buffer );
-		if( Process != NULL )
+		if( Process != NULL ) {
+			//lprintf( "Process with flags:%s %d", pData->buffer, sendflags );
 			Process( psvUser, pData->buffer, sendflags );
+		}
 		if( tmp_base )
 			Release( tmp_base );
 		return (*pInfo)?1:0;
@@ -58840,6 +62739,10 @@ FILESYS_NAMESPACE_END
 #include <intrinsics.h>
 #endif
 #ifdef __LINUX__
+#ifndef _GNU_SOURCE
+// timegm - ISOC2X feature
+#  define _GNU_SOURCE
+#endif
  // struct sockaddr_un
 #endif
 #ifdef __ANDROID__
@@ -58855,8 +62758,8 @@ FILESYS_NAMESPACE_END
 #endif
 #ifdef __cplusplus
 #include <cstdio>
-LOGGING_NAMESPACE
 #endif
+LOGGING_NAMESPACE
 #ifndef _SH_DENYWR
 #  define _SH_COMPAT 0x00
 #  define _SH_DENYRW 0x10
@@ -58886,6 +62789,8 @@ struct state_flags{
 	BIT_FIELD bLogSourceFile : 1;
 	BIT_FIELD bOptionsLoaded : 1;
 	BIT_FIELD group_ok : 1;
+	BIT_FIELD bUseStdout : 1;
+	BIT_FIELD bUseStderr : 1;
 } flags;
 // a conserviative minimalistic configuration...
 //} (*syslog_local).flags = { 0,0,1,0,1,0,1,1,0};
@@ -58935,6 +62840,7 @@ struct syslog_local_data *syslog_local;
 struct syslog_local_data _syslog_local;
 struct syslog_local_data *syslog_local = &_syslog_local;
 #endif
+static void free_next_info( void );
 static void DoSystemLog( const TEXTCHAR *buffer );
 //----------------------------------------------------------------------------
 // we should really wait until the very end to cleanup?
@@ -59148,8 +63054,13 @@ void SetDefaultName( CTEXTSTR path, CTEXTSTR name, CTEXTSTR extra )
 			Release( (POINTER)filename );
 		filename = StrDup( name );
 	}
-	if( !filepath )
+	if( !filepath ) {
+#ifdef _WIN32
 		filepath = ExpandPath( "*/" );
+#else
+		filepath = ExpandPath( ";/" );
+#endif
+	}
 	if( !filename )
 		filename = StrDup( GetProgramName() );
 	if( !filename )
@@ -59220,6 +63131,12 @@ static void LoadOptions( void )
 				SetDefaultName( buffer, NULL, NULL );
 			}
 		}
+		(*syslog_local).flags.bUseStdout = SACK_GetProfileIntEx( GetProgramName()
+																 , "SACK/Logging/Use STDOUT"
+																 , (*syslog_local).flags.bLogSourceFile, TRUE );
+		(*syslog_local).flags.bUseStderr = SACK_GetProfileIntEx( GetProgramName()
+																 , "SACK/Logging/Use STDERR"
+																 , (*syslog_local).flags.bLogSourceFile, !(*syslog_local).flags.bUseStdout );
 #endif
 		if( SACK_GetProfileIntEx( GetProgramName(), "SACK/Logging/Send Log to UDP", 0, TRUE ) )
 		{
@@ -59307,18 +63224,26 @@ void InitSyslog( int ignore_options )
 			/* using SYSLOG_AUTO_FILE option does not require this to be open.
 			* it is opened on demand.
 			*/
-#      if !defined( DEFAULT_OUTPUT_STDERR ) &&  !defined( DEFAULT_OUTPUT_STDOUT )
-			logtype = SYSLOG_AUTO_FILE;
-			(*syslog_local).flags.bLogOpenBackup = 1;
-#      else
-			logtype = SYSLOG_FILE;
-#        if defined( DEFAULT_OUTPUT_STDERR )
-			(*syslog_local).file = stderr;
-#        else
-			(*syslog_local).file = stdout;
-#        endif
 			(*syslog_local).flags.bLogOpenBackup = 0;
+#      if !defined( DEFAULT_OUTPUT_STDERR ) &&  !defined( DEFAULT_OUTPUT_STDOUT )
+			if( (*syslog_local).flags.bUseStdout ){
+				logtype = SYSLOG_FILE;
+				(*syslog_local).file = stdout;
+			} else if( (*syslog_local).flags.bUseStdout ) {
+				logtype = SYSLOG_FILE;
+				(*syslog_local).file = stderr;
+			} else {
+				logtype = SYSLOG_AUTO_FILE;
+				(*syslog_local).flags.bLogOpenBackup = 1;
+			}
 #      endif
+#        if defined( DEFAULT_OUTPUT_STDERR )
+		( *syslog_local ).file = stderr;
+		logtype = SYSLOG_FILE;
+#        else
+		( *syslog_local ).file = stdout;
+		logtype = SYSLOG_FILE;
+#        endif
 			(*syslog_local).flags.bUseDeltaTime = 1;
 			(*syslog_local).flags.bLogCPUTime = 1;
 			(*syslog_local).flags.bUseDeltaTime = 1;
@@ -59363,6 +63288,7 @@ PRIORITY_PRELOAD( InitSyslogPreload, SYSLOG_PRELOAD_PRIORITY )
 PRIORITY_PRELOAD( InitSyslogPreloadWithOptions, NAMESPACE_PRELOAD_PRIORITY + 1 )
 {
 	InitSyslog( 0 );
+	OnThreadExit( free_next_info );
 }
 PRIORITY_PRELOAD( InitSyslogPreloadAllowGroups, DEFAULT_PRELOAD_PRIORITY + 1 )
 {
@@ -59457,54 +63383,6 @@ int GetTimeZone( void ){
 		return sign * (((seconds / 60 / 60) * 100) + ((seconds / 60) % 60));
 	}
 }
-#if 0
-#ifdef _WIN32
-	{
-		static int isSet;
-		static int tz;
-		if( isSet ) return tz;
-		// Get the local system time.
-		{
-			DWORD dwType;
-			DWORD dwValue;
-			DWORD dwSize = sizeof( dwValue );
-			HKEY hTemp;
-			DWORD dwStatus;
-			dwStatus = RegOpenKeyEx( HKEY_LOCAL_MACHINE
-			                       , "SYSTEM\\CurrentControlSet\\Control\\TimeZoneInformation", 0
-			                       , KEY_READ, &hTemp );
-			if( (dwStatus == ERROR_SUCCESS) && hTemp )
-			{
-				dwSize = sizeof( dwValue );
-				dwStatus = RegQueryValueEx(hTemp, "ActiveTimeBias", 0
-				                          , &dwType
-				                          , (PBYTE)&dwValue
-				                          , &dwSize );
-				RegCloseKey( hTemp );
-			}
-			else
-				dwValue = 0;
-			//HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\TimeZoneInformation
-			// Get the timezone info.
-			//TIME_ZONE_INFORMATION TimeZoneInfo;
-			//GetTimeZoneInformation( &TimeZoneInfo );
-			// Convert local time to UTC.
-			//TzSpecificLocalTimeToSystemTime( &TimeZoneInfo,
-			//								 &LocalTime,
-			//								 &GmtTime );
-			// Local time expressed in terms of GMT bias.
-			{
-				timebuf->zhr = (int8_t)( -( (int)dwValue/60 ) ) ;
-				timebuf->zmn = (dwValue>0)?( dwValue % 60 ):((-dwValue)%60);
-			}
-			tz = (int)dwValue;
-			isSet = TRUE;
-			return tz;
-		}
-	}
-#endif
-}
-#endif
 void ConvertTickToTime( int64_t tick, PSACK_TIME st ) {
 	int8_t tz = (int8_t)tick;
 	int sign = (tz < 0) ? -1 : 1;
@@ -59965,30 +63843,87 @@ LOGICAL IsBadReadPtr( CPOINTER pointer, uintptr_t len )
 }
 #  else
 //---------------------------------------------------------------------------
+struct map_entry {
+	uintptr_t low;
+	uintptr_t high;
+};
+typedef struct map_entry MEMORYREADPTRMAPENTRY;
+#define MAXMEMORYREADPTRMAPENTRYSPERSET 512
+DeclareSet( MEMORYREADPTRMAPENTRY );
+static PMEMORYREADPTRMAPENTRYSET entryPool;
+static int compare_addr( uintptr_t a, uintptr_t b )
+{
+	struct map_entry *ma = (struct map_entry *)a;
+	struct map_entry *mb = (struct map_entry *)b;
+	if( ma->low < mb->low || ma->high <= mb->low )
+		return -1;
+	if( ma->high > mb->high || ma->low >= mb->high )
+		return 1;
+	// else ma->low <= b && ma->high >= b
+	return 0;
+}
+static int check_addr( uintptr_t psv, uintptr_t key )
+{
+	struct map_entry *ma = (struct map_entry *)key;
+	if( psv < ma->low )
+		return -1;
+	if( psv > ma->high )
+		return 1;
+	return 0;
+}
+static void delete_addr( CPOINTER data, uintptr_t key )
+{
+	Release( (POINTER)key );
+}
 LOGICAL IsBadReadPtr( CPOINTER pointer, uintptr_t len )
 {
+	static size_t last_low, last_high;
+	static PTREEROOT map_index;
  // reference unused.
-   (void)len;
+	(void)len;
 	static FILE *maps;
-	//return FALSE;
-	//DebugBreak();
+	uintptr_t ptr = (uintptr_t)pointer;
+	// quick check last known result
+	if( ptr >= last_low && ptr <= last_high )
+		return FALSE;
+	if( !map_index ){
+		map_index = CreateBinaryTreeExtended( BT_OPT_NODUPLICATES, compare_addr, delete_addr DBG_SRC );
+	}
 	if( !maps )
 		maps = fopen( "/proc/self/maps", "rt" );
-	else
+	else {
+		struct map_entry *found;
+		if( found = (struct map_entry *)LocateInBinaryTree( map_index, ptr, check_addr ) ) {
+			last_low = found->low;
+			last_high = found->high;
+			return FALSE;
+		}
 		fseek( maps, 0, SEEK_SET );
+	}
 	//fprintf( stderr, "Testing a pointer..\n" );
 	if( maps )
 	{
-		uintptr_t ptr = (uintptr_t)pointer;
+		struct map_entry *tmp;
 		char line[256];
 		while( fgets( line, sizeof(line)-1, maps ) )
 		{
 			size_t low, high;
-			sscanf( line, "%zd-%zd" cPTRSZVALfx, &low, &high );
+			//tmp = (struct map_entry *)Allocate( sizeof( struct map_entry ) );
+//(struct map_entry *)Allocate( sizeof( struct map_entry ) );
+			tmp = GetFromSet( MEMORYREADPTRMAPENTRY, &entryPool );
+			sscanf( line, "%zx-%zx", &tmp->low, &tmp->high );
 			//fprintf( stderr, "%s" "Find: %08" PTRSZVALfx " Low: %08" PTRSZVALfx " High: %08" PTRSZVALfx "\n"
 			//		 , line, pointer, low, high );
-			if( ptr >= low && ptr <= high )
+			if( !AddBinaryNode( map_index, tmp, (uintptr_t)tmp ) )
 			{
+				// if the node existed before, then it didn't match...
+				Release( (POINTER)tmp );
+				continue;
+			}
+			if( ptr >= tmp->low && ptr <= tmp->high )
+			{
+				last_low = tmp->low;
+				last_high = tmp->high;
 				return FALSE;
 			}
 		}
@@ -60072,6 +64007,7 @@ void DoSystemLog( const TEXTCHAR *buffer )
 		|| logtype == SYSLOG_UDPBROADCAST )
 		UDPSystemLog( buffer );
 #else
+ // needs to exist because next thing is else if
 	if( 0 )
 		;
 #endif
@@ -60148,7 +64084,8 @@ void DoSystemLog( const TEXTCHAR *buffer )
 						// can't open the logging file, stop trying now, will save us trouble in the future
 						logtype = SYSLOG_NONE;
 				}
-				logtype = SYSLOG_AUTO_FILE;
+				else
+					logtype = SYSLOG_AUTO_FILE;
 			}
 		}
 		FileSystemLog( buffer );
@@ -60207,11 +64144,7 @@ void SystemLogFL( const TEXTCHAR *message FILELINE_PASS )
 		return;
 	if( !(*syslog_local).flags.group_ok && openLock )
 		return;
-#ifdef WIN32
-	while( InterlockedExchange( (long volatile*)&lowLevelLock, 1 ) ) Relinquish();
-#else
 	while( LockedExchange( &lowLevelLock, 1 ) ) Relinquish();
-#endif
 	logtime = GetLogTime();
 	if( (*syslog_local).flags.bLogSourceFile && pFile )
 	{
@@ -60227,8 +64160,13 @@ void SystemLogFL( const TEXTCHAR *message FILELINE_PASS )
 	}
 	else
 		sourcefile[0] = 0;
-	if( (*syslog_local).flags.bLogThreadID )
+	if( (*syslog_local).flags.bLogThreadID ) {
+#ifdef WIN32
 		tnprintf( threadid, sizeof( threadid ), "%012" _64fX "~", GetThisThreadID() );
+#else
+		tnprintf( threadid, sizeof( threadid ), "%012" _64fX ":%d~", GetThisThreadID(), (int)(GetThisThreadID()&0x7FFFFFFF) );
+#endif
+	}
 	if( pFile )
 		tnprintf( buffer, sizeof( buffer )
 				  , "%s%s%s%s%s%s%s"
@@ -60249,21 +64187,33 @@ void SystemLogFL( const TEXTCHAR *message FILELINE_PASS )
 	DoSystemLog( buffer );
 	lowLevelLock = 0;
 }
-#undef SystemLogEx
-void SystemLogEx ( const TEXTCHAR *message DBG_PASS )
-{
-#ifdef _DEBUG
-	SystemLogFL( message DBG_RELAY );
-#else
-	SystemLogFL( message FILELINE_NULL );
-#endif
+void BinaryToString( PVARTEXT pvt, const uint8_t* buffer, size_t size DBG_PASS ) {
+	size_t nOut = size;
+	const uint8_t* data = buffer;
+	// should make this expression something in signed_usigned_comparison...
+	while( nOut && !( nOut & ( ( (size_t)1 ) << ( ( sizeof( nOut ) * CHAR_BIT ) - 1 ) ) ) ) {
+		TEXTCHAR cOut[96];
+		size_t ofs = 0;
+		size_t x;
+		ofs = 0;
+		for( x = 0; x < nOut && x < 16; x++ )
+			 ofs += tnprintf( cOut + ofs, sizeof( cOut ) / sizeof( TEXTCHAR ) - ofs, "%02X ", (unsigned char)data[x] );
+		// space fill last partial buffer
+		for( ; x < 16; x++ )
+			 ofs += tnprintf( cOut + ofs, sizeof( cOut ) / sizeof( TEXTCHAR ) - ofs, "   " );
+		for( x = 0; x < nOut && x < 16; x++ ) {
+			 if( data[x] >= 32 && data[x] < 127 )
+				 ofs += tnprintf( cOut + ofs, sizeof( cOut ) / sizeof( TEXTCHAR ) - ofs, "%c", (unsigned char)data[x] );
+			 else
+				 ofs += tnprintf( cOut + ofs, sizeof( cOut ) / sizeof( TEXTCHAR ) - ofs, "." );
+		}
+		VarTextAddDataEx( pvt, cOut, ofs DBG_RELAY );
+		VarTextAddCharacterEx( pvt, '\n' DBG_RELAY);
+		nOut -= x;
+		data += x;
+	}
 }
-#undef SystemLog
- void  SystemLog ( const TEXTCHAR *message )
-{
-	SystemLogFL( message, NULL, 0 );
-}
- void  LogBinaryFL ( const uint8_t* buffer, size_t size FILELINE_PASS )
+void  LogBinaryFL ( const uint8_t* buffer, size_t size FILELINE_PASS )
 {
 	size_t nOut = size;
 	const uint8_t* data = buffer;
@@ -60407,6 +64357,34 @@ static struct next_lprint_info *GetNextInfo( void )
 #endif
 	return next;
 }
+void free_next_info( void ) {
+	struct next_lprint_info *next;
+#ifdef USE_CUSTOM_ALLOCER
+#  if defined( WIN32 )
+	if( ( next = (struct next_lprint_info*)TlsGetValue( (*syslog_local).next_lprintf_tls ) ) ){
+		TlsSetValue( (*syslog_local).next_lprintf_tls, NULL );
+		free( next );
+	}
+#  elif defined( __LINUX__ )
+	if( ( next = (struct next_lprint_info*)pthread_getspecific( (*syslog_local).next_lprintf_tls ) ) ) {
+		pthread_setspecific( (*syslog_local).next_lprintf_tls, NULL );
+		free( next );
+	}
+#  endif
+#else
+#  if defined( WIN32 )
+	if( (next = (struct next_lprint_info*)TlsGetValue( (*syslog_local).next_lprintf_tls )) ) {
+		TlsSetValue( (*syslog_local).next_lprintf_tls, NULL );
+		Release( next );
+	}
+#  elif defined( __LINUX__ )
+	if( (next = (struct next_lprint_info*)pthread_getspecific( (*syslog_local).next_lprintf_tls )) ) {
+		pthread_setspecific( (*syslog_local).next_lprintf_tls, NULL );
+		Release( next );
+	}
+#  endif
+#endif
+}
 static INDEX CPROC _null_vlprintf ( CTEXTSTR format, va_list args )
 {
  // fix unused
@@ -60450,22 +64428,19 @@ static INDEX CPROC _real_vlprintf ( CTEXTSTR format, va_list args )
 		// at this point we're not doing internal allocations...
 		cannot_log = 0;
 		if( logtime[0] )
-#ifdef UNDER_CE
-		{
-			StringCbPrintf( buffer, 4096, "%s|"
-							  , logtime );
-			ofs = StrLen( buffer );
-		}
-#else
 			ofs = tnprintf( buffer, 4095, "%s|"
 							  , logtime );
-#endif
 		else
 			ofs = 0;
 		// argsize - the program's giving us file and line
 		// debug for here or not, this must be used.
-		if( (*syslog_local).flags.bLogThreadID )
+		if( (*syslog_local).flags.bLogThreadID ) {
+#ifdef WIN32
 			tnprintf( threadid, sizeof( threadid ), "%012" _64fX "~", GetThisThreadID() );
+#else
+			tnprintf( threadid, sizeof( threadid ), "%012" _64fX ":%d~", GetThisThreadID(), (int)(GetThisThreadID()&0x7FFFFFFF) );
+#endif
+		}
 #ifdef UNDER_CE
 		tnprintf( buffer + ofs, 4095 - ofs, "%s%s%s"
 				  , (*syslog_local).flags.bLogThreadID?threadid:""
@@ -60501,22 +64476,12 @@ static INDEX CPROC _real_vlprintf ( CTEXTSTR format, va_list args )
 					}
 #   endif
 				nLine = next_lprintf.nLine;
-#   ifdef UNDER_CE
 				tnprintf( buffer + ofs, 4095 - ofs, "%s(%" _32f "):"
 									, pFile, nLine );
 				ofs += StrLen( buffer + ofs );
-#   else
-				tnprintf( buffer + ofs, 4095 - ofs, "%s(%" _32f "):"
-									, pFile, nLine );
-				ofs += StrLen( buffer + ofs );
-#   endif
 			}
 #endif
-#ifdef UNICODE
-			vswprintf( buffer + ofs, 4095 - ofs, format, args );
-#else
 			vsnprintf( buffer + ofs, 4095 - ofs, format, args );
-#endif
 			// okay, so even the above is unsafe, because Micro$oft has
 			// decreed to be stupid.
 			buffer[4095] = 0;
@@ -60649,22 +64614,7 @@ void SetSyslogOptions( FLAGSETTYPE *options )
  // open for append, else open for write
 	(*syslog_local).flags.bLogSourceFile = TESTFLAG( options, SYSLOG_OPT_LOG_SOURCE_FILE )?1:0;
 }
-#ifdef __cplusplus_cli
-static public ref class Log
-{
-public:
-	static void log( System::String^ ouptut )
-	{
-				pin_ptr<const WCHAR> _output = PtrToStringChars(ouptut);
-				TEXTSTR __ouptut = DupWideToText( _output );
-		lprintf( "%s", __ouptut );
-		Release( __ouptut );
-	}
-};
-#endif
-#ifdef __cplusplus
 LOGGING_NAMESPACE_END
-#endif
 //---------------------------------------------------------------------------
 // $Log: syslog.c,v $
 // Revision 1.74  2005/05/30 11:56:36  d3x0r
@@ -60728,7 +64678,10 @@ LOGGING_NAMESPACE_END
 #define CONFIGSCR_PROC(type,name) IMPORT_METHOD type CPROC name
 #endif
 #ifdef __cplusplus
-SACK_NAMESPACE namespace config {
+namespace sack {
+	/* <combinewith configscript.h>
+	   \ \                          */
+	namespace config {
 #endif
 typedef char *__arg_list[1];
 typedef __arg_list arg_list;
@@ -60983,6 +64936,8 @@ struct config_element_tag
 	enum config_types type;
 // if a match is found, follow this to next.
 	struct config_test_tag *next;
+// single word uses this for multi-part phrases that are words
+	struct config_test_tag *built_next;
 	struct config_element_tag *prior;
  // this is where we came from
 	struct config_element_tag **ppMe;
@@ -60992,13 +64947,21 @@ struct config_element_tag
 		BIT_FIELD multiword_terminator : 1;
  // prior == actual segment...
 		BIT_FIELD singleword_terminator : 1;
+ // already checked and matched...
+		BIT_FIELD matched : 1;
 		// careful - assembly here requires absolute known
 		// posisitioning - -fpack-struct will short-change
 		// this structure to the minimal number of bits.
-		BIT_FIELD filler:29;
+		BIT_FIELD filler:28;
 	} flags;
  // used with vector fields.
 	uint32_t element_count;
+ // multiword needs to add to possible_checks
+	struct config_file_tag *pch;
+  // the current test this is a member of (in var or const list)
+	struct config_test_tag *Check;
+ // relates to the word element this terminates
+	struct config_element_tag *word_element;
 	union {
 		PTEXT pText;
 		struct {
@@ -61044,7 +65007,7 @@ struct config_element_tag
 				// either the count will be specified, or this will have to
 				// be auto expanded....
 };
-#define CONFIG_EMPTY_EXTRA ,NULL,NULL,NULL,{0,0,0,0},0,{{0}}
+#define CONFIG_EMPTY_EXTRA ,NULL,NULL,NULL,NULL,{0,0,0,0,0},0,NULL,NULL,NULL,{{0}}
 typedef struct config_test_tag
 {
 	// this constant list could be a more optimized structure like
@@ -61058,6 +65021,21 @@ typedef struct config_test_tag
 DeclareSet( CONFIG_TEST );
 #define MAXCONFIG_ELEMENTSPERSET 128
 DeclareSet( CONFIG_ELEMENT );
+struct config_multi_word {
+ // the element that matched
+	PCONFIG_ELEMENT pce;
+ // the element that matched
+	PCONFIG_ELEMENT pceEnd;
+ // text line that matched
+	TEXTSTR matched;
+};
+struct config_check {
+ // each test might iterate the word differently
+	PTEXT word;
+ // the current state of this test.
+	PCONFIG_TEST Check;
+	PDATALIST multiWords;
+};
 typedef struct config_file_tag CONFIG_HANDLER;
 struct config_file_tag
 {
@@ -61083,7 +65061,7 @@ struct config_file_tag
 	PCONFIG_TESTSET test_elements;
 	LOGICAL config_recovered;
 	CTEXTSTR save_config_as;
- // history of saved coniguration states...
+ // history of saved configuration states...
 	PLIST states;
 	struct config_file_flags {
  // if used, don't release
@@ -61091,6 +65069,9 @@ struct config_file_tag
 		BIT_FIELD bUnicode : 1;
 		BIT_FIELD bUnicode8 : 1;
 	} flags;
+ // list of possible config_check_tags that are valid...
+	PDATALIST possible_checks;
+	struct config_check *current_possible;
 };
 typedef struct configuation_state *PCONFIG_STATE;
 typedef struct configuation_state {
@@ -61109,8 +65090,9 @@ struct configscript_global {
 		BIT_FIELD bInitialized : 1;
 		BIT_FIELD bDisableMemoryLogging : 1;
 		BIT_FIELD bLogUnhandled : 1;
-		BIT_FIELD bLogTrace : 1;
+		BIT_FIELD bLogTraceBuild : 1;
 		BIT_FIELD bLogLines : 1;
+		BIT_FIELD bLogTrace : 1;
 	} flags;
 };
 #ifdef g
@@ -61147,6 +65129,7 @@ PRELOAD( InitGlobalConfig2 )
 	// later, set options - core startup configs like sql.config cannot read options.
 	g.flags.bDisableMemoryLogging = SACK_GetProfileIntEx( "SACK/Config Script", "Disable Memory Logging", g.flags.bDisableMemoryLogging, TRUE );
 	g.flags.bLogUnhandled = SACK_GetProfileIntEx( "SACK/Config Script", "Log Unhandled if no application handler", g.flags.bLogUnhandled, TRUE );
+	g.flags.bLogTraceBuild = SACK_GetProfileIntEx( "SACK/Config Script", "Log configuration building(trace)", g.flags.bLogTraceBuild, TRUE );
 	g.flags.bLogTrace = SACK_GetProfileIntEx( "SACK/Config Script", "Log configuration processing(trace)", g.flags.bLogTrace, TRUE );
 	g.flags.bLogLines = SACK_GetProfileIntEx( "SACK/Config Script", "Log configuration line input", g.flags.bLogLines, TRUE );
 #endif
@@ -61697,9 +65680,10 @@ static PTEXT GetConfigurationLine( PCONFIG_HANDLER pConfigHandler )
 		else
 		{
 			//lprintf( "Okay got a blank line... might handle it with 'unhandled'" );
-			if( pConfigHandler->Unhandled )
-				pConfigHandler->Unhandled( pConfigHandler->psvUser, NULL );
-			LineRelease(p);
+			//if( pConfigHandler->Unhandled )
+			//	pConfigHandler->Unhandled( pConfigHandler->psvUser, NULL );
+			if( p )
+				LineRelease(p);
 		}
 	}
 	return NULL;
@@ -61785,13 +65769,13 @@ void EncodeBinaryConfig( TEXTSTR *encode, POINTER data, size_t length )
 		convert.bin.bytes[1] = (p++)[0];
 		convert.bin.bytes[2] = (p++)[0];
 		(q++)[0] = charset[convert.base.data1];
-	EXPLOIT_BURST_FEATURE();
+		EXPLOIT_BURST_FEATURE();
 		(q++)[0] = charset[convert.base.data2];
-	EXPLOIT_BURST_FEATURE();
+		EXPLOIT_BURST_FEATURE();
 		(q++)[0] = charset[convert.base.data3];
-	EXPLOIT_BURST_FEATURE();
+		EXPLOIT_BURST_FEATURE();
 		(q++)[0] = charset[convert.base.data4];
-	EXPLOIT_BURST_FEATURE();
+		EXPLOIT_BURST_FEATURE();
 	}
 	bExtraBytes = 0;
 	if( l < length )
@@ -62391,6 +66375,7 @@ int IsSingleWordVar( PCONFIG_ELEMENT pce, PTEXT *start )
 	struct config_element_tag *pEnd;
 	PTEXT pWords = NULL;
 	int matched = 1;
+	INDEX idx;
 	struct config_element_tag *default_EOL = NULL;
 	//PTEXT __start = *start;
 	if( pce->type != CONFIG_SINGLE_WORD )
@@ -62400,13 +66385,16 @@ int IsSingleWordVar( PCONFIG_ELEMENT pce, PTEXT *start )
 		Release( pce->data[0].singleword.pWord );
 		pce->data[0].singleword.pWord = NULL;
 	}
+	LIST_FORALL( pce->data[0].multiword.pEnds, idx, struct config_element_tag *, pEnd ) {
+		pEnd->flags.matched = FALSE;
+	}
 	while( *start )
 	{
 		if( pWords )
 		{
-			INDEX idx;
 			if( (*start)->format.position.offset.spaces )
 			{
+				pce->next = pce->built_next;
 				//if( pWords )
 				//	LineRelease( pWords );
 				// so at a space, stop appending.
@@ -62427,6 +66415,8 @@ int IsSingleWordVar( PCONFIG_ELEMENT pce, PTEXT *start )
 					break;
 				}
 				else if( pEnd->type == CONFIG_NOTHING ) {
+					pce->data[0].singleword.pWhichEnd = pEnd;
+					pce->next = pEnd->next;
 					if( !default_EOL )
 						default_EOL = pce;
 				}
@@ -62476,33 +66466,77 @@ int IsMultiWordVar( PCONFIG_ELEMENT pce, PTEXT *start )
 {
 	struct config_element_tag *pEnd;
 	int matched = 1;
+	int matches = 0;
 	PTEXT pWords = NULL;
+	INDEX idx;
 	struct config_element_tag *default_EOL = NULL;
 	if( pce->type != CONFIG_MULTI_WORD )
 		return FALSE;
 	if( pce->data[0].multiword.pWords )
 	{
-		Release( pce->data[0].multiword.pWords );
-		pce->data[0].multiword.pWords = NULL;
+		// this is held external to this now...
+		//Release( pce->data[0].multiword.pWords );
+		//pce->data[0].multiword.pWords = NULL;
+	}
+	LIST_FORALL( pce->data[0].multiword.pEnds, idx, struct config_element_tag *, pEnd ) {
+		pEnd->flags.matched = FALSE;
 	}
 	while( *start )
 	{
-		INDEX idx;
 		LIST_FORALL( pce->data[0].multiword.pEnds, idx, struct config_element_tag *, pEnd )
 		{
+ // already found a match for this and added it.
+			if( pEnd->flags.matched ) continue;
+			PTEXT was_start;
+			was_start = start[0];
 			if( ( matched = IsAnyVar( pEnd, start ) ) != 0 ){
-				pce->data[0].multiword.pWhichEnd = pEnd;
+				struct config_check new_check;
+				struct config_multi_word multi_match;
+				PDATALIST pdl = pce->pch->current_possible->multiWords;
+				new_check.word = *start;
+				start[0] = was_start;
+				new_check.Check = pEnd->next;
+				new_check.multiWords = CreateDataList( sizeof( struct config_multi_word ));
+				//lprintf( "Alloc list %p:", new_check.multiWords );
+				if( pdl )
+				{
+					INDEX idx2;
+					struct config_multi_word* oldMatch;
+					DATA_FORALL( pdl, idx2, struct config_multi_word*, oldMatch ){
+						Hold( oldMatch->matched );
+						AddDataItem( &new_check.multiWords, oldMatch );
+					}
+				}
+				multi_match.pce = pce;
+				multi_match.pceEnd = pEnd;
+				{
+					PTEXT out;
+					pWords->format.position.offset.spaces = 0;
+					out = BuildLine( pWords );
+					multi_match.matched = StrDup( GetText( out ) );
+					LineRelease( out );
+				}
+				AddDataItem( &new_check.multiWords, &multi_match );
+				//new_check.multiWords = pce;
+				AddDataItem( &pce->pch->possible_checks, &new_check );
+				pEnd->flags.matched = TRUE;
+				matches++;
 				if( g.flags.bLogTrace )
-					lprintf( "Matched one of several?  set next to %p", pEnd, pEnd->next );
-				pce->next = pEnd->next;
-				break;
+					lprintf( "Matched one of several?  set next to %p %p", pEnd, pEnd->next );
+				//pce->data[0].multiword.pWhichEnd = pEnd;
+				//pce->next = pEnd->next;
+				//break;
 			}
 			else if( !default_EOL && pEnd->type == CONFIG_NOTHING ) {
 				default_EOL = pEnd;
 			}
 		}
-		if( pEnd )
-			break;
+		/*
+		if( pEnd ) {
+			// try another rule with current words matching...
+			continue;
+		}
+		*/
 		pWords = SegAppend( pWords, SegDuplicate( *start ) );
 		*start = NEXTLINE( *start );
 	}
@@ -62516,14 +66550,48 @@ int IsMultiWordVar( PCONFIG_ELEMENT pce, PTEXT *start )
 			return FALSE;
 		}
 		else {
-			if( default_EOL )
-				pce->next = default_EOL->next;
+			if( default_EOL ) {
+				struct config_check new_check;
+				struct config_multi_word multi_match;
+				PDATALIST pdl = pce->pch->current_possible->multiWords;
+				matches++;
+				new_check.word = *start;
+				new_check.Check = default_EOL->next;;
+				new_check.multiWords = CreateDataList( sizeof( struct config_multi_word ));
+				//lprintf( "Alloc list %p:", new_check.multiWords );
+				if( pdl )
+				{
+					INDEX idx2;
+					struct config_multi_word* oldMatch;
+					DATA_FORALL( pdl, idx2, struct config_multi_word*, oldMatch ){
+						Hold( oldMatch->matched );
+						AddDataItem( &new_check.multiWords, oldMatch );
+					}
+				}
+				multi_match.pce = pce;
+				multi_match.pceEnd = default_EOL;
+				{
+					PTEXT out;
+					pWords->format.position.offset.spaces = 0;
+					out = BuildLine( pWords );
+					multi_match.matched = StrDup( GetText( out ) );
+					LineRelease( out );
+				}
+				AddDataItem( &new_check.multiWords, &multi_match );
+				//new_check.multiWords = pce;
+				AddDataItem( &pce->pch->possible_checks, &new_check );
+			} else {
+				LineRelease( pWords );
+				pWords = NULL;
+			}
 			if( g.flags.bLogTrace )
 				lprintf( "is alright - gathered to end of line ok. (or matched)" );
 		}
 	}
 	//if( !pWords )
 	//	pWords = SegCreate(0);
+	LineRelease( pWords );
+	pWords = NULL;
 	if( pWords )
 	{
 		pWords->format.position.offset.spaces = 0;
@@ -62537,13 +66605,14 @@ int IsMultiWordVar( PCONFIG_ELEMENT pce, PTEXT *start )
 		return TRUE;
 	}
 	/* can have empty space for multiword, but was an OK result anyway...*/
-	return matched;
+	return matches > 0;
 }
 //---------------------------------------------------------------------
 int IsPathVar( PCONFIG_ELEMENT pce, PTEXT *start )
 {
 	struct config_element_tag *pEnd;
 	PTEXT pWords = NULL;
+	INDEX idx;
 	if( pce->type != CONFIG_PATH )
 		return FALSE;
 	if( pce->data[0].multiword.pWords )
@@ -62551,9 +66620,11 @@ int IsPathVar( PCONFIG_ELEMENT pce, PTEXT *start )
 		Release( pce->data[0].multiword.pWords );
 		pce->data[0].multiword.pWords = NULL;
 	}
+	LIST_FORALL( pce->data[0].multiword.pEnds, idx, struct config_element_tag *, pEnd ) {
+		pEnd->flags.matched = 0;
+	}
 	while( *start  )
 	{
-		INDEX idx;
 		LIST_FORALL( pce->data[0].multiword.pEnds, idx, struct config_element_tag *, pEnd )
 		{
 			if( IsAnyVar( pEnd, start ) ) {
@@ -62590,6 +66661,7 @@ int IsFileVar( PCONFIG_ELEMENT pce, PTEXT *start )
 {
 	struct config_element_tag *pEnd;
 	PTEXT pWords = NULL;
+	INDEX idx;
 	if( pce->type != CONFIG_FILE )
 		return FALSE;
 	if( pce->data[0].multiword.pWords )
@@ -62597,9 +66669,11 @@ int IsFileVar( PCONFIG_ELEMENT pce, PTEXT *start )
 		Release( pce->data[0].multiword.pWords );
 		pce->data[0].multiword.pWords = NULL;
 	}
+	LIST_FORALL( pce->data[0].multiword.pEnds, idx, struct config_element_tag *, pEnd ) {
+		pEnd->flags.matched = 0;
+	}
 	while( *start )
 	{
-		INDEX idx;
 		LIST_FORALL( pce->data[0].multiword.pEnds, idx, struct config_element_tag *, pEnd )
 		{
 			if( IsAnyVar( pEnd, start ) ) {
@@ -62635,6 +66709,7 @@ int IsFilePathVar( PCONFIG_ELEMENT pce, PTEXT *start )
 {
 	struct config_element_tag *pEnd;
 	PTEXT pWords = NULL;
+	INDEX idx;
 	if( pce->type != CONFIG_FILEPATH )
 		return FALSE;
 	if( pce->data[0].multiword.pWords )
@@ -62642,9 +66717,11 @@ int IsFilePathVar( PCONFIG_ELEMENT pce, PTEXT *start )
 		Release( pce->data[0].multiword.pWords );
 		pce->data[0].multiword.pWords = NULL;
 	}
+	LIST_FORALL( pce->data[0].multiword.pEnds, idx, struct config_element_tag *, pEnd ) {
+		pEnd->flags.matched = 0;
+	}
 	while( *start )
 	{
-		INDEX idx;
 		LIST_FORALL( pce->data[0].multiword.pEnds, idx, struct config_element_tag *, pEnd )
 		{
 			if( IsAnyVar( pEnd, start ) ) {
@@ -62751,24 +66828,24 @@ int IsAnyVarEx( PCONFIG_ELEMENT pce, PTEXT *start DBG_PASS )
 //#define PushArgument( type, arg ) ( (parampack = Preallocate( parampack, argsize += sizeof( arg )) )?(*(type*)(parampack) = (arg)),0:0)
 //#define PopArguments( sz ) Release( parampack )
 //---------------------------------------------------------------------
-void DoProcedure( uintptr_t *ppsvUser, PCONFIG_TEST Check )
+void DoProcedure( uintptr_t *ppsvUser, PCONFIG_TEST Check, PTEXT line )
 {
 	INDEX idx;
 	PCONFIG_ELEMENT pce = NULL;
 	va_args parampack;
+	PTEXT builtLine = BuildLine( line );
+	TEXTSTR textLine = GetText( builtLine );
 #ifdef __WATCOMC__
 	va_args save_parampack;
 #endif
 	init_args( parampack );
+	PushArgument( parampack, CONFIG_ARG_STRING, CTEXTSTR, textLine );
 	LIST_FORALL( Check->pVarElementList, idx, PCONFIG_ELEMENT, pce )
 	{
 		if( pce->type == CONFIG_PROCEDURE || pce->type == CONFIG_PROCEDURE_EX )
 		{
 			if( pce->data[0].Process)
 			{
-#ifdef NEED_ASSEMBLY_CALLER
-				CallProcedure( ppsvUser, pce );
-#else
 				PCONFIG_ELEMENT pcePush = pce->prior;
 				// push arguments in reverse order...
 				//lprintf( "Calling process... " );
@@ -62820,7 +66897,6 @@ void DoProcedure( uintptr_t *ppsvUser, PCONFIG_TEST Check )
 				else
 					(*ppsvUser) = pce->data[0].Process( *ppsvUser, pass_args(parampack) );
 				PopArguments( parampack );
-#endif
  // done, end of list, please leave and do not iterate further!
 				break;
 			}
@@ -62840,114 +66916,192 @@ void DoProcedure( uintptr_t *ppsvUser, PCONFIG_TEST Check )
 			}
 		}
 	}
+	LineRelease( builtLine );
 }
 void ProcessConfigurationLine( PCONFIG_HANDLER pch, PTEXT line )
 		{
 			PCONFIG_TEST Check = &pch->ConfigTestRoot;
 			PTEXT word = line;
-			while( word && Check )
+			PTEXT this_word;
+			LOGICAL processed = FALSE;
+			struct config_check *this_check;
+			struct config_check tmp_check;
+ // empty the data list
+			EmptyDataList( &pch->possible_checks );
+			tmp_check.multiWords = NULL;
+			tmp_check.word = word;
+			tmp_check.Check = Check;
+			AddDataItem( &pch->possible_checks, &tmp_check );
+//word && Check )
+			while( 1 )
 			{
+				INDEX check_idx;
+				check_idx = 0;
+				pch->current_possible = this_check = (struct config_check*)GetDataItem( &pch->possible_checks, check_idx );
+				if( this_check
+ // otherwise it's a multiword part...
+				   && this_check->Check )
+				{
 					INDEX idx;
 					PCONFIG_ELEMENT pce = NULL;
-					if( g.flags.bLogTrace )
-						lprintf( "Test word (%s) vs constant elements", GetText( word ) );
-					LIST_FORALL( Check->pConstElementList, idx, PCONFIG_ELEMENT, pce )
+					if( this_check->multiWords )
 					{
-						if( g.flags.bLogTrace )
-							lprintf( "Is %s == %s?", GetText( word ), GetText( pce->data[0].pText ) );
-						if( IsConstText( pce, &word ) )
-						{
-							Check = pce->next;
-							break;
+						INDEX idx2;
+						struct config_multi_word *cmw;
+						DATA_FORALL( this_check->multiWords, idx2, struct config_multi_word*, cmw ){
+							cmw->pce->data->multiword.pWords = cmw->matched;
+							cmw->pce->data->multiword.pWhichEnd = cmw->pceEnd;
+							cmw->pce->next = this_check->Check;
 						}
 					}
-					if( g.flags.bLogTrace )
-						lprintf( "Test word (%s) vs variable elements", GetText( word ) );
-					{
-						if( !pce )
+					Check = this_check->Check;
+					// keep this_word to reset the word for the variable check vs constant check
+					this_word = word = this_check->word;
+					if( !word ) {
+						//lprintf( "Could have just matched to end of line and all is well..." );
+						processed = TRUE;
+						DoProcedure( &pch->psvUser, Check, line );
+					} else {
+						// remove this item; if it further matches another state will be added.
+						if( g.flags.bLogTrace && Check->pConstElementList )
+							lprintf( "Test word (%s) vs constant elements", GetText( word ) );
+						LIST_FORALL( Check->pConstElementList, idx, PCONFIG_ELEMENT, pce )
 						{
-							int found = 0;
-							LIST_FORALL( Check->pVarElementList, idx, PCONFIG_ELEMENT, pce )
-							{
-								// end of the line, match should be the process...
-								if( g.flags.bLogTrace )
-								{
-									lprintf( "Is %s a Thing", GetText( word ) );
-									LogElement( "Thing is", pce );
-								}
-								if( IsAnyVar( pce, &word ) )
-								{
-									if( g.flags.bLogTrace )
-										lprintf( "Yes, it is any var." );
-									found = 1;
-									if( g.flags.bLogTrace )
-										lprintf( "pce->next is %p  word is %p(%s)", pce->next, word, GetText( word ) );
-									Check = pce->next;
-									break;
-								}
-								else if( g.flags.bLogTrace )
-								{
-									lprintf( "But it's not anything I know." );
-								}
-							}
 							if( g.flags.bLogTrace )
-								lprintf( "is %s", found?"found":"Not found" );
-							if( !found )
+								lprintf( "Is %s == %s?", GetText( word ), GetText( pce->data[0].pText ) );
+							if( IsConstText( pce, &word ) )
 							{
-								PTEXT pLine = BuildLine( line );
-								if( g.flags.bLogTrace )
-									lprintf( "Line not matched[%s]", GetText( pLine ) );
-								if( pch->Unhandled )
-									pch->Unhandled( pch->psvUser, GetText( pLine ) );
-								else
-								{
-									if( g.flags.bLogUnhandled )
-										xlprintf(LOG_NOISE)( "Unknown Configuration Line(No unhandled proc): %s", GetText( pLine ) );
+								//Check = pce->next;
+								if( this_check->multiWords ) {
+									INDEX idx2;
+									struct config_multi_word* cmw;
+									DATA_FORALL( this_check->multiWords, idx2, struct config_multi_word*, cmw ) {
+										Hold( cmw->matched );
+									}
+									//lprintf( "Hold list %p:", this_check->multiWords );
+									tmp_check.multiWords = (PDATALIST)Hold( this_check->multiWords );
 								}
+								else tmp_check.multiWords = NULL;
+								tmp_check.word = word;
+								tmp_check.Check = pce->next;
+								AddDataItem( &pch->possible_checks, &tmp_check );
+								word = this_word;
+								// all constants that matched would be this check...
 								break;
 							}
 						}
+						if( g.flags.bLogTrace && Check->pVarElementList )
+							lprintf( "Test word (%s) vs variable elements", GetText( word ) );
+						{
+							// even if it matched a static comparison, it might also match a variable argument...
+							// if( !pce )
+							{
+								int found = 0;
+								LIST_FORALL( Check->pVarElementList, idx, PCONFIG_ELEMENT, pce )
+								{
+									// end of the line, match should be the process...
+									if( g.flags.bLogTrace )
+									{
+										lprintf( "Is %s a Thing", GetText( word ) );
+										LogElement( "Thing is", pce );
+									}
+									if( IsAnyVar( pce, &word ) )
+									{
+										if( g.flags.bLogTrace ) lprintf( "Yes, it is (one of those)." );
+										if( !word && !pce->next ) {
+											if( g.flags.bLogTrace ) lprintf( "And it completed a match." );
+											processed = TRUE;
+											DoProcedure( &pch->psvUser, Check, line );
+											return;
+										} else {
+											found++;
+											if( pce->type != CONFIG_MULTI_WORD ) {
+												// multiword adds combinations itself...
+												if( this_check->multiWords ) {
+													INDEX idx2;
+													struct config_multi_word* cmw;
+													DATA_FORALL( this_check->multiWords, idx2, struct config_multi_word*, cmw ) {
+														Hold( cmw->matched );
+													}
+													//lprintf( "Hold list %p:", this_check->multiWords );
+													tmp_check.multiWords = (PDATALIST)Hold( this_check->multiWords );
+												}
+												else tmp_check.multiWords = NULL;
+												tmp_check.word = word;
+												tmp_check.Check = pce->next;
+												AddDataItem( &pch->possible_checks, &tmp_check );
+											}
+										        word = this_word;
+										}
+										if( g.flags.bLogTrace )
+											lprintf( "pce->next is %p  word is %p(%s)", pce->next, word, GetText( word ) );
+										//Check = pce->next;
+										//break;
+									}
+									else if( g.flags.bLogTrace )
+									{
+										lprintf( "But it's not anything I know." );
+									}
+								}
+							        if( g.flags.bLogTrace )
+									lprintf( "is %s (%d times)", found?"found":"Not found", found );
+								if( pch->possible_checks->Cnt == 0 )
+								{
+									// unhandled can't really be handled here...
+									PTEXT pLine = BuildLine( line );
+									if( g.flags.bLogTrace )
+										lprintf( "Line not matched[%s]", GetText( pLine ) );
+									if( pch->Unhandled )
+										pch->Unhandled( pch->psvUser, GetText( pLine ) );
+									else
+									{
+										if( g.flags.bLogUnhandled )
+											xlprintf(LOG_NOISE)( "Unknown Configuration Line(No unhandled proc): %s", GetText( pLine ) );
+									}
+									LineRelease( pLine );
+									break;
+								}
+							}
+						}
 					}
-			}
-			if( !Check )
-			{
-				lprintf( "Fell off the end the line processor, still have data..." );
-				{
-					PTEXT pLine = BuildLine( line );
-					if( pch->Unhandled )
-						pch->Unhandled( pch->psvUser, GetText( pLine ) );
-					else
-					{
-						// I didn't want to get rid of this...
-						// but ahh well, it's noisy and it works.
-						//lprintf( "Unknown Configuration Line: %s", GetText( pLine ) );
+					if( this_check->multiWords ){
+						struct config_multi_word* check;
+						INDEX idx;
+						DATA_FORALL( this_check->multiWords, idx, struct config_multi_word*, check ){
+							ReleaseEx( check->matched DBG_SRC );
+						}
+						//lprintf( "Delete list %p:", this_check->multiWords );
+						DeleteDataList( &this_check->multiWords );
 					}
+					DeleteDataItem( &pch->possible_checks, check_idx );
+				} else {
+					//Check = NULL;
+					break;
 				}
 			}
-	// otherwise we may have bailed early.
-			else if( !word )
+			if( !processed )
 			{
-				// check here for Procedure at end of line (word == NULL)
-				DoProcedure( &pch->psvUser, Check );
-			}
-#if 0
-			else
-			{
-				if( g.flags.bLogTrace )
-					lprintf( "line partially matched... need to recover and re-evaluate.." );
-				{
+				//lprintf( "Fell off the end the line processor, still have data..." );
+				if( pch->Unhandled ) {
 					PTEXT pLine = BuildLine( line );
-					if( pch->Unhandled )
-						pch->Unhandled( pch->psvUser, GetText( pLine ) );
-					else
-					{
-						// I didn't want to get rid of this...
-						// but ahh well, it's noisy and it works.
-						//lprintf( "Unknown Configuration Line: %s", GetText( pLine ) );
-					}
+					pch->Unhandled( pch->psvUser, GetText( pLine ) );
+					LineRelease( pLine );
 				}
 			}
-#endif
+			// cleanup any leftover states
+			while( pch->possible_checks->Cnt ) {
+				this_check = (struct config_check*)GetDataItem( &pch->possible_checks, 0 );
+				if( this_check->multiWords ){
+					struct config_multi_word* check;
+					INDEX idx;
+					DATA_FORALL( this_check->multiWords, idx, struct config_multi_word*, check ){
+						ReleaseEx( check->matched DBG_SRC );
+					}
+					//lprintf( "Delete list %p:", this_check->multiWords );
+					DeleteDataList( &this_check->multiWords );
+				}
+				DeleteDataItem( &pch->possible_checks, 0 );
+			}
 		}
 static void TestUnicode( PCONFIG_HANDLER pch )
 {
@@ -62960,14 +67114,16 @@ static void TestUnicode( PCONFIG_HANDLER pch )
 		size_t char_check;
 		int ascii_unicode = 1;
 		len_read = sack_fread( charbuf, 1, 64, pch->file );
-		if( ( ((uint16_t*)charbuf)[0] == 0xFEFF )
-			|| ( ((uint16_t*)charbuf)[0] == 0xFFFE )
-			|| ( ((uint16_t*)charbuf)[0] == 0xFDEF ) )
+		if( len_read >= 2
+			&& ( ( ((uint16_t*)charbuf)[0] == 0xFEFF )
+		      || ( ((uint16_t*)charbuf)[0] == 0xFFFE )
+		      || ( ((uint16_t*)charbuf)[0] == 0xFDEF ) ) )
 		{
 			return_pos = 2;
 			pch->flags.bUnicode = 1;
 		}
-		else if( ( charbuf[0] == (char)0xef ) && ( charbuf[1] == (char)0xbb ) && ( charbuf[0] == (char)0xbf ) )
+		else if( len_read >= 2
+			&& ( charbuf[0] == (char)0xef ) && ( charbuf[1] == (char)0xbb ) && ( charbuf[0] == (char)0xbf ) )
 		{
 			return_pos = 1;
 			pch->flags.bUnicode8 = 1;
@@ -63006,6 +67162,7 @@ static void TestUnicode( PCONFIG_HANDLER pch )
 //---------------------------------------------------------------------
 CONFIGSCR_PROC( int, ProcessConfigurationFile )( PCONFIG_HANDLER pch, CTEXTSTR name, uintptr_t psv )
 {
+	TEXTCHAR pathname[1024];
 	PTEXT line;
 #if !defined( __ANDROID__ ) && !defined( __EMSCRIPTEN__ )
  // don't prefix with anything.
@@ -63013,16 +67170,13 @@ CONFIGSCR_PROC( int, ProcessConfigurationFile )( PCONFIG_HANDLER pch, CTEXTSTR n
 #endif
 	pch->file = sack_fopen( 0, name, "rb" );
 #if !defined( __ANDROID__ ) && !defined( __EMSCRIPTEN__ )
-#  ifndef UNDER_CE
 	if( !pch->file && !absolute_path )
 	{
-		TEXTCHAR pathname[255];
 		tnprintf( pathname, sizeof( pathname ), "./%s", name );
-#	ifdef _MSC_VER
-		pathname[sizeof(pathname)/sizeof(pathname[0])-1]=0;
-#	endif
 		pch->file = sack_fopen( 0, pathname, "rb" );
 	}
+/*
+   library path will never happen anymore...
 	if( !pch->file && !absolute_path )
 	{
 		TEXTCHAR pathname[255];
@@ -63032,32 +67186,43 @@ CONFIGSCR_PROC( int, ProcessConfigurationFile )( PCONFIG_HANDLER pch, CTEXTSTR n
 #	endif
 		pch->file = sack_fopen( 0, pathname, "rb" );
 	}
-#  endif
+*/
 	if( !pch->file && !absolute_path )
 	{
+		// ~/.Freedom Collective/app/<name>
+		TEXTCHAR pathname[255];
+		tnprintf( pathname, sizeof( pathname ), ";/%s", name );
+		pch->file = sack_fopen( 0, pathname, "rb" );
+	}
+	if( !pch->file && !absolute_path )
+	{
+		// /var/Freedom Collective/(program)/<name>
+		// this is a global writable path(should be)
+		// creation of files is probably conservative...
 		TEXTCHAR pathname[255];
 		tnprintf( pathname, sizeof( pathname ), "*/%s", name );
-#	ifdef _MSC_VER
-		pathname[sizeof(pathname)/sizeof(pathname[0])-1]=0;
-#	endif
 		pch->file = sack_fopen( 0, pathname, "rb" );
 	}
 	if( !pch->file && !absolute_path )
 	{
+		// installed configurations/<name>  share/SACK/conf
 		TEXTCHAR pathname[255];
+		tnprintf( pathname, sizeof( pathname ), "?/conf/%s", name );
+		pch->file = sack_fopen( 0, pathname, "rb" );
+	}
+	/* program path might be useful */
+	if( !pch->file && !absolute_path )
+	{
+		TEXTCHAR pathname[255];
+		// with the program.
 		tnprintf( pathname, sizeof( pathname ), "#/%s", name );
-#	ifdef _MSC_VER
-		pathname[sizeof(pathname)/sizeof(pathname[0])-1]=0;
-#	endif
 		pch->file = sack_fopen( 0, pathname, "rb" );
 	}
 	if( !pch->file && !absolute_path )
 	{
 		TEXTCHAR pathname[255];
+		// system global
 		tnprintf( pathname, sizeof( pathname ), "/etc/%s", name );
-#  ifdef _MSC_VER
-		pathname[sizeof(pathname)/sizeof(pathname[0])-1]=0;
-#  endif
 		pch->file = sack_fopen( 0, pathname, "rb" );
 	}
 #endif
@@ -63109,6 +67274,7 @@ static PCONFIG_ELEMENT NewConfigTestElement( PCONFIG_HANDLER pch )
  //&(PCONFIG_ELEMENT)Allocate( sizeof( CONFIG_ELEMENT ) );
 	PCONFIG_ELEMENT pceNew = GetFromSet( CONFIG_ELEMENT, &pch->elements );
 	MemSet( pceNew, 0, sizeof( CONFIG_ELEMENT ) );
+	pceNew->pch = pch;
 	return pceNew;
 }
 //---------------------------------------------------------------------
@@ -63264,7 +67430,7 @@ PCONFIG_ELEMENT _AddConfigurationEx( PCONFIG_HANDLER pch, CTEXTSTR format, USER_
 	((uint32_t*)&flags)[0] = 0;
 	//flags.dw = 0;
 //#if defined( FULL_TRACE ) || defined( DEBUG_SLOWNESS )
-	if( g.flags.bLogTrace )
+	if( g.flags.bLogTraceBuild )
 		lprintf( "Burst..." );
 //#endif
 	pLine = burst( pTemp );
@@ -63275,7 +67441,7 @@ PCONFIG_ELEMENT _AddConfigurationEx( PCONFIG_HANDLER pch, CTEXTSTR format, USER_
 	pWord = pLine;
 	while( pWord )
 	{
-		if( g.flags.bLogTrace )
+		if( g.flags.bLogTraceBuild )
 			lprintf( "Evaluating %s ... ", GetText( pWord ) );
 		if( flags.vartag )
 		{
@@ -63324,14 +67490,14 @@ PCONFIG_ELEMENT _AddConfigurationEx( PCONFIG_HANDLER pch, CTEXTSTR format, USER_
 				pceNew->flags.vector = flags.vector;
 				break;
 			case 'w':
-				if( g.flags.bLogTrace )
+				if( g.flags.bLogTraceBuild )
 					lprintf( "Setting new as type SINGLE_WORD" );
 				pceNew->type = CONFIG_SINGLE_WORD;
 				pceNew->flags.vector = flags.vector;
 				flags.also_store_next_as_end = 1;
 				break;
 			case 'm':
-				if( g.flags.bLogTrace )
+				if( g.flags.bLogTraceBuild )
 					lprintf( "Setting new as type MULTI_WORD" );
 				pceNew->type = CONFIG_MULTI_WORD;
 				pceNew->flags.vector = flags.vector;
@@ -63368,11 +67534,11 @@ PCONFIG_ELEMENT _AddConfigurationEx( PCONFIG_HANDLER pch, CTEXTSTR format, USER_
 			}
 			if( !flags.ignore_new )
 			{
-				if( g.flags.bLogTrace )
+				if( g.flags.bLogTraceBuild )
 					lprintf( "Not ignoring the new thing..." );
 				if( flags.store_as_end )
 				{
-					if( g.flags.bLogTrace )
+					if( g.flags.bLogTraceBuild )
 						lprintf( "Storing as end..." );
 					{
 						INDEX idx;
@@ -63384,10 +67550,12 @@ PCONFIG_ELEMENT _AddConfigurationEx( PCONFIG_HANDLER pch, CTEXTSTR format, USER_
 							}
 						}
 						if( !pEnd ){
+							pceNew->Check = NULL;
+							pceNew->word_element = pcePrior;
 							AddLink( &pcePrior->data[0].multiword.pEnds, pceNew );
 							pceNew->flags.multiword_terminator = 1;
 							pceNew->prior = pcePrior;
-							pct = pceNew->next = NewConfigTest( pch );
+							pct = pceNew->next = pceNew->built_next = NewConfigTest( pch );
 							if( g.flags.bLogTrace )
 								lprintf( "%p pceNew next is %p", pceNew, pct );
 						}
@@ -63413,8 +67581,10 @@ PCONFIG_ELEMENT _AddConfigurationEx( PCONFIG_HANDLER pch, CTEXTSTR format, USER_
 					}
 					if( flags.also_store_as_end )
 					{
-						if( g.flags.bLogTrace )
+						if( g.flags.bLogTraceBuild )
 							lprintf( "Also Storing as end..." );
+						pceNew->Check = NULL;
+						pceNew->word_element = pcePrior;
 						AddLink( &pcePrior->data[0].singleword.pEnds, pceNew );
 						pceNew->flags.singleword_terminator = 1;
 						flags.also_store_as_end = 0;
@@ -63446,16 +67616,18 @@ PCONFIG_ELEMENT _AddConfigurationEx( PCONFIG_HANDLER pch, CTEXTSTR format, USER_
 						if( !pceCheck )
 						{
 //#if defined( FULL_TRACE ) || defined( DEBUG_SLOWNESS )
-							if( g.flags.bLogTrace )
+							if( g.flags.bLogTraceBuild)
 								lprintf( "Adding into a new config test" );
 //#endif
+							pceNew->Check = pct;
+							pceNew->word_element = NULL;
 							AddLink( &pct->pVarElementList, pceNew );
-							pct = pceNew->next = NewConfigTest( pch );
+							pct = pceNew->next = pceNew->built_next = NewConfigTest( pch );
 							pceNew->prior = pcePrior;
 							pcePrior = pceNew;
 							pceNew = NewConfigTestElement( pch );
 //#if defined( FULL_TRACE ) || defined( DEBUG_SLOWNESS )
-							if( g.flags.bLogTrace )
+							if( g.flags.bLogTraceBuild )
 								lprintf( "Added." );
 //#endif
 						}
@@ -63474,7 +67646,7 @@ PCONFIG_ELEMENT _AddConfigurationEx( PCONFIG_HANDLER pch, CTEXTSTR format, USER_
 		{
 			if( TextIs( pWord, "%" ) )
 			{
-				if( g.flags.bLogTrace )
+				if( g.flags.bLogTraceBuild )
 					lprintf( "next thing is a format character" );
 				flags.vartag = 1;
 			}
@@ -63483,12 +67655,12 @@ PCONFIG_ELEMENT _AddConfigurationEx( PCONFIG_HANDLER pch, CTEXTSTR format, USER_
 			{
 				INDEX idx;
 				PCONFIG_ELEMENT pConst = NULL;
-				if( g.flags.bLogTrace )
+				if( g.flags.bLogTraceBuild )
 					lprintf( "Storing %s as a constant text", GetText( pWord ) );
 				if( flags.store_as_end )
 				{
 					pceNew->type = CONFIG_TEXT;
-					if( g.flags.bLogTrace )
+					if( g.flags.bLogTraceBuild )
 						lprintf( "Adding %s as the terminator", GetText( pWord ) );
 					pceNew->data[0].pText = SegDuplicate( pWord );
 					{
@@ -63503,16 +67675,18 @@ PCONFIG_ELEMENT _AddConfigurationEx( PCONFIG_HANDLER pch, CTEXTSTR format, USER_
 						if( !pEnd ){
 							if( g.flags.bLogTrace )
 								lprintf( "Added new terminator branch... pce needs a pct" );
+							pceNew->Check = NULL;
+							pceNew->word_element = pcePrior;
 							AddLink( &pcePrior->data[0].multiword.pEnds, pceNew );
 							pceNew->flags.multiword_terminator = 1;
 							pceNew->prior = pcePrior;
-                     pct = pceNew->next = NewConfigTest( pch );
+							pct = pceNew->next = pceNew->built_next = NewConfigTest( pch );
 						}
 						else{
-                     // use existing one, so delete this one.
-                     DestroyConfigElement( pch, pceNew );
+							// use existing one, so delete this one.
+							DestroyConfigElement( pch, pceNew );
 							pceNew = pEnd;
-                     pct = pEnd->next;
+							pct = pEnd->next;
 							if( g.flags.bLogTrace )
 								lprintf( "Recovered an old pce to resume from...%p", pEnd );
 						}
@@ -63536,12 +67710,14 @@ PCONFIG_ELEMENT _AddConfigurationEx( PCONFIG_HANDLER pch, CTEXTSTR format, USER_
  // continue outer loop (while word)
 					if( pConst )
 					{
-						if( g.flags.bLogTrace )
+						if( g.flags.bLogTraceBuild )
 							lprintf( "Found constant already in tree" );
 						if( flags.also_store_as_end )
 						{
-							if( g.flags.bLogTrace )
+							if( g.flags.bLogTraceBuild )
 								lprintf( "Also Storing as end... %s", GetText( pceNew->data[0].pText ) );
+							pceNew->Check = NULL;
+							pceNew->word_element = pcePrior;
 							AddLink( &pcePrior->data[0].singleword.pEnds, pceNew );
 							pceNew->flags.singleword_terminator = 1;
 							flags.also_store_as_end = 0;
@@ -63550,20 +67726,24 @@ PCONFIG_ELEMENT _AddConfigurationEx( PCONFIG_HANDLER pch, CTEXTSTR format, USER_
 					}
 					else
 					{
-						if( g.flags.bLogTrace )
+						if( g.flags.bLogTraceBuild )
 							lprintf( "Adding new constant to tree:%s", GetText( pWord ) );
 						if( flags.also_store_as_end )
 						{
-							if( g.flags.bLogTrace )
+							if( g.flags.bLogTraceBuild )
 								lprintf( "Also Storing as end... %s", GetText( pceNew->data[0].pText ) );
+							pceNew->Check = NULL;
+							pceNew->word_element = pcePrior;
 							AddLink( &pcePrior->data[0].singleword.pEnds, pceNew );
 							pceNew->flags.singleword_terminator = 1;
 							flags.also_store_as_end = 0;
 						}
 						pceNew->type = CONFIG_TEXT;
 						pceNew->data[0].pText = SegDuplicate( pWord );
+						pceNew->Check = pct;
+						pceNew->word_element = NULL;
 						AddLink( &pct->pConstElementList, pceNew );
-						pct = pceNew->next = NewConfigTest( pch);
+						pct = pceNew->next = pceNew->built_next = NewConfigTest( pch);
 						pceNew->prior = pcePrior;
 						pcePrior = pceNew;
 						pceNew = NewConfigTestElement(pch );
@@ -63572,18 +67752,31 @@ PCONFIG_ELEMENT _AddConfigurationEx( PCONFIG_HANDLER pch, CTEXTSTR format, USER_
 			}
 		}
 		pWord = NEXTLINE( pWord );
+		if( !pWord && flags.store_next_as_end ) {
+			flags.store_as_end = 1;
+		}
+		flags.store_next_as_end = 0;
+		if( !pWord && ( flags.also_store_next_as_end ) ) {
+			flags.also_store_as_end = 1;
+		}
+		flags.also_store_next_as_end = 0;
 	}
-	if( flags.store_as_end ) {
+	if( flags.store_as_end || flags.also_store_as_end ) {
 		pceNew->type = CONFIG_NOTHING;
+		pceNew->Check = NULL;
+		pceNew->word_element = pcePrior;
 		AddLink( &pcePrior->data[0].multiword.pEnds, pceNew );
-		pceNew->flags.multiword_terminator = 1;
+		if( flags.also_store_as_end )
+			pceNew->flags.singleword_terminator = 1;
+		else
+			pceNew->flags.multiword_terminator = 1;
 		pceNew->prior = pcePrior;
-		pct = pceNew->next = NewConfigTest( pch );
-		if( g.flags.bLogTrace )
+		pct = pceNew->next = pceNew->built_next = NewConfigTest( pch );
+		if( g.flags.bLogTraceBuild )
 			lprintf( "%p pceNew next is %p", pceNew, pct );
 		pcePrior = pceNew;
 		pceNew = NewConfigTestElement( pch );
-		flags.store_as_end = 0;
+		flags.also_store_as_end = flags.store_as_end = 0;
 	}
 	LineRelease( pLine );
 	// end of the format line - add the procedure.
@@ -63591,6 +67784,8 @@ PCONFIG_ELEMENT _AddConfigurationEx( PCONFIG_HANDLER pch, CTEXTSTR format, USER_
 	// no need to update pcePrior - we're done.
 	pceNew->type = CONFIG_PROCEDURE;
 	pceNew->data[0].Process = Process;
+	pceNew->Check = pct;
+	pceNew->word_element = NULL;
 	AddLink( &pct->pVarElementList, pceNew );
 	return pceNew;
 }
@@ -63632,11 +67827,12 @@ CONFIGSCR_PROC( PCONFIG_HANDLER, CreateConfigurationEvaluator )( void )
 	{
 		if( !(g._disabled_allocate_logging++) )
 		{
-			g._last_allocate_logging = SetAllocateLogging( FALSE );
+			g._last_allocate_logging = ClearAllocateLogging( FALSE );
 		}
 	}
 	pch = (PCONFIG_HANDLER)Allocate( sizeof( CONFIG_HANDLER ) );
 	MemSet( pch, 0, sizeof( *pch ) );
+	pch->possible_checks = CreateDataList( sizeof( struct config_check) );
 	// break input chunks into lines....
 	AddLink( &pch->filters, FilterLines );
 	SetLink( &pch->filter_data, FindLink( &pch->filters, (POINTER)FilterLines ), 0 );
@@ -63681,17 +67877,27 @@ void DestroyConfigElement( PCONFIG_HANDLER pch, PCONFIG_ELEMENT pce )
 	case CONFIG_SINGLE_WORD:
 		if( pce->data[0].pWord )
 			Release( pce->data[0].pWord );
-		DeleteList( &pce->data[0].singleword.pEnds );
-		break;
-	case CONFIG_MULTI_WORD:
-		if( pce->data[0].multiword.pWords )
-			Release( pce->data[0].multiword.pWords );
-		if( pce->data[0].multiword.pEnds )
 		{
 			struct config_element_tag *pEnd;
 			INDEX idx;
-			LIST_FORALL( pce->data[0].multiword.pEnds, idx, struct config_element_tag *, pEnd )
-			{
+			if(0)
+			LIST_FORALL( pce->data[0].singleword.pEnds, idx, struct config_element_tag *, pEnd ) {
+#ifdef DEBUG_SAVE_CONFIG
+				lprintf( "Destroy config element %p", pEnd );
+#endif
+				DestroyConfigElement( pch, pEnd );
+			}
+		}
+		DeleteList( &pce->data[0].singleword.pEnds );
+		break;
+	case CONFIG_MULTI_WORD:
+		// this is a temp workspace now, data is released in other ways.
+		//if( pce->data[0].multiword.pWords )
+		//	Release( pce->data[0].multiword.pWords );
+		if( pce->data[0].multiword.pEnds ) {
+			struct config_element_tag *pEnd;
+			INDEX idx;
+			LIST_FORALL( pce->data[0].multiword.pEnds, idx, struct config_element_tag *, pEnd ) {
 #ifdef DEBUG_SAVE_CONFIG
 				lprintf( "Destroy config element %p", pEnd );
 #endif
@@ -63764,6 +67970,7 @@ CONFIGSCR_PROC( void, DestroyConfigurationEvaluator )( PCONFIG_HANDLER pch )
 	lprintf( "Destroy evaluator %p", pch );
 #endif
 	DestroyConfigTest( pch, &pch->ConfigTestRoot, FALSE );
+	DeleteDataList( &pch->possible_checks );
 	{
 		INDEX idx;
 		PCONFIG_STATE state;
@@ -63797,7 +68004,7 @@ CONFIGSCR_PROC( void, DestroyConfigurationEvaluator )( PCONFIG_HANDLER pch )
 			g._disabled_allocate_logging--;
 			if( !g._disabled_allocate_logging )
 			{
-				SetAllocateLogging( g._last_allocate_logging );
+				ResetAllocateLogging( g._last_allocate_logging );
 			}
 		}
 	DeleteList( &pch->states );
@@ -64036,6 +68243,7 @@ SYSTEM_PROC( void, ParseIntoArgs )( TEXTCHAR const* lpCmdLine, int *pArgc, TEXTC
 }
 SACK_SYSTEM_NAMESPACE_END
 //#define DEBUG_LIBRARY_LOADING
+//#define DEBUG_WINDOWS_TREMINATE
 #define NO_UNICODE_C
 #define SYSTEM_CORE_SOURCE
 #define FIX_RELEASE_COM_COLLISION
@@ -64077,31 +68285,38 @@ typedef struct handle_info_tag
 {
 	//struct mydatapath_tag *pdp;
  // partial inputs...
-   PTEXT pLine;
-   char *name;
+	PTEXT pLine;
+	char *name;
 	int       bNextNew;
-   PTHREAD   hThread;
+	PTHREAD   hThread;
 #ifdef WIN32
    // read/write handle
-   HANDLE    handle;
+	HANDLE    handle;
 #else
-   int       pair[2];
+	int       pair[2];
    // read/write handle
-   int       handle;
+	int       handle;
 #endif
 } HANDLEINFO, *PHANDLEINFO;
 struct taskOutputStruct {
 	PTASK_INFO task;
-   LOGICAL stdErr;
+	LOGICAL stdErr;
 };
 //typedef void (CPROC*TaskEnd)(uintptr_t, struct task_info_tag *task_ended);
 struct task_info_tag {
 	struct {
-		BIT_FIELD closed : 1;
-		BIT_FIELD process_ended : 1;
+  // TerminateProgram() was called against this process
+		volatile uint8_t closed;
+ // StopProgram() was called against this process
+		volatile uint8_t process_ended;
+ // the wait for exit thread already exited...
+		volatile uint8_t process_signaled_end;
 		BIT_FIELD bSentIoTerminator : 1;
 		BIT_FIELD log_input : 1;
 		BIT_FIELD runas_root : 1;
+		BIT_FIELD useCtrlBreak : 1;
+		BIT_FIELD useEventSignal : 1;
+		//BIT_FIELD noKillOnExit : 1;
 	} flags;
 	TaskEnd EndNotice;
 	TaskOutput OutputEvent;
@@ -64113,19 +68328,26 @@ struct task_info_tag {
 	volatile PTHREAD pOutputThread;
 	volatile PTHREAD pOutputThread2;
 	struct taskOutputStruct args1;
-   struct taskOutputStruct args2;
+	struct taskOutputStruct args2;
+ // flags passed to create the process
+	int spawn_flags;
 #if defined(WIN32)
+	int launch_flags;
+ // used for event to shutdown a task
+	char name[256];
 	HANDLE hReadOut, hWriteOut;
 	HANDLE hReadErr, hWriteErr;
 	HANDLE hReadIn, hWriteIn;
 	STARTUPINFO si;
 	PROCESS_INFORMATION pi;
    DWORD exitcode;
+	HWND taskWindow;
 #elif defined( __LINUX__ )
    int hReadOut, hWriteOut;
    int hReadErr, hWriteErr;
 	int hReadIn, hWriteIn;
-   pid_t pid;
+   volatile pid_t pid;
+   int pty;
    uint32_t exitcode;
 #endif
 };
@@ -64153,23 +68375,39 @@ typedef struct loaded_library_tag
 	LOGICAL mapped;
 	PFUNCTION functions;
 	DeclareLink( struct loaded_library_tag );
- // points into full_name after last slash - just library name
-	TEXTCHAR *name;
 	int loading;
+#ifdef _WIN32
+ // points into full_name after last slash - just library name
+	wchar_t* name;
 // this is appended after full_name and is l.library_path
-	TEXTCHAR *alt_full_name;
-	TEXTCHAR *cur_full_name;
-	TEXTCHAR *orig_name;
+	wchar_t* alt_full_name;
+	wchar_t* cur_full_name;
+	//wchar_t* orig_name;
+// this is more than 1; allocation pads extra bytes for the name. prefixed iwth l.load_path
+	wchar_t* full_name;
+// this is more than 1; allocation pads extra bytes for the name. prefixed iwth l.load_path
+	TEXTCHAR name_data[1];
+#else
+ // points into full_name after last slash - just library name
+	TEXTCHAR* name;
+// this is appended after full_name and is l.library_path
+	TEXTCHAR* alt_full_name;
+	TEXTCHAR* cur_full_name;
+	//TEXTCHAR* orig_name;
 // this is more than 1; allocation pads extra bytes for the name. prefixed iwth l.load_path
 	TEXTCHAR full_name[1];
+#endif
 } LIBRARY, *PLIBRARY;
-  struct local_systemlib_data {
+struct local_systemlib_data {
+	CTEXTSTR install_path;
 	CTEXTSTR load_path;
 	CTEXTSTR library_path;
 	CTEXTSTR common_data_path;
 	struct system_local_flags{
 		BIT_FIELD bLog : 1;
 		BIT_FIELD bInitialized : 1;
+		BIT_FIELD shutdown : 1;
+		BIT_FIELD bLogExec : 1;
 	} flags;
   // pointer to just filename part...
 	CTEXTSTR filename;
@@ -64184,23 +68422,28 @@ typedef struct loaded_library_tag
 	char * (CPROC*ExternalFindProgram)( const char *filename );
 	// on XP this is in PSAPI.DLL later it's in Kernel32.DLL
 #ifdef WIN32
+	PDATALIST killEventCallbacks;
 	BOOL (WINAPI* EnumProcessModules)( HANDLE hProcess, HMODULE *lphModule
 	                                 , DWORD cb, LPDWORD lpcbNeeded );
 #endif
-  }
-#ifdef __STATIC_GLOBALS__
-  local_systemlib__
+};
+#ifdef SYSTEM_CORE_SOURCE
+static struct local_systemlib_data local_systemlib__;
 #endif
-  ;
 #ifndef SYSTEM_CORE_SOURCE
 extern
 #endif
-	  struct local_systemlib_data *local_systemlib;
+	struct local_systemlib_data *local_systemlib;
 #ifdef l
 #   undef l
 #endif
 #define l (*local_systemlib)
 int TryShellExecute( PTASK_INFO task, CTEXTSTR path, CTEXTSTR program, PTEXT cmdline );
+struct callback_info {
+	int ( *cb )( uintptr_t );
+	uintptr_t psv;
+	int deleted;
+};
 #ifdef __MAC__
 //sourced from https://github.com/comex/myvmmap/blob/master/myvmmap.c Jan/7/2018
 #  include <mach/mach.h>
@@ -64236,19 +68479,19 @@ static CTEXTSTR program_name;
 static CTEXTSTR program_path;
 static CTEXTSTR library_path;
 static CTEXTSTR working_path;
-void SACKSystemSetProgramPath( char *path )
+void SACKSystemSetProgramPath( CTEXTSTR path )
 {
 	program_path = DupCStr( path );
 }
-void SACKSystemSetProgramName( char *name )
+void SACKSystemSetProgramName( CTEXTSTR name )
 {
 	program_name = DupCStr( name );
 }
-void SACKSystemSetWorkingPath( char *name )
+void SACKSystemSetWorkingPath( CTEXTSTR name )
 {
 	working_path = DupCStr( name );
 }
-void SACKSystemSetLibraryPath( char *name )
+void SACKSystemSetLibraryPath( CTEXTSTR name )
 {
 	library_path = DupCStr( name );
 }
@@ -64258,20 +68501,27 @@ CTEXTSTR OSALOT_GetEnvironmentVariable(CTEXTSTR name)
 {
 #ifdef WIN32
 	static int env_size;
-	static TEXTCHAR *env;
+	static wchar_t *env;
+	static char* lastResult;
+	wchar_t* wName = CharWConvert( name );
 	int size;
-	if( size = GetEnvironmentVariable( name, NULL, 0 ) )
+	if( size = GetEnvironmentVariableW( wName, NULL, 0 ) )
 	{
 		if( size > env_size )
 		{
 			if( env )
 				ReleaseEx( (POINTER)env DBG_SRC );
-			env = NewArray( TEXTCHAR, size + 10 );
+			env = NewArray( wchar_t, size + 10 );
 			env_size = size + 10;
 		}
-		if( GetEnvironmentVariable( name, env, env_size ) )
-			return env;
+		if( GetEnvironmentVariableW( wName, env, env_size ) ) {
+			if( lastResult ) Deallocate( char*, lastResult );
+			lastResult = WcharConvert( env );
+			Deallocate( wchar_t*, wName );
+			return lastResult;
+		}
 	}
+	Deallocate( wchar_t*, wName );
 	return NULL;
 #else
 #ifdef UNICODE
@@ -64291,7 +68541,11 @@ CTEXTSTR OSALOT_GetEnvironmentVariable(CTEXTSTR name)
 void OSALOT_SetEnvironmentVariable(CTEXTSTR name, CTEXTSTR value)
 {
 #if defined( WIN32 ) || defined( __CYGWIN__ )
-	SetEnvironmentVariable( name, value );
+	wchar_t *wName = CharWConvert( name );
+	wchar_t *wValue = CharWConvert( value );
+	SetEnvironmentVariableW( wName, wValue );
+	Deallocate( wchar_t*, wName );
+	Deallocate( wchar_t*, wValue );
 #else
 #ifdef UNICODE
 	{
@@ -64302,7 +68556,10 @@ void OSALOT_SetEnvironmentVariable(CTEXTSTR name, CTEXTSTR value)
 		ReleaseEx( tmpvalue DBG_SRC );
 	}
 #else
-	setenv( name, value, TRUE );
+	if( !value )
+		unsetenv( name );
+	else
+		setenv( name, value, TRUE );
 #endif
 #endif
 }
@@ -64484,26 +68741,92 @@ void loadMacLibraries(struct local_systemlib_data *init_l) {
         strcpy(path, "~/");
     //printf("%d: %s\n", pid, path);
     {
-				TEXTCHAR *ext, *ext1;
-				ext = (TEXTSTR)StrRChr( (CTEXTSTR)path, '.' );
-				if( ext )
-						ext[0] = 0;
-				ext1 = (TEXTSTR)pathrchr( path );
-				if( ext1 )
-				{
-						ext1[0] = 0;
-						(*init_l).filename = StrDupEx( ext1 + 1 DBG_SRC );
-						(*init_l).load_path = StrDupEx( path DBG_SRC );
-				}
-				else
-				{
-						(*init_l).filename = StrDupEx( path DBG_SRC );
-						(*init_l).load_path = StrDupEx( "" DBG_SRC );
-				}
+		TEXTCHAR *ext, *ext1;
+		ext = (TEXTSTR)StrRChr( (CTEXTSTR)path, '.' );
+		if( ext )
+				ext[0] = 0;
+		ext1 = (TEXTSTR)pathrchr( path );
+		if( ext1 )
+		{
+			ext1[0] = 0;
+			(*init_l).filename = StrDupEx( ext1 + 1 DBG_SRC );
+			(*init_l).load_path = StrDupEx( path DBG_SRC );
 		}
+		else
+		{
+			(*init_l).filename = StrDupEx( path DBG_SRC );
+			(*init_l).load_path = StrDupEx( "" DBG_SRC );
+		}
+	}
     assert(!task_info(task, TASK_DYLD_INFO, (task_info_t) &dyld_info, (mach_msg_type_number_t[]) {TASK_DYLD_INFO_COUNT}));
     is_64bit = dyld_info.all_image_info_addr >= (1ull << 32);
     lookup_dyld_images();
+}
+#endif
+#ifdef _WIN32
+static uintptr_t KillEventThread( PTHREAD thread ) {
+	char *eventName = (char*)GetThreadParam( thread );
+	HANDLE hRestartEvent = NULL;
+	{
+		// I don't know that this is stricly required;
+		//   There was a error in the service checking for signaled event...
+		PSECURITY_DESCRIPTOR psd = (PSECURITY_DESCRIPTOR)LocalAlloc( LPTR, SECURITY_DESCRIPTOR_MIN_LENGTH );
+		InitializeSecurityDescriptor( psd, SECURITY_DESCRIPTOR_REVISION );
+		SetSecurityDescriptorDacl( psd, TRUE, NULL, FALSE );
+		SECURITY_ATTRIBUTES sa = { 0 };
+		sa.nLength = sizeof( sa );
+		sa.lpSecurityDescriptor = psd;
+		sa.bInheritHandle = FALSE;
+		//lprintf( "Creating event:%s", eventName );
+		//HANDLE hEvent = CreateEvent( &sa, TRUE, FALSE, TEXT( "Global\\Test" ) );
+		hRestartEvent = CreateEvent( &sa, FALSE, FALSE, eventName );
+		LocalFree( psd );
+		eventName[0] = 0;
+	}
+	DWORD status = WaitForSingleObject( hRestartEvent, INFINITE );
+	if( status == WAIT_OBJECT_0 ) {
+		INDEX idx;
+		struct callback_info* ci;
+		//int( *cb )( void );
+		int preventShutdown = 0;
+		DATA_FORALL( l.killEventCallbacks, idx, struct callback_info*, ci ) {
+			//lprintf( "callback: %p %p %d", ci->cb, ci->psv, ci->deleted );
+			if( !ci->deleted )
+				preventShutdown |= ci->cb(ci->psv);
+		}
+		//lprintf( "Callbacks done: %d", preventShutdown );
+		if( !preventShutdown ) {
+			InvokeExits();
+			exit( 0 );
+		}
+	}
+	CloseHandle( hRestartEvent );
+	return 0;
+}
+void AddKillSignalCallback( int( *cb )( uintptr_t ), uintptr_t psv ) {
+	struct callback_info ci;
+	ci.cb = cb;
+	ci.psv = psv;
+	ci.deleted = 0;
+	if( !l.killEventCallbacks ) l.killEventCallbacks = CreateDataList( sizeof( struct callback_info ) );
+	AddDataItem( &l.killEventCallbacks, &ci );
+}
+void RemoveKillSignalCallback( int( *cb )( uintptr_t ), uintptr_t psv ) {
+	struct callback_info *ci;
+	INDEX idx;
+	DATA_FORALL( l.killEventCallbacks, idx, struct callback_info*, ci ) {
+		if( ci->cb == cb && ci->psv == psv ) {
+			ci->deleted = TRUE;
+			break;
+		}
+	}
+}
+void EnableExitEvent( void ) {
+	char eventName[256];
+	snprintf( eventName, 256, "Global\\%s(%d):exit", GetProgramName(), GetCurrentProcessId() );
+	//lprintf( "Starting exit event thread... %s", eventName );
+	ThreadTo( KillEventThread, (uintptr_t)eventName );
+	while( eventName[0] ) Relinquish();
 }
 #endif
 static void CPROC SetupSystemServices( POINTER mem, uintptr_t size )
@@ -64531,6 +68854,13 @@ static void CPROC SetupSystemServices( POINTER mem, uintptr_t size )
 			(*init_l).filename = StrDupEx( filepath DBG_SRC );
 			(*init_l).load_path = StrDupEx( "" DBG_SRC );
 		}
+#ifndef USE_LIBRARY_INSTALL_PATH
+		{
+			TEXTCHAR tmp[MAXPATH];
+			snprintf( tmp, MAXPATH, "%s/..", (*init_l).load_path );
+			(*init_l).install_path = ( ExpandPath( tmp ) );
+		}
+#endif
 		GetModuleFileName( LoadLibrary( TARGETNAME ), filepath, sizeof( filepath ) );
 		ext1 = (TEXTSTR)pathrchr( filepath );
 		if( ext1 )
@@ -64540,6 +68870,13 @@ static void CPROC SetupSystemServices( POINTER mem, uintptr_t size )
 				(*init_l).library_path = StrDupEx( filepath +4 DBG_SRC );
 			else
 				(*init_l).library_path = StrDupEx( filepath DBG_SRC );
+#ifdef USE_LIBRARY_INSTALL_PATH
+			{
+				TEXTCHAR tmp[MAXPATH];
+				snprintf( tmp, MAXPATH, "%s/..", (*init_l).library_path );
+				(*init_l).install_path = ( ExpandPath( tmp ) );
+			}
+#endif
 		}
 		else
 		{
@@ -64612,20 +68949,34 @@ static void CPROC SetupSystemServices( POINTER mem, uintptr_t size )
 	{
 		char buf[256];
 		FILE *maps = fopen( "/proc/self/maps", "rt" );
+		LOGICAL progPathSet = FALSE;
 		while( maps && fgets( buf, 256, maps ) )
 		{
-			unsigned long start;
-			unsigned long end;
-			sscanf( buf, "%lx", &start );
-			sscanf( buf+9, "%lx", &end );
-			if( ((unsigned long)SetupSystemServices >= start ) && ((unsigned long)SetupSystemServices <= end ) )
+			size_t start;
+			size_t end;
+			// remove newline from buf
+			if( !progPathSet ) {
+				TEXTSTR eol = StrChr( buf, '\n' );
+				if( eol ) eol[0] = 0;
+				TEXTSTR tail = StrRChr( buf+49, '/' );
+				if( tail && tail[0] ) tail++;
+				else tail  = buf+49;
+				if( StrCmp( tail, program_name ) == 0 ) {
+					tail[-1] = 0;
+					SACKSystemSetProgramPath( buf+49 );
+					progPathSet = TRUE;
+				}
+			}
+			sscanf( buf, "%zx", &start );
+			char *endbuf = strchr( buf, '-' );
+			endbuf++;
+			sscanf( endbuf, "%zx", &end );
+			if( ((size_t)SetupSystemServices >= start ) && ((size_t)SetupSystemServices <= end ) )
 			{
 				char *myname;
 				char *mypath;
 				void *lib;
 				char *myext;
-				void (*InvokeDeadstart)(void );
-				void (*MarkRootDeadstartComplete)(void );
 				fclose( maps );
 				maps = NULL;
 				if( strlen( buf ) > 49 )
@@ -64645,11 +68996,13 @@ static void CPROC SetupSystemServices( POINTER mem, uintptr_t size )
 				}
 				//LOGI( "my path [%s][%s]", mypath, myname );
 				// do not auto load libraries
-				SACKSystemSetProgramPath( mypath );
-				(*init_l).load_path =  DupCStr( mypath );
-				SACKSystemSetProgramName( myname );
-				(*init_l).filename = DupCStr( myname );
-				SACKSystemSetWorkingPath( buf );
+				if( !progPathSet ) {
+					SACKSystemSetProgramPath( mypath );
+					(*init_l).load_path =  DupCStr( mypath );
+					SACKSystemSetProgramName( myname );
+					(*init_l).filename = DupCStr( myname );
+				}
+				SACKSystemSetLibraryPath( buf );
 				break;
 			}
 		}
@@ -64682,8 +69035,15 @@ static void CPROC SetupSystemServices( POINTER mem, uintptr_t size )
 				pb[0]=0;
 			else
 				pb = buf - 1;
-			//lprintf( "My execution: %s", buf);
+			//lprintf( "My execution: %s %s", buf, pb+1);
 			(*init_l).filename = StrDupEx( pb + 1 DBG_SRC );
+#ifndef USE_LIBRARY_INSTALL_PATH
+			{
+				TEXTCHAR tmp[MAXPATH];
+				snprintf( tmp, MAXPATH, "%s/..", buf );
+				(*init_l).install_path = ( ExpandPath( tmp ) );
+			}
+#endif
 			(*init_l).load_path = StrDupEx( buf DBG_SRC );
 #       endif
 			local_systemlib = init_l;
@@ -64721,6 +69081,13 @@ static void CPROC SetupSystemServices( POINTER mem, uintptr_t size )
 					if( path )
 						path[0] = 0;
 					(*init_l).library_path = dupname;
+#ifdef USE_LIBRARY_INSTALL_PATH
+					{
+						TEXTCHAR tmp[MAXPATH];
+						snprintf( tmp, MAXPATH, "%s/..", dupname );
+						(*init_l).install_path = ( ExpandPath( tmp ) );
+					}
+#endif
 				}
 				else
 					(*init_l).library_path = ".";
@@ -64807,6 +69174,7 @@ PRIORITY_PRELOAD( SetupPath, OSALOT_PRELOAD_PRIORITY )
 PRELOAD( SetupSystemOptions )
 {
 	//lprintf( "SYSTEM OPTION INIT" );
+	l.flags.bLogExec = SACK_GetProfileIntEx( GetProgramName(), "SACK/System/Enable Logging exec()", 0, TRUE );
 	l.flags.bLog = SACK_GetProfileIntEx( GetProgramName(), "SACK/System/Enable Logging", 0, TRUE );
 	if( SACK_GetProfileIntEx( GetProgramName(), "SACK/System/Auto prepend program location to PATH environment", 0, TRUE ) ){
 		//lprintf( "Add %s to path", l.load_path );
@@ -64845,17 +69213,457 @@ int CPROC EndTaskWindow( PTASK_INFO task )
 }
 #endif
 //--------------------------------------------------------------------------
-#ifdef WIN32
-#if _MSC_VER
-#pragma runtime_checks( "sru", off )
-#endif
+#if 0
+#  ifdef WIN32
+#    if _MSC_VER
+#      pragma runtime_checks( "sru", off )
+#    endif
 static DWORD STDCALL SendCtrlCThreadProc( void *data )
 {
+	return GenerateConsoleCtrlEvent( CTRL_C_EVENT, 0 );
+}
+static DWORD STDCALL SendBreakThreadProc( void* data ) {
 	return GenerateConsoleCtrlEvent( CTRL_BREAK_EVENT, 0 );
 }
-#if _MSC_VER
-#pragma runtime_checks( "sru", restore )
+#    if _MSC_VER
+#      pragma runtime_checks( "sru", restore )
+#    endif
+#  endif
 #endif
+#ifdef _WIN32
+struct process_id_pair {
+	DWORD parent;
+	DWORD child;
+};
+void ProcIdFromParentProcId( DWORD dwProcessId, PDATALIST *ppdlProcs ) {
+	if( !dwProcessId ) {
+		//lprintf( "Don't search for proces id 0..." );
+		ppdlProcs[0] = NULL;
+		return;
+	}
+	struct process_id_pair pair = { GetCurrentProcessId(), dwProcessId };
+	DWORD dwMe = GetCurrentProcessId();
+// vector<PROCID> vec;
+	PDATALIST pdlProcs = CreateDataList( sizeof( struct process_id_pair ) );
+	//int i = 0;
+	INDEX maxId = 1;
+	INDEX minId = 0;
+	HANDLE hp = CreateToolhelp32Snapshot( TH32CS_SNAPPROCESS, 0 );
+	PROCESSENTRY32 pe = { 0 };
+	pe.dwSize = sizeof( PROCESSENTRY32 );
+	AddDataItem( &pdlProcs, &pair );
+	while( 1 ) {
+		int found;
+		INDEX idx;
+		struct process_id_pair*procId;
+		found = 0;
+		if( Process32First( hp, &pe ) ) {
+			do {
+  // NEXTALL steps index 1.
+				idx = minId-1;
+				if( pe.th32ParentProcessID == dwMe ) continue;
+				//lprintf( "Check  %d %d", pe.th32ParentProcessID, pe.th32ProcessID );
+				DATA_NEXTALL( pdlProcs, idx, struct process_id_pair*, procId ) {
+					//lprintf( " subCheck %d %d %d %d", idx, maxId, pe.th32ParentProcessID, procId->child );
+					if( idx > maxId ) break;
+					if( pe.th32ParentProcessID == procId->child ) {
+						found = 1;
+						pair.parent = procId->child;
+						pair.child = pe.th32ProcessID;
+						{
+							INDEX idx;
+							struct process_id_pair* procId;
+							DATA_FORALL( pdlProcs, idx, struct process_id_pair*, procId ) {
+								if( procId->parent == pair.parent && procId->child == pair.child ) break;
+							}
+							if( !procId ) AddDataItem( &pdlProcs, &pair );
+						}
+						//lprintf( "Found child %d %d", pair.parent, pair.child );
+					}
+				}
+			} while( Process32Next( hp, &pe ) );
+			minId = maxId;
+			maxId = pdlProcs->Cnt;
+		}
+		if( !found )
+			break;
+	}
+	CloseHandle( hp );
+	ppdlProcs[0] = pdlProcs;
+}
+struct handle_data {
+	unsigned long process_id;
+	HWND window_handle;
+};
+PDATALIST GetProcessTree( PTASK_INFO task ){
+	INDEX idx;
+	INDEX idx2;
+	struct process_id_pair* pair;
+	PDATALIST pdlProcs;
+	PDATALIST pdlResult = NULL;
+	struct process_tree_pair *checkPair;
+	struct process_tree_pair resultPair;
+	ProcIdFromParentProcId( task->pi.dwProcessId, &pdlProcs );
+	DATA_FORALL( pdlProcs, idx, struct process_id_pair*, pair ) {
+		struct process_tree_pair *parent;
+		INDEX parent_id = INVALID_INDEX;
+		//struct process_tree_pair *checkPair;
+		INDEX child_id = INVALID_INDEX;
+		DATA_FORALL( pdlResult, idx2, struct process_tree_pair*, checkPair ) {
+			if( checkPair->process_id == pair->parent ) {
+				parent_id = idx2;
+				parent = checkPair;
+			}
+			if( checkPair->process_id == pair->child )
+				child_id = idx2;
+		}
+		if( parent_id < 0 ){
+			resultPair.process_id = pair->parent;
+			resultPair.parent_id = -1;
+			resultPair.child_id = child_id;
+			resultPair.next_id = -1;
+			AddDataItem( &pdlResult, &resultPair );
+			parent_id = 0;
+			parent = (struct process_tree_pair *)GetDataItem( &pdlResult, 0 );
+		}
+		if( child_id < 0 ){
+			resultPair.process_id = pair->child;
+			resultPair.parent_id = parent_id;
+			resultPair.child_id = -1;
+			if( parent->child_id < 0 )
+				resultPair.next_id = -1;
+			else
+				resultPair.next_id = parent->child_id;
+			parent->child_id = pdlResult->Cnt;
+			AddDataItem( &pdlResult, &resultPair );
+		}
+	}
+	DeleteDataList( &pdlProcs );
+	return pdlResult;
+}
+BOOL is_main_window( HWND handle ) {
+	return GetWindow( handle, GW_OWNER ) == (HWND)0 && IsWindowVisible( handle );
+}
+BOOL CALLBACK enum_windows_callback( HWND handle, LPARAM lParam ) {
+	struct handle_data* data = (struct handle_data*)lParam;
+	unsigned long process_id = 0;
+	GetWindowThreadProcessId( handle, &process_id );
+	if( data->process_id != process_id || !is_main_window( handle ) )
+		return TRUE;
+	data->window_handle = handle;
+	return FALSE;
+}
+HWND find_main_window( unsigned long process_id ) {
+	struct handle_data data;
+	data.process_id = process_id;
+	data.window_handle = 0;
+	EnumWindows( enum_windows_callback, (LPARAM)&data );
+	return data.window_handle;
+}
+struct move_window {
+	PTASK_INFO task;
+	int timeout, left, top, width, height;
+	uintptr_t psv;
+	void (*cb)( uintptr_t, LOGICAL );
+};
+struct style_window{
+	PTASK_INFO task;
+	int timeout;
+	uint32_t windowStyle, windowExStyle, classStyle;
+	uintptr_t psv;
+	void ( *cb )( uintptr_t, int );
+};
+HWND RefreshTaskWindow( PTASK_INFO task ) {
+	return task->taskWindow = find_main_window( task->pi.dwProcessId );
+}
+static uintptr_t moveTaskWindowThread( PTHREAD thread ) {
+	struct move_window* move = (struct move_window*)GetThreadParam( thread );
+	uint32_t time = timeGetTime();
+	BOOL success = FALSE;
+	int tries = 0;
+	//lprintf( "move Thread: %d", time );
+	while( (int)( timeGetTime() - time ) < move->timeout ) {
+		//lprintf( "move Thread(time): %d", timeGetTime() - time );
+		HWND hWndProc = move->task->taskWindow ?move->task->taskWindow :find_main_window( move->task->pi.dwProcessId );
+		int atx, aty, atw, ath;
+		if( !hWndProc ) {
+			WakeableSleep( 100 );
+			continue;
+		}
+		move->task->taskWindow = hWndProc;
+		while( (int)( timeGetTime() - time ) < move->timeout ) {
+			//lprintf( "move window(time): %d", timeGetTime() - time );
+			{
+				RECT rect;
+				GetWindowRect( hWndProc, &rect );
+				atx = rect.left;
+				aty = rect.top;
+				atw = rect.right - rect.left;
+				ath = rect.bottom - rect.top;
+				//lprintf( "Get Pos1 :%d %d %d %d %d", tries, rect.left, rect.top, atw, ath );
+			}
+			if( atx != move->left || aty != move->top || atw != move->width || ath != move->height ) {
+				success = SetWindowPos( hWndProc, HWND_TOPMOST, move->left, move->top, move->width, move->height, 0 );
+				SetWindowPos( hWndProc, HWND_NOTOPMOST, move->left, move->top, move->width, move->height, 0 );
+				//lprintf( "Success:%d %d %d %d %d", success, move->left, move->top, move->width, move->height );
+			} else {
+				//lprintf( "Window is already positioned correctly" );
+				success = 1;
+				break;
+			}
+			tries++;
+			if( tries < 3 ) {
+				WakeableSleep( 100 );
+				continue;
+			} else break;
+		}
+		if( !success ) {
+			DWORD dwError = GetLastError();
+			lprintf( "Failed to move window? %d Trying again...", dwError );
+			continue;
+		} else {
+			break;
+		}
+	}
+	//lprintf( "Done Move...%d", success );
+	if( move->cb ) move->cb( move->psv, success );
+	Deallocate( struct move_window*, move );
+	return 0;
+}
+static uintptr_t styleTaskWindowThread( PTHREAD thread ){
+	struct style_window* style = (struct style_window*)GetThreadParam( thread );
+	uint32_t time = timeGetTime();
+	int success = 0;
+	int tries = 0;
+	//lprintf( "style Thread: %d", time );
+	while( (int)( timeGetTime() - time ) < style->timeout ){
+		//lprintf( "style Thread(time): %d", timeGetTime() - time );
+		HWND hWndProc = style->task->taskWindow ? style->task->taskWindow : find_main_window( style->task->pi.dwProcessId );
+		int windowStyle, windowExStyle, classStyle;
+		if( !hWndProc ){
+			WakeableSleep( 100 );
+			continue;
+		}
+		style->task->taskWindow = hWndProc;
+		while( (int)( timeGetTime() - time ) < style->timeout ){
+			//lprintf( "style window(time): %d", timeGetTime() - time );
+			windowStyle = (int)GetWindowLongPtr( hWndProc, GWL_STYLE );
+			windowExStyle = (int)GetWindowLongPtr( hWndProc, GWL_EXSTYLE );
+			classStyle = (int)GetClassLongPtr( hWndProc, GCL_STYLE );
+			success = 0;
+			if( ( style->windowStyle != -1 ) && ( windowStyle != style->windowStyle ) )
+				SetWindowLongPtr( hWndProc, GWL_STYLE, style->windowStyle );
+			else success |= 1;
+			if( ( style->windowExStyle != -1 ) && ( windowExStyle != style->windowExStyle ) )
+				SetWindowLongPtr( hWndProc, GWL_EXSTYLE, style->windowExStyle );
+			else success |= 2;
+			if( ( style->classStyle != -1 ) && ( classStyle != style->classStyle ) )
+				SetClassLongPtr( hWndProc, GWL_EXSTYLE, style->windowExStyle );
+			else success |= 4;
+			if( success == ( 1 | 2 | 4 ) )
+				break;
+			tries++;
+			if( tries < 3 ){
+				WakeableSleep( 100 );
+				continue;
+			} else break;
+		}
+		if( success != 7 ){
+			lprintf( "Failed to set window styles? Trying again..." );
+			continue;
+		} else{
+			break;
+		}
+	}
+	//lprintf( "Done Move...%d", success );
+	if( style->cb ) style->cb( style->psv, success );
+	Deallocate( struct style_window*, style );
+	return 0;
+}
+char* GetWindowTitle( PTASK_INFO task ) {
+	HWND hWndProc = task->taskWindow ? task->taskWindow : find_main_window( task->pi.dwProcessId );
+	char* str = NewArray( char, 256 );
+	if( hWndProc ) {
+		GetWindowText( hWndProc, str, 256 );
+	} else
+		StrCpy( str, "No Window" );
+	return str;
+}
+struct find_monitor_data {
+	int device;
+	int monitor;
+	int* x; int* y;
+	int* width; int* height;
+	int found;
+};
+static BOOL WINAPI addMonitor( HMONITOR hMonitor,
+	HDC hDC_null,
+	LPRECT pRect,
+	LPARAM dwParam
+) {
+	struct find_monitor_data* data = (struct find_monitor_data*)dwParam;
+	MONITORINFOEX monitorInfo;
+	monitorInfo.cbSize = sizeof( monitorInfo );
+	GetMonitorInfo( hMonitor, (LPMONITORINFO)& monitorInfo);
+	if( data->monitor > 0 ) {
+		if( !( --data->monitor ) ) {
+			data->found = 1;
+			data->x[0] = pRect->left;
+			data->y[0] = pRect->top;
+			data->width[0] = pRect->right - pRect->left;
+			data->height[0] = pRect->bottom - pRect->top;
+			return FALSE;
+		}
+	} else {
+		for( int numStart = 0; monitorInfo.szDevice[numStart]; numStart++ ) {
+			if( monitorInfo.szDevice[numStart] >= '0' && monitorInfo.szDevice[numStart] <= '9' ) {
+				int devNum = atoi( monitorInfo.szDevice + numStart );
+				if( devNum == data->device ) {
+					data->found = 1;
+					data->x[0] = pRect->left;
+					data->y[0] = pRect->top;
+					data->width[0] = pRect->right - pRect->left;
+					data->height[0] = pRect->bottom - pRect->top;
+					return FALSE;
+				}
+				break;
+			}
+		}
+	}
+	return TRUE;
+}
+static int _GetDisplaySizeEx ( int nDisplay, int monitor
+	, int* x, int* y
+	, int* width, int* height ) {
+	{
+		struct find_monitor_data data;
+		if( monitor >= 0 ) {
+			data.monitor = monitor;
+			data.device = 0;
+		} else {
+			data.monitor = -1;
+			data.device = nDisplay;
+		}
+		data.x = x;
+		data.y = y;
+		data.width = width;
+		data.height = height;
+		data.found = 0;
+		EnumDisplayMonitors( NULL
+			, NULL
+			, addMonitor
+			, (LPARAM)&data
+		);
+		return data.found;
+	}
+#if 0
+	if( nDisplay >= 0 ) {
+		TEXTSTR teststring = NewArray( TEXTCHAR, 20 );
+		//int idx;
+		int v_test = 0;
+		int i;
+		DISPLAY_DEVICE dev;
+		DEVMODE dm;
+		if( x ) ( *x ) = 0;
+		if( y ) ( *y ) = 0;
+		if( width ) ( *width ) = 1920;
+		if( height ) ( *height ) = 1080;
+		dm.dmSize = sizeof( DEVMODE );
+		dm.dmDriverExtra = 0;
+		dev.cb = sizeof( DISPLAY_DEVICE );
+		for( v_test = 0; !found && ( v_test < 2 ); v_test++ ) {
+			// go ahead and try to find V devices too... not sure what they are, but probably won't get to use them.
+			tnprintf( teststring, 20, "\\\\.\\DISPLAY%s%d", ( v_test == 1 ) ? "V" : "", nDisplay );
+			for( i = 0;
+ // all devices
+				!found && EnumDisplayDevices( NULL
+					, i
+					, &dev
+ // dwFlags
+					, 0
+				); i++ ) {
+				if( EnumDisplaySettings( dev.DeviceName, ENUM_CURRENT_SETTINGS, &dm ) ) {
+					//if( l.flags.bLogDisplayEnumTest )
+					lprintf( "display(cur) %s is at %d,%d %dx%d", dev.DeviceName, dm.dmPosition.x, dm.dmPosition.y, dm.dmPelsWidth, dm.dmPelsHeight );
+				} else if( EnumDisplaySettings( dev.DeviceName, ENUM_REGISTRY_SETTINGS, &dm ) ) {
+					//if( l.flags.bLogDisplayEnumTest )
+					lprintf( "display(reg) %s is at %d,%d %dx%d", dev.DeviceName, dm.dmPosition.x, dm.dmPosition.y, dm.dmPelsWidth, dm.dmPelsHeight );
+				} else {
+					lprintf( "Found display name, but enum current settings failed? %s %d", teststring, GetLastError() );
+					continue;
+				}
+				if( StrCaseCmp( teststring, dev.DeviceName ) == 0 ) {
+					//if( l.flags.bLogDisplayEnumTest )
+					//	lprintf( "[%s] might be [%s]", teststring, dev.DeviceName );
+					if( x )
+						( *x ) = dm.dmPosition.x;
+					if( y )
+						( *y ) = dm.dmPosition.y;
+					if( width )
+						( *width ) = dm.dmPelsWidth;
+					if( height )
+						( *height ) = dm.dmPelsHeight;
+					found = 1;
+					break;
+				}
+			}
+		}
+		Deallocate( char*, teststring );
+	}
+	return found;
+#endif
+}
+void StyleTaskWindow( PTASK_INFO task, int timeout, int windowStyle, int windowExStyle, int classStyle, void cb(uintptr_t, int ), uintptr_t psv ) {
+	struct style_window* style = New( struct style_window );
+	style->task = task;
+	style->timeout = timeout;
+	style->windowStyle = windowStyle;
+	style->windowExStyle = windowExStyle;
+	style->classStyle = classStyle;
+	style->cb = cb;
+	style->psv = psv;
+	ThreadTo( styleTaskWindowThread, (uintptr_t)style );
+}
+void MoveTaskWindow( PTASK_INFO task, int timeout, int left, int top, int width, int height, void cb(uintptr_t, LOGICAL ), uintptr_t psv ) {
+	struct move_window* move = New( struct move_window );
+	move->task = task;
+	move->timeout = timeout;
+	move->left = left;
+	move->top = top;
+	move->width = width;
+	move->height = height;
+	move->cb = cb;
+	move->psv = psv;
+	ThreadTo( moveTaskWindowThread, (uintptr_t)move );
+}
+void MoveTaskWindowToDisplay( PTASK_INFO task, int timeout, int display, void cb( uintptr_t, LOGICAL ), uintptr_t psv ) {
+	struct move_window* move = New( struct move_window );
+	move->task = task;
+	move->timeout = timeout;
+	//lprintf( "TaskToDisplay %d", display );
+	if( !_GetDisplaySizeEx( display, -1, &move->left, &move->top, &move->width, &move->height ) ) {
+		Deallocate( struct move_window*, move );
+		if( cb ) cb( psv, FALSE );
+		return;
+	}
+	move->cb = cb;
+	move->psv = psv;
+	ThreadTo( moveTaskWindowThread, (uintptr_t)move );
+}
+void MoveTaskWindowToMonitor( PTASK_INFO task, int timeout, int display, void cb( uintptr_t, LOGICAL ), uintptr_t psv ) {
+	struct move_window* move = New( struct move_window );
+	move->task = task;
+	move->timeout = timeout;
+	//lprintf( "TaskToMonitor %d", display );
+	if( !_GetDisplaySizeEx( -1, display, &move->left, &move->top, &move->width, &move->height ) ) {
+		Deallocate( struct move_window*, move );
+		if( cb ) cb( psv, FALSE );
+		return;
+	}
+	move->cb = cb;
+	move->psv = psv;
+	ThreadTo( moveTaskWindowThread, (uintptr_t)move );
+}
 #endif
 LOGICAL CPROC StopProgram( PTASK_INFO task )
 {
@@ -64867,126 +69675,165 @@ LOGICAL CPROC StopProgram( PTASK_INFO task )
 #ifdef WIN32
 #ifndef UNDER_CE
 	int error;
-	if( !GenerateConsoleCtrlEvent( CTRL_C_EVENT, task->pi.dwProcessId ) )
+	int exited = 0;
+	//ExitProcess()
+ // sometimes we can't get back the launched process? rude.
+	if( task->pi.dwProcessId )
 	{
-		error = GetLastError();
-		lprintf( "Failed to send CTRL_C_EVENT %d", error );
-		if( !GenerateConsoleCtrlEvent( CTRL_BREAK_EVENT, task->pi.dwProcessId ) )
-		{
-			error = GetLastError();
-			lprintf( "Failed to send CTRL_BREAK_EVENT %d", error );
+		HWND hWndMain = task->taskWindow?task->taskWindow:find_main_window( task->pi.dwProcessId );
+		if( hWndMain ) {
+			TEXTCHAR title[256];
+			GetWindowText( hWndMain, title, 256 );
+			lprintf( "Sending WM_CLOSE to %p %s %s", hWndMain, task->name, title );
+			SendMessage( hWndMain, WM_CLOSE, 0, 0 );
 		}
-	}
-	// try and copy some code to it..
-	{
-		POINTER mem = VirtualAllocEx( task->pi.hProcess, NULL, 4096, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE );
-		DWORD err = GetLastError();
-		if( mem ) {
-			SIZE_T written;
-			if( WriteProcessMemory( task->pi.hProcess, mem,
-				(LPCVOID)SendCtrlCThreadProc, 1024, &written ) ) {
-				DWORD dwThread;
- //-V575
-				HANDLE hThread = CreateRemoteThread( task->pi.hProcess, NULL, 0
-					, (LPTHREAD_START_ROUTINE)mem, NULL, 0, &dwThread );
-				err = GetLastError();
-				if( hThread )
-					if( WaitForSingleObject( task->pi.hProcess, 50 ) != WAIT_OBJECT_0 )
-						return FALSE;
-					else
-						return TRUE;
+		else if( !task->flags.useEventSignal ) {
+			DWORD dwKillId = task->pi.dwProcessId;
+			if( task->spawn_flags & LPP_OPTION_NEW_GROUP ) {
+				IgnoreBreakHandler( ( 1 << CTRL_C_EVENT ) | ( 1 << CTRL_BREAK_EVENT ) );
+#ifdef DEBUG_WINDOWS_TREMINATE
+				lprintf( "Killing child %d? %s", dwKillId, task->name );
+#endif
+				//MessageBox( NULL, "pause", "pause", MB_OK );
+				FreeConsole();
+				BOOL a = AttachConsole( dwKillId );
+				if( !a ) {
+					DWORD dwError = GetLastError();
+					lprintf( "Failed to attachConsole %d %d %d", a, dwError, dwKillId );
+				}
+				if( !task->flags.useCtrlBreak )
+					if( !GenerateConsoleCtrlEvent( CTRL_C_EVENT, dwKillId ) ) {
+						error = GetLastError();
+						lprintf( "Failed to send CTRL_C_EVENT %d %d", dwKillId, error );
+					} else lprintf( "Success sending ctrl C?" );
+				else
+					if( !GenerateConsoleCtrlEvent( CTRL_BREAK_EVENT, dwKillId ) ) {
+						error = GetLastError();
+						lprintf( "Failed to send CTRL_BREAK_EVENT %d %d", dwKillId, error );
+					} else lprintf( "Success sending ctrl break?" );
+				IgnoreBreakHandler( 0 );
+			} else {
+				lprintf( "Process wasn't in a new group - would end up killing self. %s (maybe can use event signal option?", task->name );
 			}
 		}
+//#if 0
+		// this is pretty niche; was an attempt to handle when ctrl-break and ctrl-c events failed.
+		if( task->flags.useEventSignal )
+		{
+			char eventName[256];
+			HANDLE hEvent;
+			snprintf( eventName, 256, "Global\\%s(%d):exit", task->name, task->pi.dwProcessId );
+			hEvent = OpenEvent( EVENT_MODIFY_STATE, FALSE, eventName );
+			//lprintf( "Signal process event: %s", eventName );
+			if( hEvent != NULL ) {
+				//lprintf( "Opened event:%p %s %d", hEvent, eventName, GetLastError() );
+				if( !SetEvent( hEvent ) ) {
+					lprintf( "Failed to set event? %d", GetLastError() );
+				}
+				CloseHandle( hEvent );
+			}
+		}
+//#endif
 	}
+	// try and copy some code to it..
+	if( !exited )
+#if 0
+		// this is bad, and just causes the remote to crash; left for reference.
+		if( task->pi.hProcess && FALSE )
+		{
+			POINTER mem = VirtualAllocEx( task->pi.hProcess, NULL, 4096, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE );
+			DWORD err = GetLastError();
+			lprintf( "Trying to do remote thread... %p %d", mem, err );
+			if( mem ) {
+				SIZE_T written;
+				if( WriteProcessMemory( task->pi.hProcess, mem,
+					(LPCVOID)SendCtrlCThreadProc, 1024, &written ) ) {
+					DWORD dwThread;
+ //-V575
+					HANDLE hThread = CreateRemoteThread( task->pi.hProcess, NULL, 0
+						, (LPTHREAD_START_ROUTINE)mem, NULL, 0, &dwThread );
+					err = GetLastError();
+					if( hThread ) {
+						//lprintf( "waiting for task to self terminate" );
+						if( WaitForSingleObject( task->pi.hProcess, 1000 ) != WAIT_OBJECT_0 ) {
+							lprintf( "Not exited after a second" );
+							return FALSE;
+						} else {
+							lprintf( "Exited for sure." );
+							return TRUE;
+						}
+					} else {
+						lprintf( "Failed to create remote thread %d", GetLastError() );
+					}
+				}
+			}
+		}
 #endif
-	if( WaitForSingleObject( task->pi.hProcess, 1 ) != WAIT_OBJECT_0 )
+#endif
+	if( (!task->pi.hProcess) || WaitForSingleObject( task->pi.hProcess, 1 ) != WAIT_OBJECT_0 ) {
+		//lprintf( "don't think it exited" );
 		return FALSE;
-	else
+	} else {
+		//lprintf( "it definitly exited..." );
 		return TRUE;
+	}
 #else
 //lprintf( "need to send kill() to signal process to stop" );
 #ifndef PEDANTIC_TEST
-	kill( task->pid, SIGINT );
+	kill( task->pid, SIGTERM );
 #endif
 #endif
 	return FALSE;
 }
-uintptr_t CPROC TerminateProgram( PTASK_INFO task )
-{
-	if( task )
-	{
-#if defined( WIN32 )
-		int bDontCloseProcess = 0;
-#endif
-		if( !task->flags.closed )
-		{
+uintptr_t TerminateProgramEx( PTASK_INFO task, int options ) {
+	//lprintf( "TerminateProgram Task?%p %d", task, task->flags.closed );
+	if( task ) {
+		if( !task->flags.closed ) {
 			task->flags.closed = 1;
 			//lprintf( "%ld, %ld %p %p", task->pi.dwProcessId, task->pi.dwThreadId, task->pi.hProcess, task->pi.hThread );
 #if defined( WIN32 )
-			if( WaitForSingleObject( task->pi.hProcess, 0 ) != WAIT_OBJECT_0 )
-			{
-				int nowait = 0;
-				// try using ctrl-c, ctrl-break to end process...
-				if( !StopProgram( task ) )
-				{
-					xlprintf(LOG_LEVEL_DEBUG+1)( "Program did not respond to ctrl-c or ctrl-break..." );
-					// if ctrl-c fails, try finding the window, and sending exit (systray close)
-					if( EndTaskWindow( task ) )
-					{
-						xlprintf(LOG_LEVEL_DEBUG+1)( "failed to find task window to send postquitmessage..." );
-						// didn't find the window - result was continue_enum with no more (1)
-						// so didn't find the window - nothing to wait for, fall through
-						nowait = 1;
-					}
+			if( options & TERMINATE_PROGRAM_CHAIN ) {
+				INDEX idx;
+				struct process_id_pair* pair;
+				PDATALIST pdlProcs;
+				PLINKSTACK stack = NULL;
+				ProcIdFromParentProcId( task->pi.dwProcessId, &pdlProcs );
+				DATA_FORALL( pdlProcs, idx, struct process_id_pair*, pair ) {
+					lprintf( "Got Pair: %d %d", pair->parent, pair->child );
+					PushLink( &stack, pair );
+					//dwKillId = pair->child;
 				}
-				if( nowait || ( WaitForSingleObject( task->pi.hProcess, 500 ) != WAIT_OBJECT_0 ) )
-				{
-					xlprintf(LOG_LEVEL_DEBUG+1)( "Terminating process...." );
-					bDontCloseProcess = 1;
-					if( !TerminateProcess( task->pi.hProcess, 0xD1E ) )
-					{
-						HANDLE hTmp;
-						lprintf( "Failed to terminate process... %p %ld : %d (will try again with OpenProcess)", task->pi.hProcess, task->pi.dwProcessId, GetLastError() );
-						hTmp = OpenProcess( SYNCHRONIZE|PROCESS_TERMINATE, FALSE, task->pi.dwProcessId);
-						if( !TerminateProcess( hTmp, 0xD1E ) )
-						{
-							lprintf( "Failed to terminate process... %p %ld : %d", task->pi.hProcess, task->pi.dwProcessId, GetLastError() );
-						}
-						CloseHandle( hTmp );
+				while( pair = (struct process_id_pair*)PopLink( &stack ) ) {
+					HANDLE hChild = OpenProcess( PROCESS_ALL_ACCESS, FALSE, pair->child );
+					if( hChild != INVALID_HANDLE_VALUE ) {
+						TerminateProcess( hChild, 0xdead );
+						CloseHandle( hChild );
+					} else lprintf( "Failed to open child process handle...", GetLastError() );
+				}
+				DeleteLinkStack( &stack );
+				DeleteDataList( &pdlProcs );
+			} else {
+				// if not already ended...
+				if( WaitForSingleObject( task->pi.hProcess, 0 ) != WAIT_OBJECT_0 ) {
+					if( !TerminateProcess( task->pi.hProcess, 0xD3ad ) ) {
+						//HANDLE hTmp;
+						lprintf( "Failed to terminate process... " );
 					}
 				}
 			}
-			if( !task->EndNotice )
-			{
-				lprintf( "Closing handle (no end notification)" );
-				// task end notice - will get the event and close these...
-				CloseHandle( task->pi.hThread );
-				task->pi.hThread = 0;
-				if( !bDontCloseProcess )
-				{
-					lprintf( "And close process handle" );
-					CloseHandle( task->pi.hProcess );
-					task->pi.hProcess = 0;
-				}
-				else
-					lprintf( "Keeping process handle" );
-			}
-//			else
-//				lprintf( "Would have close handles rudely." );
 #else
 #ifndef PEDANTIC_TEST
-			kill( task->pid, SIGTERM );
+			kill( task->pid, SIGKILL );
 #endif
 			// wait a moment for it to die...
 #endif
 		}
-		//if( !task->EndNotice )
-		//{
-		//	Release( task );
-		//}
-		//task = NULL;
 	}
 	return 0;
+}
+uintptr_t TerminateProgram( PTASK_INFO task )
+{
+	return TerminateProgramEx( task, 0 );
 }
 //--------------------------------------------------------------------------
 SYSTEM_PROC( void, SetProgramUserData )( PTASK_INFO task, uintptr_t psv )
@@ -65005,8 +69852,14 @@ uintptr_t CPROC WaitForTaskEnd( PTHREAD pThread )
 {
 	PTASK_INFO task = (PTASK_INFO)GetThreadParam( pThread );
 #ifdef __LINUX__
-	while( !task->pid ) {
-		Relinquish();
+ // StopProgram(); this thread already exited on this?
+	while( ( !task->flags.process_ended
+ /*terminated*/
+	       && !task->flags.closed )
+	    && ( !task->pid
+	       || ( task->OutputEvent && !task->pOutputThread )
+	       || ( task->OutputEvent2 && !task->pOutputThread2 ) ) ) {
+		IdleFor( 100 );
 	}
 #endif
 	// this should be considered the owner of this.
@@ -65024,36 +69877,66 @@ uintptr_t CPROC WaitForTaskEnd( PTHREAD pThread )
 		WaitForSingleObject( task->pi.hProcess, INFINITE );
 		GetExitCodeProcess( task->pi.hProcess, &task->exitcode );
 #elif defined( __LINUX__ )
-		waitpid( task->pid, NULL, 0 );
+		if( task->pid )
+		{
+			int status;
+			pid_t result;
+			result = waitpid( task->pid, &status, 0 );
+			task->exitcode = status;
+			/*
+			if( WIFEXITED(status)){
+				lprintf( "waitpid exited:%d", status );
+			}else if( WIFSTOPPED(status)){
+				lprintf( "waitpid stopped:%d", status );
+			}else if( WIFSIGNALED(status)){
+				lprintf( "waitpid signaled:%d", status );
+			}
+			lprintf( "waitpid said: %zd %d", result, status );
+			*/
+		} else
+			task->exitcode = -666;
 #endif
-		task->flags.process_ended = 1;
-		if( task->hStdOut.hThread )
+		task->flags.process_signaled_end = 1;
+		//lprintf( "Task Ended, have to wake and remove pipes " );
+		if( task->hStdOut.hThread || task->hStdErr.hThread )
 		{
 #ifdef _WIN32
+			uint32_t now = timeGetTime();
+			while( ( timeGetTime() - now ) < 100 && ( task->hStdOut.hThread || task->hStdErr.hThread ) )
+				Relinquish();
+			//lprintf( "Stalled before cancel?", ( task->hStdOut.hThread || task->hStdErr.hThread ) );
 			// vista++ so this won't work for XP support...
 			static BOOL (WINAPI *MyCancelSynchronousIo)( HANDLE hThread ) = (BOOL(WINAPI*)(HANDLE))-1;
 			if( (uintptr_t)MyCancelSynchronousIo == (uintptr_t)-1 )
 				MyCancelSynchronousIo = (BOOL(WINAPI*)(HANDLE))LoadFunction( "kernel32.dll", "CancelSynchronousIo" );
 			if( MyCancelSynchronousIo )
 			{
-				if( !MyCancelSynchronousIo( GetThreadHandle( task->hStdOut.hThread ) ) )
-				{
-					// maybe the read wasn't queued yet....
-					//lprintf( "Failed to cancel IO on thread %d %d", GetThreadHandle( task->hStdOut.hThread ), GetLastError() );
-				}
-				if( !MyCancelSynchronousIo( GetThreadHandle( task->hStdErr.hThread ) ) )
-				{
-					// maybe the read wasn't queued yet....
-					//lprintf( "Failed to cancel IO on thread %d %d", GetThreadHandle( task->hStdOut.hThread ), GetLastError() );
-				}
+				///lprintf( "!!! Cancelling syncrhous IO " );
+				if( task->hStdOut.hThread )
+					if( !MyCancelSynchronousIo( GetThreadHandle( task->hStdOut.hThread ) ) )
+					{
+						DWORD dwError = GetLastError();
+						// maybe the read wasn't queued yet....
+						lprintf( "Failed to cancel IO on thread %d %d", GetThreadHandle( task->hStdOut.hThread ), dwError );
+					}
+				if( task->hStdErr.hThread )
+					if( !MyCancelSynchronousIo( GetThreadHandle( task->hStdErr.hThread ) ) )
+					{
+						DWORD dwError = GetLastError();
+						// maybe the read wasn't queued yet....
+						lprintf( "Failed to cancel IO on thread %d %d", GetThreadHandle( task->hStdErr.hThread ), dwError );
+					}
 			}
 			else
 			{
 				static BOOL (WINAPI *MyCancelIoEx)( HANDLE hFile,LPOVERLAPPED ) = (BOOL(WINAPI*)(HANDLE,LPOVERLAPPED))-1;
+				//lprintf( "Trying CancelIo instead?" );
 				if( (uintptr_t)MyCancelIoEx == (uintptr_t)-1 )
 					MyCancelIoEx = (BOOL(WINAPI*)(HANDLE,LPOVERLAPPED))LoadFunction( "kernel32.dll", "CancelIoEx" );
 				if( MyCancelIoEx ) {
-					MyCancelIoEx( task->hStdOut.handle, NULL );
+					if( task->hStdOut.hThread )
+						MyCancelIoEx( task->hStdOut.handle, NULL );
+					if( task->hStdErr.hThread )
 						MyCancelIoEx( task->hStdErr.handle, NULL );
 				} else {
 					DWORD written;
@@ -65068,18 +69951,29 @@ uintptr_t CPROC WaitForTaskEnd( PTHREAD pThread )
 #endif
 		}
 		// wait for task last output before notification of end of task.
-		while( task->pOutputThread || task->pOutputThread2 )
-			Relinquish();
+		//lprintf( "Task is exiting... %p %p", task->pOutputThread, task->pOutputThread2 );
+		{
+			uint32_t now = timeGetTime();
+			while( ( ( timeGetTime()-now)< 500 )
+			       && ( task->pOutputThread || task->pOutputThread2 ) )
+				Relinquish();
+		}
+		//lprintf( "Task Exit didn't finish - output threads are stuck." );
 		if( task->EndNotice )
 			task->EndNotice( task->psvEnd, task );
+#if defined( __LINUX__ )
+		if( task->pty > 0 )
+			close( task->pty );
+		//lprintf( "Never did close that handle?");
+#endif
 #if defined( WIN32 )
 		//lprintf( "Closing process and thread handles." );
-		CloseHandle( task->hReadIn );
-		CloseHandle( task->hReadOut );
-		CloseHandle( task->hReadErr );
-		CloseHandle( task->hWriteIn );
-		CloseHandle( task->hWriteOut );
-		CloseHandle( task->hWriteErr );
+		if( task->hReadIn    != INVALID_HANDLE_VALUE ) CloseHandle( task->hReadIn );
+		if( task->hReadOut   != INVALID_HANDLE_VALUE ) CloseHandle( task->hReadOut );
+		if( task->hReadErr   != INVALID_HANDLE_VALUE ) CloseHandle( task->hReadErr );
+		if( task->hWriteIn   != INVALID_HANDLE_VALUE ) CloseHandle( task->hWriteIn );
+		if( task->hWriteOut  != INVALID_HANDLE_VALUE ) CloseHandle( task->hWriteOut );
+		if( task->hWriteErr  != INVALID_HANDLE_VALUE ) CloseHandle( task->hWriteErr );
 		//lprintf( "Closing process handle %p", task->pi.hProcess );
 		if( task->pi.hProcess )
 		{
@@ -65098,15 +69992,6 @@ uintptr_t CPROC WaitForTaskEnd( PTHREAD pThread )
 	return 0;
 }
 //--------------------------------------------------------------------------
-#ifdef WIN32
-static int DumpError( void )
-{
-#ifdef _DEBUG
-	lprintf( "Failed create process:%d", GetLastError() );
-#endif
-	return 0;
-}
-#endif
 #ifdef WIN32
 static BOOL CALLBACK EnumDesktopProc( LPTSTR lpszDesktop,
 												 LPARAM lParam
@@ -65185,6 +70070,8 @@ DWORD GetExplorerProcessID()
 	{
 #ifndef __NO_OPTIONS__
 		SACK_GetProfileStringEx( GetProgramName(), "SACK/System/Impersonate Process", "explorer.exe", process_find, sizeof( process_find ), TRUE );
+#else
+		strcpy( process_find, "explorer.exe" );
 #endif
 	}
 	hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
@@ -65219,7 +70106,7 @@ void ImpersonateInteractiveUser( void )
 		hProcess =
 			OpenProcess(
 							PROCESS_ALL_ACCESS,
-							TRUE,
+							FALSE,
 							processID );
 		if( hProcess)
 		{
@@ -65267,7 +70154,7 @@ HANDLE GetImpersonationToken( void )
 		hProcess =
 			OpenProcess(
 							PROCESS_ALL_ACCESS,
-							TRUE,
+							FALSE,
 							processID );
 		if( hProcess)
 		{
@@ -65337,17 +70224,17 @@ int TryShellExecute( PTASK_INFO task, CTEXTSTR path, CTEXTSTR program, PTEXT cmd
 	} SHELLEXECUTEINFO, *LPSHELLEXECUTEINFO;
 #endif
 #endif
-	SHELLEXECUTEINFO execinfo;
+	SHELLEXECUTEINFOW execinfo;
 	MemSet( &execinfo, 0, sizeof( execinfo ) );
 	execinfo.cbSize = sizeof( SHELLEXECUTEINFO );
   // need this to get process handle back for terminate later
 	execinfo.fMask = SEE_MASK_NOCLOSEPROCESS
-		| SEE_MASK_FLAG_NO_UI
-		| SEE_MASK_NO_CONSOLE
+		| ( ( task->spawn_flags & LPP_OPTION_DO_NOT_HIDE) ? 0 : SEE_MASK_FLAG_NO_UI )
+		| ( ( task->spawn_flags & LPP_OPTION_NEW_CONSOLE ) ? 0 : SEE_MASK_NO_CONSOLE )
 		//| SEE_MASK_NOASYNC
 		;
-	execinfo.lpFile = program;
-	execinfo.lpDirectory = path;
+	execinfo.lpFile = CharWConvert( program );
+	execinfo.lpDirectory = CharWConvert( path );
 	{
 		TEXTCHAR *params;
 		params = GetText( cmdline );
@@ -65360,13 +70247,13 @@ int TryShellExecute( PTASK_INFO task, CTEXTSTR path, CTEXTSTR program, PTEXT cmd
 		if( params[0] )
 		{
 			//lprintf( "adding extra parames [%s]", params );
-			execinfo.lpParameters = params;
+			execinfo.lpParameters = CharWConvert( params );
 		}
 	}
-	execinfo.nShow = SW_SHOWNORMAL;
+	execinfo.nShow = (( task->spawn_flags&LPP_OPTION_DO_NOT_HIDE)? SW_SHOWNORMAL:SW_HIDE);
 	if( task->flags.runas_root )
-		execinfo.lpVerb = "runas";
-	if( ShellExecuteEx( &execinfo ) )
+		execinfo.lpVerb = CharWConvert( "runas" );
+	if( ShellExecuteExW( &execinfo ) )
 	{
 		if( (uintptr_t)execinfo.hInstApp > 32)
 		{
@@ -65374,19 +70261,26 @@ int TryShellExecute( PTASK_INFO task, CTEXTSTR path, CTEXTSTR program, PTEXT cmd
 			{
 			case 42:
 #ifdef _DEBUG
-				lprintf( "No association picked : %p (gle:%d)", (uintptr_t)execinfo.hInstApp , GetLastError() );
+				//lprintf( "No association picked : %p (gle:%d)", (uintptr_t)execinfo.hInstApp , GetLastError() );
 #endif
 				break;
 			}
 #ifdef _DEBUG
-			lprintf( "sucess with shellexecute of(%p) %s ", execinfo.hInstApp, program );
+			//lprintf( "sucess with shellexecute of(%p) %s ", execinfo.hInstApp, program );
 #endif
+			Deallocate( LPCWSTR, execinfo.lpVerb );
+			if( execinfo.lpFile ) Deallocate( LPCWSTR, execinfo.lpFile );
+			if( execinfo.lpDirectory ) Deallocate( LPCWSTR, execinfo.lpDirectory );
 			task->pi.hProcess = execinfo.hProcess;
+			task->pi.dwProcessId = GetProcessId( task->pi.hProcess );
 			task->pi.hThread = 0;
 			return TRUE;
 		}
 		else
 		{
+			Deallocate( LPCWSTR, execinfo.lpVerb );
+			if( execinfo.lpFile ) Deallocate( LPCWSTR, execinfo.lpFile );
+			if( execinfo.lpDirectory ) Deallocate( LPCWSTR, execinfo.lpDirectory );
 			//switch( (uintptr_t)execinfo.hInstApp )
 			{
 			//default:
@@ -65398,6 +70292,9 @@ int TryShellExecute( PTASK_INFO task, CTEXTSTR path, CTEXTSTR program, PTEXT cmd
 	}
 	else
 		lprintf( "Shellexec error %d", GetLastError() );
+	Deallocate( LPCWSTR, execinfo.lpVerb );
+	if( execinfo.lpFile ) Deallocate( LPCWSTR, execinfo.lpFile );
+	if( execinfo.lpDirectory ) Deallocate( LPCWSTR, execinfo.lpDirectory );
 	return FALSE;
 }
 #endif
@@ -65483,8 +70380,10 @@ static void LoadExistingLibraries( void )
 		FILE *maps;
 		char buf[256];
 		maps = sack_fopenEx( 0, "/proc/self/maps", "rt", sack_get_mounted_filesystem( "native" ) );
+		//lprintf( "maps? %p", maps);
 		while( maps && sack_fgets( buf, 256, maps ) )
 		{
+			//lprintf( "Line:", buf );
 			char *libpath = strchr( buf, '/' );
 			char *split = strchr( buf, '-' );
 			if( libpath && split )
@@ -65530,8 +70429,13 @@ SYSTEM_PROC( LOGICAL, IsMappedLibrary)( CTEXTSTR libname )
 	}
 	while( library )
 	{
-		if( library->library && StrCaseCmp( library->name, libname ) == 0 )
+#ifdef _WIN32
+		if( library->library && StrCaseCmp_u8u16( libname, library->name ) == 0 )
 			break;
+#else
+		if( library->library && StrCaseCmp( libname, library->name ) == 0 )
+			break;
+#endif
 		library = library->next;
 	}
 	if( library )
@@ -65553,8 +70457,13 @@ SYSTEM_PROC( void, AddMappedLibrary)( CTEXTSTR libname, POINTER image_memory )
 	}
 	while( library )
 	{
-		if( StrCaseCmp( library->name, libname ) == 0 )
+#ifdef _WIN32
+		if( StrCaseCmp_u8u16( libname, library->name ) == 0 )
 			break;
+#else
+		if( StrCaseCmp( libname, library->name ) == 0 )
+			break;
+#endif
 		library = library->next;
 	}
 	// don't really NEED anything else, in case we need to start before deadstart invokes.
@@ -65563,8 +70472,15 @@ SYSTEM_PROC( void, AddMappedLibrary)( CTEXTSTR libname, POINTER image_memory )
 		size_t maxlen = StrLen( libname ) + 1;
 		library = NewPlus( LIBRARY, sizeof(TEXTCHAR)*((maxlen<0xFFFFFF)?(uint32_t)maxlen:0) );
 		library->alt_full_name = NULL;
+#ifdef _WIN32
+		// full_name isn't name_data
+		library->full_name = CharWConvert( libname );
+		library->name = (wchar_t*)pathrchrW( library->full_name );
+#else
+		// full_name is equivalent to name_data
 		StrCpy( library->full_name, libname );
 		library->name = (char*)pathrchr( library->full_name );
+#endif
 		if( library->name )
 			library->name++;
 		else
@@ -65646,6 +70562,14 @@ void DeAttachThreadToLibraries( LOGICAL attach )
 SYSTEM_PROC( generic_function, LoadFunctionExx )( CTEXTSTR libname, CTEXTSTR funcname, LOGICAL bPrivate  DBG_PASS )
 {
 	PLIBRARY library;
+#ifdef _DEBUG
+#  ifdef _WIN32
+	struct {
+		wchar_t* name;
+		DWORD error;
+	} errors[4] ;
+#  endif
+#endif
 	SystemInit();
 	library = l.libraries;
 	if( !l.libraries )
@@ -65655,8 +70579,13 @@ SYSTEM_PROC( generic_function, LoadFunctionExx )( CTEXTSTR libname, CTEXTSTR fun
 	}
 	while( library )
 	{
-		if( StrCaseCmp( library->name, libname ) == 0 )
+#ifdef _WIN32
+		if( StrCaseCmp_u8u16( libname, library->name ) == 0 )
 			break;
+#else
+		if( StrCaseCmp( libname, library->name ) == 0 )
+			break;
+#endif
 		library = library->next;
 	}
 	// don't really NEED anything else, in case we need to start before deadstart invokes.
@@ -65667,45 +70596,83 @@ SYSTEM_PROC( generic_function, LoadFunctionExx )( CTEXTSTR libname, CTEXTSTR fun
 		size_t curnameLen;
 		TEXTCHAR curPath[MAXPATH];
 		size_t maxlen;
+		size_t libnameLen;
+		libname = ExpandPath( libname );
+		libnameLen = StrLen( libname );
 		GetCurrentPath( curPath, sizeof( curPath ) );
-		maxlen = (fullnameLen = StrLen( l.load_path ) + 1 + StrLen( libname ) + 1)
-			+ (orignameLen = StrLen( libname ) + 1)
-			+ (curnameLen = StrLen( curPath ) + 1 + StrLen( libname ) + 1)
-			+ StrLen( l.library_path ) + 1 + StrLen( libname ) + 1
+		maxlen = (fullnameLen = StrLen( l.load_path ) + 1 + libnameLen + 1)
+			+ (orignameLen = libnameLen + 1)
+			+ (curnameLen = StrLen( curPath ) + 1 + libnameLen + 1)
+			+ StrLen( l.library_path ) + 1
 			;
 		library = NewPlus( LIBRARY, sizeof(TEXTCHAR)*((maxlen<0xFFFFFF)?(uint32_t)maxlen:0) );
  // depth counter
 		library->loading = 0;
-		library->alt_full_name = library->full_name + fullnameLen;
+#ifdef _WIN32
+		if( !IsAbsolutePath( libname ) ) {
+		   // where the program loaded from? library loaded from
+			snprintf( library->name_data, maxlen, "%s/%s", l.load_path, libname );
+			{
+				char* n; for( n = library->name_data; n[0]; n++ ) if( n[0] == '/' ) n[0] = '\\';
+				library->full_name = CharWConvert( library->name_data );
+			}
+			// the original name (converted)
+			snprintf( library->name_data, maxlen, "%s", libname );
+			{
+				char* n; for( n = library->name_data; n[0]; n++ ) if( n[0] == '/' ) n[0] = '\\';
+				library->name = CharWConvert( library->name_data );
+			}
+			// where this library loaded from
+			snprintf( library->name_data, maxlen, "%s/%s", l.library_path, libname );
+			{
+				char* n; for( n = library->name_data; n[0]; n++ ) if( n[0] == '/' ) n[0] = '\\';
+				library->alt_full_name = CharWConvert( library->name_data );
+			}
+			// where this user currenty is
+			snprintf( library->name_data, maxlen, "%s/%s", curPath, libname );
+			{
+				char* n; for( n = library->name_data; n[0]; n++ ) if( n[0] == '/' ) n[0] = '\\';
+				library->cur_full_name = CharWConvert( library->name_data );
+			}
+		} else {
+			snprintf( library->name_data, maxlen, "%s", libname );
+			{
+				char* n; for( n = library->name_data; n[0]; n++ ) if( n[0] == '/' ) n[0] = '\\';
+				library->full_name = CharWConvert( library->name_data );
+				library->name = (wchar_t*)pathrchrW( library->full_name );
+				if( library->name ) library->name++;
+				else library->name = library->full_name;
+			}
+			library->name = library->full_name;
+			Hold( library->name );
+			library->alt_full_name = library->full_name;
+			Hold( library->alt_full_name );
+			library->cur_full_name = library->full_name;
+			Hold( library->cur_full_name );
+		}
+#else
 		//lprintf( "New library %s", libname );
-		if( !IsAbsolutePath( libname ) )
-		{
-			library->orig_name = library->full_name + fullnameLen;
-			library->cur_full_name = library->full_name + fullnameLen + orignameLen;
-			library->alt_full_name = library->full_name + fullnameLen + orignameLen + curnameLen;
+		if( !IsAbsolutePath( libname ) ) {
+			library->cur_full_name = library->full_name + fullnameLen ;
+			library->alt_full_name = library->full_name + fullnameLen + curnameLen;
 			library->name = library->full_name
 				+ tnprintf( library->full_name, maxlen, "%s/", l.load_path );
-			tnprintf( library->orig_name, maxlen, "%s", libname );
+			tnprintf( library->name, maxlen, "%s", libname );
 			tnprintf( library->cur_full_name, maxlen, "%s/%s", curPath, libname );
 			tnprintf( library->alt_full_name, maxlen, "%s/%s", l.library_path, libname );
-			tnprintf( library->name
-				, fullnameLen - (library->name-library->full_name)
-				, "%s", libname );
-		}
-		else
-		{
+		} else {
 			StrCpy( library->full_name, libname );
-			library->orig_name = library->full_name;
+			library->name = (char*)pathrchr( library->full_name );
 			library->cur_full_name = library->full_name;
 			library->alt_full_name = library->full_name;
 			//library->long_name = library->full_name;
-			library->name = (char*)pathrchr( library->full_name );
 			library->loading = 0;
 			if( library->name )
 				library->name++;
 			else
 				library->name = library->full_name;
 		}
+#endif
 		library->library = NULL;
 		library->mapped = FALSE;
 		library->functions = NULL;
@@ -65739,10 +70706,16 @@ SYSTEM_PROC( generic_function, LoadFunctionExx )( CTEXTSTR libname, CTEXTSTR fun
 				// result will be in the local list of libraries (duplicating this one)
 				// and will reference the same name(or a byte duplicate)
 				if( check != library && !check->loading
-					&& ( StrCaseCmp( check->full_name, library->full_name ) == 0
-						|| StrCaseCmp( check->name, library->name ) == 0 ) )
+					&& ( StrCaseCmpW( check->full_name, library->full_name ) == 0
+						|| StrCaseCmpW( check->name, library->name ) == 0 ) )
 				{
 					UnlinkThing( library );
+#ifdef _WIN32
+					Deallocate( wchar_t*, library->alt_full_name );
+					Deallocate( wchar_t*, library->cur_full_name );
+					Deallocate( wchar_t*, library->full_name );
+					Deallocate( wchar_t*, library->name );
+#endif
 					Deallocate( PLIBRARY, library );
 					library = check;
 					// loaded....
@@ -65750,37 +70723,63 @@ SYSTEM_PROC( generic_function, LoadFunctionExx )( CTEXTSTR libname, CTEXTSTR fun
 				}
 			}
 		}
+		ReleaseEx( (TEXTSTR)libname DBG_SRC );
 		library->loading--;
 	}
 	SuspendDeadstart();
 	if( !library->library ) {
  //-V595
-		library->library = LoadLibrary( library->cur_full_name );
+		library->library = LoadLibraryExW( library->cur_full_name, NULL, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR| LOAD_LIBRARY_SEARCH_DEFAULT_DIRS );
+#ifdef _DEBUG
+		errors[0].name = library->cur_full_name;
+		errors[0].error = GetLastError();
+#endif
 	}
 	if( !library->library ) {
 #  ifdef DEBUG_LIBRARY_LOADING
 		lprintf( "trying load...%s", library->full_name );
 #  endif
-		library->library = LoadLibrary( library->full_name );
+		library->library = LoadLibraryExW( library->full_name, NULL, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS );
+#ifdef _DEBUG
+		errors[1].name = library->full_name;
+		errors[1].error = GetLastError();
+#endif
 	}
 	if( !library->library ) {
-		library->library = LoadLibrary( library->alt_full_name );
+		library->library = LoadLibraryExW( library->alt_full_name, NULL, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS );
+#ifdef _DEBUG
+		errors[2].name = library->alt_full_name;
+		errors[2].error = GetLastError();
+#endif
 	}
 	if( !library->library ) {
-		library->library = LoadLibrary( library->orig_name );
-		//if( !library->library ) lprintf( "Failed load basic:%s %d", library->orig_name, GetLastError() );
-	}
-	if( !library->library ) {
-#  ifdef DEBUG_LIBRARY_LOADING
-		lprintf( "trying load...%s", library->name );
-#  endif
-		library->library = LoadLibrary( library->name );
+		library->library = LoadLibraryExW( library->name, NULL, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS );
+#ifdef _DEBUG
+		errors[3].name = library->name;
+		errors[3].error = GetLastError();
+#endif
+		//if( !library->library ) lprintf( "Failed load basic:%s %d", library->name, GetLastError() );
 	}
 	if( !library->library ) {
 		if( !library->loading ) {
-			if( l.flags.bLog )
+			//if( l.flags.bLog )
+#ifdef _DEBUG
+			for( int i = 0; i < 4; i++ )
+				lprintf( "Error LoadLibrary: %5d %ls", errors[i].error, errors[i].name );
+#else
+			_xlprintf( 2 DBG_RELAY )("Attempt to load [%ls][%ls][%ls]%ls(%s) failed."
+					, library->cur_full_name
+					, library->full_name
+					, library->alt_full_name
+					, library->name
+					, funcname ? funcname : "all"
  //-V595
-				_xlprintf( 2 DBG_RELAY )("Attempt to load %s[%s](%s) failed: %d.", libname, library->full_name, funcname ? funcname : "all", GetLastError());
+					);
+#endif
+			ReleaseEx( library->cur_full_name DBG_SRC );
+			ReleaseEx( library->full_name DBG_SRC );
+			ReleaseEx( library->alt_full_name DBG_SRC );
+			ReleaseEx( library->name DBG_SRC );
 			UnlinkThing( library );
 			ReleaseEx( library DBG_SRC );
 		}
@@ -65788,23 +70787,24 @@ SYSTEM_PROC( generic_function, LoadFunctionExx )( CTEXTSTR libname, CTEXTSTR fun
 		return NULL;
 	}
 #else
+	}
 	SuspendDeadstart();
 #  ifndef __ANDROID__
 		// ANDROID This will always fail from the application manager.
 #    ifdef UNICODE
 		{
-			char *tmpname = CStrDup( library->name );
+			char *tmpname = CStrDup( library->alt_full_name );
 			library->library = dlopen( tmp, RTLD_LAZY|(bPrivate?RTLD_LOCAL: RTLD_GLOBAL) );
 			Release( tmpname );
 		}
 #    else
-		library->library = dlopen( library->name, RTLD_LAZY|(bPrivate?RTLD_LOCAL: RTLD_GLOBAL) );
+		library->library = dlopen( library->alt_full_name, RTLD_LAZY|(bPrivate?RTLD_LOCAL: RTLD_GLOBAL) );
 #    endif
 		if( !library->library )
 		{
-			//if( l.flags.bLog )
+			if( l.flags.bLog )
 				_xlprintf( 2 DBG_RELAY)( "Attempt to load %s%s(%s) failed: %s.", bPrivate?"(local)":"(global)"
-				          , library->name, funcname?funcname:"all", dlerror() );
+				          , library->alt_full_name, funcname?funcname:"all", dlerror() );
 #  endif
 #  ifdef UNICODE
 			{
@@ -65817,46 +70817,45 @@ SYSTEM_PROC( generic_function, LoadFunctionExx )( CTEXTSTR libname, CTEXTSTR fun
 #  endif
 			if( !library->library )
 			{
-				_xlprintf( 2 DBG_RELAY)( "Attempt to load  %s%s(%s) failed: %s.", bPrivate?"(local)":"(global)"
-						, library->full_name, funcname?funcname:"all", dlerror() );
-				library->library = dlopen( library->alt_full_name, RTLD_LAZY|(bPrivate?RTLD_LOCAL: RTLD_GLOBAL) );
+				if( l.flags.bLog )
+					_xlprintf( 2 DBG_RELAY)( "Attempt to load  %s%s(%s) failed: %s.", bPrivate?"(local)":"(global)"
+							, library->full_name, funcname?funcname:"all", dlerror() );
+				library->library = dlopen( library->cur_full_name, RTLD_LAZY|(bPrivate?RTLD_LOCAL: RTLD_GLOBAL) );
 				if( !library->library )
 				{
-					_xlprintf( 2 DBG_RELAY)( "Attempt to load  %s%s(%s) failed: %s.", bPrivate?"(local)":"(global)"
-							, library->alt_full_name, funcname?funcname:"all", dlerror() );
-					library->library = dlopen( library->cur_full_name, RTLD_LAZY|(bPrivate?RTLD_LOCAL: RTLD_GLOBAL) );
-					if( !library->library )
-					{
+					if( l.flags.bLog )
 						_xlprintf( 2 DBG_RELAY)( "Attempt to load  %s%s(%s) failed: %s.", bPrivate?"(local)":"(global)"
 								, library->cur_full_name, funcname?funcname:"all", dlerror() );
+					library->library = dlopen( library->name, RTLD_LAZY|(bPrivate?RTLD_LOCAL: RTLD_GLOBAL) );
+					if( !library->library )
+					{
+						if( l.flags.bLog )
+							_xlprintf( 2 DBG_RELAY)( "Attempt to load  %s%s(%s) failed: %s.", bPrivate?"(local)":"(global)"
+									, library->name, funcname?funcname:"all", dlerror() );
 						UnlinkThing( library );
 						ReleaseEx( library DBG_SRC );
 						ResumeDeadstart();
 						return NULL;
+//else lprintf( "Success opening:%s", library->name );
 					}
+//else lprintf( "Success opening:%s", library->cur_full_name );
 				}
+//else lprintf( "Success opening:%s", library->full_name );
 			}
 #  ifndef __ANDROID__
+//else lprintf( "Success opening:%s", library->alt_full_name );
 		}
 #  endif
-}
-#endif
-#ifdef __cplusplus_cli
-		{
-			void (CPROC *f)( void );
-			if( l.flags.bLog )
-				lprintf( "GetInvokePreloads" );
-			f = (void(CPROC*)(void))GetProcAddress( library->library, "InvokePreloads" );
-			if( f )
-				f();
-		}
 #endif
 		{
 			//DebugBreak();
 			ResumeDeadstart();
-			// actually bInitialDone will not be done sometimes
+			// (old news?)actually bInitialDone will not be done sometimes
 			// and we need to force this here.
-			InvokeDeadstart();
+			// (2023) this is probably not needed now; the single flag for
+			// bHeldDeadstart in names loading interfaces was probably resuming
+			// and extra time too soon; this is harmless to do though.
+			// InvokeDeadstart();
 		}
 		InvokeLibraryLoad();
 	//}
@@ -66023,7 +71022,7 @@ get_function_name:
 					lprintf( "Get:%s", function->name );
 				function->function = (generic_function)GetProcAddress( library->library
 #    ifdef _UNICODE
-																					  , WcharConvert( tmpname )
+																					  , charConvert( tmpname )
 #    else
 																					  , tmpname
 #    endif
@@ -66094,8 +71093,13 @@ SYSTEM_PROC( void *, GetPrivateModuleHandle )( CTEXTSTR libname )
 	PLIBRARY library = l.libraries;
 	while( library )
 	{
+#ifdef _WIN32
+		if( StrCaseCmp_u8u16( libname, library->name ) == 0 )
+			return library->library;
+#else
 		if( StrCaseCmp( library->name, libname ) == 0 )
 			return library->library;
+#endif
 		library = library->next;
 	}
 	return NULL;
@@ -66245,6 +71249,25 @@ CTEXTSTR GetProgramPath( void )
 	return l.load_path;
 #endif
 }
+CTEXTSTR GetInstallPath( void )
+{
+#if defined( __EMSCRIPTEN__ )
+	return TARGET_INSTALL_PREFIX;
+#elif defined( __ANDROID__ )
+	return TARGET_INSTALL_PREFIX;
+#else
+	if( !local_systemlib || l.install_path )
+	{
+		SystemInit();
+		if( !l.install_path )
+		{
+			DebugBreak();
+			return NULL;
+		}
+	}
+	return l.install_path;
+#endif
+}
 CTEXTSTR GetLibraryPath( void )
 {
 #if defined( __EMSCRIPTEN__ )
@@ -66314,6 +71337,8 @@ void SetProgramName( CTEXTSTR filename )
 }
 DeclareThreadVar LOGICAL disallow_spawn;
 LOGICAL sack_system_allow_spawn( void ) {
+	if( ( *local_systemlib ).flags.shutdown )
+		return FALSE;
 	return !disallow_spawn;
 }
 void sack_system_disallow_spawn( void ) {
@@ -66326,7 +71351,8 @@ SACK_SYSTEM_NAMESPACE_END
 #ifndef __NO_IDLE__
 #endif
 #ifdef __LINUX__
-#include <sys/poll.h>
+#include <poll.h>
+#include <pty.h>
 extern char **environ;
 #endif
 //--------------------------------------------------------------------------
@@ -66337,12 +71363,14 @@ typedef struct task_info_tag TASK_INFO;
 static int DumpErrorEx( DBG_VOIDPASS )
 #define DumpError() DumpErrorEx( DBG_VOIDSRC )
 {
-	_xlprintf( LOG_LEVEL_DEBUG DBG_RELAY)( "Failed create process:%d", GetLastError() );
+	//const int err = GetLastError();
+	//_xlprintf( LOG_NOISE+1 DBG_RELAY)( "Failed create process:%d", err );
 	return 0;
 }
 #endif
 //--------------------------------------------------------------------------
 extern uintptr_t CPROC WaitForTaskEnd( PTHREAD pThread );
+#ifdef _WIN32
 static uintptr_t CPROC HandleTaskOutput(PTHREAD thread )
 {
 	struct taskOutputStruct* taskParams = (struct taskOutputStruct*)GetThreadParam( thread );
@@ -66350,6 +71378,7 @@ static uintptr_t CPROC HandleTaskOutput(PTHREAD thread )
 	PTASK_INFO task = taskParams->task;
 	if( task )
 	{
+		Hold( task );
 		if( taskParams->stdErr )
 			task->pOutputThread2 = thread;
 		else
@@ -66358,131 +71387,85 @@ static uintptr_t CPROC HandleTaskOutput(PTHREAD thread )
 		{
 			PHANDLEINFO phi = taskParams->stdErr?&task->hStdErr:&task->hStdOut;
 			PTEXT pInput = SegCreate( 4096 );
-			int done, lastloop;
-			Hold( task );
-			done = lastloop = FALSE;
+			int lastloop;
+			size_t offset = 0;
+			lastloop = FALSE;
 			do
 			{
-				uint32_t dwRead;
-				if( done )
-					lastloop = TRUE;
-				{
-						if( task->flags.log_input )
-							lprintf( "Go to read task's stdout." );
-#ifdef _WIN32
-						if( !task->flags.process_ended &&
-							 ReadFile( phi->handle
-										, GetText( pInput ), (DWORD)(GetTextSize( pInput ) - 1)
-  //read the  pipe
-										, (LPDWORD)&dwRead, NULL ) )
-						{
-#else
-							dwRead = read( phi->handle
-											 , GetText( pInput )
-											 , GetTextSize( pInput ) - 1 );
-							if( !dwRead )
-							{
-#  ifdef _DEBUG
-												//lprintf( "Ending system thread because of broke pipe! %d", errno );
-#  endif
-#  ifdef WIN32
-								continue;
-#  else
-												//lprintf( "0 read = pipe failure." );
-								break;
-#  endif
-							}
-#endif
-							if( task->flags.log_input )
-								lprintf( "got read on task's stdout: %d", dwRead );
-							if( task->flags.bSentIoTerminator )
-							{
-								if( dwRead > 1 )
-									dwRead--;
-								else
-								{
-									if( task->flags.log_input )
-										lprintf( "Finished, no more data, task has ended; no need for once more around" );
-									lastloop = 1;
- // we're done; task ended, and we got an io terminator on XP
-									break;
-								}
-							}
-							//lprintf( "result %d", dwRead );
-							if( dwRead < 4096 ) {
-								GetText( pInput )[dwRead] = 0;
-								pInput->data.size = dwRead;
-								//LogBinary( GetText( pInput ), GetTextSize( pInput ) );
-								if( taskParams->stdErr ) {
-									if( task->OutputEvent2 )
-										task->OutputEvent2( task->psvEnd, task, GetText( pInput ), GetTextSize( pInput ) );
-									else if( task->OutputEvent )
-										task->OutputEvent( task->psvEnd, task, GetText( pInput ), GetTextSize( pInput ) );
-								} else {
-									if( task->OutputEvent )
-										task->OutputEvent( task->psvEnd, task, GetText( pInput ), GetTextSize( pInput ) );
-								}
-								pInput->data.size = 4096;
-							}
-#ifdef _WIN32
-						}
-						else
-						{
-							DWORD dwError = GetLastError();
-							int32_t dwAvail;
-							if( ( dwError == ERROR_OPERATION_ABORTED ) && task->flags.process_ended )
-							{
-								if( PeekNamedPipe( phi->handle, NULL, 0, NULL, (LPDWORD)&dwAvail, NULL ) )
-								{
-									if( dwAvail > 0 )
-									{
-										lprintf( "caught data" );
-										// there is still data in the pipe, just that the process closed
-										// and we got the sync even before getting the data.
+				DWORD dwRead;
+				DWORD dwAvail;
+				if( task->flags.log_input )
+					lprintf( "Go to read task's stdout." );
+				offset = 0;
+				while( 1 ) {
+					BOOL readSuccess = ReadFile( phi->handle
+						, GetText( pInput ) + offset, (DWORD)( GetTextSize( pInput ) - ( 1 + offset ) )
+						, &dwRead, NULL );
+					DWORD dwError = ( !readSuccess ) ? GetLastError() : 0;
+					if( readSuccess || dwError == ERROR_BROKEN_PIPE )
+					{
+						offset += dwRead;
+						if( dwError != ERROR_BROKEN_PIPE ) {
+							if( offset < 4095 ) {
+								Relinquish();
+								if( PeekNamedPipe( phi->handle, NULL, 0, NULL, &dwAvail, NULL ) ) {
+									if( dwAvail ) {
+										if( task->flags.log_input )
+											lprintf( "More data became available: %d", dwAvail );
+										continue;
 									}
-									else
-										break;
 								}
 							}
+						} else if( !dwRead ) {
+							lastloop = 1;
+							break;
 						}
-#endif
+						if( task->flags.log_input )
+							lprintf( "got read on task's stdout: %d %d", taskParams->stdErr, dwRead );
+						//lprintf( "result %d", dwRead );
+						GetText( pInput )[offset] = 0;
+						pInput->data.size = offset;
+						offset = 0;
+						//LogBinary( GetText( pInput ), GetTextSize( pInput ) );
+						if( taskParams->stdErr ) {
+							if( task->OutputEvent2 )
+								task->OutputEvent2( task->psvEnd, task, GetText( pInput ), GetTextSize( pInput ) );
+							else if( task->OutputEvent )
+								task->OutputEvent( task->psvEnd, task, GetText( pInput ), GetTextSize( pInput ) );
+						} else {
+							if( task->OutputEvent )
+								task->OutputEvent( task->psvEnd, task, GetText( pInput ), GetTextSize( pInput ) );
+						}
+						pInput->data.size = 4096;
+						if( dwError == ERROR_BROKEN_PIPE )
+							break;
+					} else {
+						DWORD dwError = GetLastError();
+						offset = 0;
+						//lprintf( "Thread Read was 0? %d %d", taskParams->stdErr, dwError );
+						if( ( dwError == ERROR_BROKEN_PIPE
+							|| dwError == ERROR_OPERATION_ABORTED )
+							&& task->flags.process_ended ) {
+							lastloop = TRUE;
+							break;
+						}
+					}
 				}
 				//allow a minor time for output to be gathered before sending
 				// partial gathers...
-				if( task->flags.process_ended )
-				{
-					// Ending system thread because of process exit!
- // do one pass to make sure we completed read
-					  done = TRUE;
-				}
 			}
 			while( !lastloop );
 			LineRelease( pInput );
-#ifdef _WIN32
-			/*
-			CloseHandle( task->hReadIn );
-			CloseHandle( task->hReadOut );
-			CloseHandle( task->hReadErr );
-			CloseHandle( task->hWriteIn );
-			CloseHandle( task->hWriteOut );
-			CloseHandle( task->hWriteErr );
-			*/
-			//lprintf( "Closing process handle %p", task->pi.hProcess );
+			//lprintf( "Clearing thread handle (done)" );
 			phi->hThread = 0;
-#else
-			//close( phi->handle );
-			close( task->hStdIn.pair[1] );
-			close( task->hStdOut.pair[0] );
-			close( task->hStdErr.pair[0] );
-#define INVALID_HANDLE_VALUE -1
-#endif
-			if( phi->handle == task->hStdIn.handle )
-				task->hStdIn.handle = INVALID_HANDLE_VALUE;
 			phi->handle = INVALID_HANDLE_VALUE;
-			if( taskParams->stdErr )
+			if( taskParams->stdErr ) {
 				task->pOutputThread2 = NULL;
-			else
+				task->OutputEvent2 = NULL;
+			} else {
 				task->pOutputThread = NULL;
+				task->OutputEvent = NULL;
+			}
 			Release( task );
 			//WakeAThread( phi->pdp->common.Owner );
 			return 0xdead;
@@ -66490,6 +71473,101 @@ static uintptr_t CPROC HandleTaskOutput(PTHREAD thread )
 	}
 	return 0;
 }
+#endif
+#ifdef __LINUX__
+static uintptr_t CPROC HandleTaskOutput( PTHREAD thread ) {
+	struct taskOutputStruct* taskParams = (struct taskOutputStruct*)GetThreadParam( thread );
+  // (PTASK_INFO)GetThreadParam( thread );
+	PTASK_INFO task = taskParams->task;
+	if( task ) {
+		Hold( task );
+		if( taskParams->stdErr )
+			task->pOutputThread2 = thread;
+		else
+			task->pOutputThread = thread;
+		// read input from task, montiro close and dispatch TaskEnd Notification also.
+		{
+			PHANDLEINFO phi = taskParams->stdErr ? &task->hStdErr : &task->hStdOut;
+			PTEXT pInput = SegCreate( 4096 );
+			int lastloop;
+			lastloop = FALSE;
+			do {
+				int32_t dwRead;
+				{
+					if( task->flags.log_input )
+						lprintf( "Go to read task's %s.", taskParams->stdErr?"stderr":"stdout" );
+					dwRead = read( phi->handle
+						, GetText( pInput )
+						, GetTextSize( pInput ) - 1 );
+					if( !dwRead || (dwRead < 0) ) {
+						const int err = errno;
+						if( err == EIO ){
+							lastloop = 1;
+							break;
+						}
+#  ifdef _DEBUG
+						//lprintf( "Ending system thread because of broke pipe! %d", errno );
+#  endif
+						lprintf( "%d read = pipe failure. %d", dwRead, err );
+						break;
+					}
+					if( task->flags.log_input )
+						lprintf( "got read on task's stdout: %d %d", taskParams->stdErr, dwRead );
+					if( task->flags.bSentIoTerminator ) {
+						if( dwRead > 1 )
+							dwRead--;
+						else {
+							if( task->flags.log_input )
+								lprintf( "Finished, no more data, task has ended; no need for once more around" );
+							lastloop = 1;
+ // we're done; task ended, and we got an io terminator on XP
+							break;
+						}
+					}
+					//lprintf( "result %d", dwRead );
+					if( dwRead < 4096 ) {
+						GetText( pInput )[dwRead] = 0;
+						pInput->data.size = dwRead;
+						//LogBinary( GetText( pInput ), GetTextSize( pInput ) );
+						if( taskParams->stdErr ) {
+							if( task->OutputEvent2 )
+								task->OutputEvent2( task->psvEnd, task, GetText( pInput ), GetTextSize( pInput ) );
+							else if( task->OutputEvent )
+								task->OutputEvent( task->psvEnd, task, GetText( pInput ), GetTextSize( pInput ) );
+						} else {
+							if( task->OutputEvent )
+								task->OutputEvent( task->psvEnd, task, GetText( pInput ), GetTextSize( pInput ) );
+						}
+						pInput->data.size = 4096;
+					}
+				}
+			//allow a minor time for output to be gathered before sending
+			// partial gathers...
+			} while( !lastloop );
+			LineRelease( pInput );
+			if( phi->handle > 0 && !(task->spawn_flags & LPP_OPTION_INTERACTIVE ) ) {
+				close( phi->handle );
+				phi->handle = -1;
+			}
+			//if( phi->handle == task->hStdIn.handle )
+			//	task->hStdIn.handle = -1;
+			if( taskParams->stdErr ) {
+				task->pOutputThread2 = NULL;
+ // this is no longer a valid thing - shutdown output pipe
+				task->OutputEvent2 = NULL;
+			} else {
+				task->pOutputThread = NULL;
+ // this is no longer a valid thing - shutdown output pipe
+				task->OutputEvent = NULL;
+			}
+			Release( task );
+			//WakeAThread( phi->pdp->common.Owner );
+			return 0xdead;
+		}
+	}
+return 0;
+}
+#endif
 //--------------------------------------------------------------------------
 static int FixHandles( PTASK_INFO task )
 {
@@ -66615,7 +71693,116 @@ SYSTEM_PROC( PTASK_INFO, LaunchPeerProgramExx )( CTEXTSTR program, CTEXTSTR path
 															  , uintptr_t psv
 																DBG_PASS
 															  ){
-   return LaunchPeerProgram_v2( program, path, args, flags, OutputHandler, NULL, EndNotice, psv, NULL DBG_RELAY );
+   return LaunchPeerProgram_v2( program, path, args, flags, OutputHandler, OutputHandler, EndNotice, psv, NULL DBG_RELAY );
+}
+#ifdef _WIN32
+static wchar_t* ConvertEnvironment( char* env ) {
+	int avail_chars = 256;
+	int used_chars = 0;
+	wchar_t* buffer = NewArray( wchar_t, avail_chars );
+	char* value = env;
+	while( value[0] ) {
+		int valLen = 0;
+		wchar_t* tmp = CharWConvert( value );
+		int len = 0;
+		for( len = 0; tmp[len]; len++ )
+			;
+		len++;
+		for( valLen = 0; value[valLen]; valLen++ )
+			;
+		valLen++;
+		while( ( used_chars + len ) >= avail_chars ) {
+			avail_chars *= 2;
+			buffer = (wchar_t*)Reallocate( buffer, sizeof( wchar_t ) * avail_chars );
+		}
+		MemCpy( buffer + used_chars, tmp, sizeof( wchar_t ) * len );
+		Deallocate( wchar_t*, tmp );
+		value += valLen;
+	}
+	return buffer;
+}
+static void convertStartupInfo( LPSTARTUPINFOA sia, LPSTARTUPINFOW siw ) {
+	siw->lpReserved = NULL;
+	siw->lpDesktop = CharWConvert( sia->lpDesktop );
+	siw->lpTitle = CharWConvert( sia->lpTitle );
+	siw->dwX = sia->dwX;
+	siw->dwY = sia->dwY;
+	siw->dwXSize = sia->dwXSize;
+	siw->dwYSize = sia->dwYSize;
+	siw->dwXCountChars = sia->dwXCountChars;
+	siw->dwYCountChars = sia->dwYCountChars;
+	siw->dwFillAttribute = sia->dwFillAttribute;
+	siw->dwFlags = sia->dwFlags;
+	siw->wShowWindow = sia->wShowWindow;
+	siw->cbReserved2 = sia->cbReserved2;
+	siw->lpReserved2 = sia->lpReserved2;
+	siw->hStdInput = sia->hStdInput;
+	siw->hStdOutput = sia->hStdOutput;
+	siw->hStdError = sia->hStdError;
+}
+static BOOL _CreateProcess(
+	LPCSTR lpApplicationName,
+	LPSTR lpCommandLine,
+	LPSECURITY_ATTRIBUTES lpProcessAttributes,
+	LPSECURITY_ATTRIBUTES lpThreadAttributes,
+	BOOL bInheritHandles,
+	DWORD dwCreationFlags,
+	LPVOID lpEnvironment,
+	LPCSTR lpCurrentDirectory,
+	LPSTARTUPINFOA lpStartupInfo,
+	LPPROCESS_INFORMATION lpProcessInformation
+) {
+	wchar_t* wAppName = lpApplicationName?CharWConvert( lpApplicationName ):NULL;
+	wchar_t* wCmdLine = lpCommandLine ? CharWConvert( lpCommandLine ) : NULL;
+	wchar_t* wWorkDir = lpCurrentDirectory ? CharWConvert( lpCurrentDirectory ) : NULL;
+	wchar_t* envBlock = lpEnvironment?ConvertEnvironment((char*)lpEnvironment):NULL;
+	DWORD dwLastError;
+	STARTUPINFOW si;
+	si.cb = sizeof( si );
+	convertStartupInfo( lpStartupInfo, &si );
+	BOOL status = CreateProcessW( wAppName, wCmdLine
+		, lpProcessAttributes, lpThreadAttributes
+		, bInheritHandles, dwCreationFlags
+		, lpEnvironment, wWorkDir, &si, lpProcessInformation );
+	dwLastError = GetLastError();
+	if( si.lpDesktop ) Deallocate( LPWSTR, si.lpDesktop );
+	if( si.lpTitle ) Deallocate( LPWSTR, si.lpTitle );
+	if( wAppName ) Deallocate( wchar_t*, wAppName );
+	if( wCmdLine ) Deallocate( wchar_t*, wCmdLine );
+	if( wWorkDir ) Deallocate( wchar_t*, wWorkDir );
+	if( envBlock ) Deallocate( wchar_t*, envBlock );
+	SetLastError( dwLastError );
+	return status;
+}
+#endif
+SYSTEM_PROC( PTASK_INFO, MonitorTaskEx )( int pid, int flags, TaskEnd EndNotice, uintptr_t psv DBG_PASS ) {
+	PTASK_INFO task = NULL;
+	task            = (PTASK_INFO)AllocateEx( sizeof( TASK_INFO ) DBG_RELAY );
+	MemSet( task, 0, sizeof( TASK_INFO ) );
+	task->spawn_flags          = 0;
+#if defined(WIN32)
+	task->launch_flags         = 0;
+#endif
+	task->flags.useCtrlBreak   = ( flags & LPP_OPTION_USE_CONTROL_BREAK ) ? 1 : 0;
+	task->flags.useEventSignal = ( flags & LPP_OPTION_USE_SIGNAL ) ? 1 : 0;
+	task->psvEnd           = psv;
+	task->flags.runas_root = ( flags & LPP_OPTION_ELEVATE ) != 0;
+	task->EndNotice        = EndNotice;
+#ifdef WIN32
+	task->pi.hProcess = OpenProcess( PROCESS_ALL_ACCESS, FALSE, pid );
+	//lprintf( "Newly monitored process: %08x", task->pi.hProcess );
+	if( task->pi.hProcess )
+		ThreadTo( WaitForTaskEnd, (uintptr_t)task );
+	else if( EndNotice ) {
+		EndNotice( psv, NULL );
+		Deallocate( PTASK_INFO, task );
+		task = NULL;
+	}
+#elif defined( __LINUX__ )
+	task->pid = pid;
+	ThreadTo( WaitForTaskEnd, (uintptr_t)task );
+#endif
+	return task;
 }
 // Run a program completely detached from the current process
 // it runs independantly.  Program does not suspend until it completes.
@@ -66630,32 +71817,27 @@ SYSTEM_PROC( PTASK_INFO, LaunchPeerProgram_v2 )( CTEXTSTR program, CTEXTSTR path
 																DBG_PASS
 															  )
 {
-	PTASK_INFO task;
+	PTASK_INFO task = NULL;
 	if( !sack_system_allow_spawn() ) return NULL;
 // = ExpandPath( program );
 	TEXTSTR expanded_path;
 	TEXTSTR expanded_working_path = path ? ExpandPath( path ) : NULL;
-	{
-		INDEX idx;
-      struct environmentValue* val;
-		LIST_FORALL( list, idx, struct environmentValue*, val ) {
-         OSALOT_SetEnvironmentVariable( val->field, val->value );
-		}
-	}
+	PLIST oldStrings = NULL;
 	if( path ) {
 		path = ExpandPath( path );
 		if( IsAbsolutePath( program ) ) {
 			expanded_path = ExpandPath( program );
 		}
 		else {
-			PVARTEXT pvtPath;
-			pvtPath = VarTextCreate();
-			if( path[0] == '.' && path[1] == 0 )
-				vtprintf( pvtPath, "%s", program );
-			else
-				vtprintf( pvtPath, "%s" "/" "%s", path, program );
-			expanded_path = ExpandPath( GetText( VarTextPeek( pvtPath ) ) );
-			VarTextDestroy( &pvtPath );
+			//PVARTEXT pvtPath;
+			//pvtPath = VarTextCreate();
+			//if( path[0] == '.' && path[1] == 0 )
+			//	vtprintf( pvtPath, "%s", program );
+			//else
+			//	vtprintf( pvtPath, "%s" "/" "%s", path, program );
+// GetText( VarTextPeek( pvtPath ) ) );
+			expanded_path = ExpandPath( program );
+			//VarTextDestroy( &pvtPath );
 		}
 	} else {
 		path = ExpandPath( "." );
@@ -66665,18 +71847,51 @@ SYSTEM_PROC( PTASK_INFO, LaunchPeerProgram_v2 )( CTEXTSTR program, CTEXTSTR path
 	{
 #ifdef WIN32
 		int launch_flags = ( ( flags & LPP_OPTION_NEW_CONSOLE ) ? CREATE_NEW_CONSOLE : 0 )
+		                 | ( ( flags & LPP_OPTION_DETACH ) ? DETACHED_PROCESS : 0 )
 		                 | ( ( flags & LPP_OPTION_NEW_GROUP ) ? CREATE_NEW_PROCESS_GROUP : 0 )
 		                 | ( ( flags & LPP_OPTION_SUSPEND ) ? CREATE_SUSPENDED : 0 )
+		                 | ( ( flags & LPP_OPTION_NO_WINDOW ) ? CREATE_NO_WINDOW : 0 )
 			;
 		PVARTEXT pvt = VarTextCreateEx( DBG_VOIDRELAY );
 		PTEXT cmdline;
 		TEXTSTR new_path;
 		PTEXT final_cmdline;
 		LOGICAL needs_quotes;
-		int first = TRUE;
+		//int first = TRUE;
+		int success = 0;
+		int shellExec = 0;
+		if( path )
+			Deallocate( CTEXTSTR, path );
+		{
+			INDEX idx;
+			struct environmentValue* val;
+			LIST_FORALL( list, idx, struct environmentValue*, val ) {
+				const char *oldVal = OSALOT_GetEnvironmentVariable( val->field );
+				if( oldVal ) oldVal = StrDup( oldVal );
+				SetLink( &oldStrings, idx, oldVal );
+				OSALOT_SetEnvironmentVariable( val->field, val->value );
+			}
+		}
 		//TEXTCHAR saved_path[256];
 		task = (PTASK_INFO)AllocateEx( sizeof( TASK_INFO ) DBG_RELAY );
 		MemSet( task, 0, sizeof( TASK_INFO ) );
+		task->spawn_flags = flags;
+		task->launch_flags = launch_flags;
+		task->flags.useCtrlBreak = ( flags & LPP_OPTION_USE_CONTROL_BREAK ) ? 1 : 0;
+		task->flags.useEventSignal = ( flags & LPP_OPTION_USE_SIGNAL ) ? 1 : 0;
+		//task->flags.noKillOnExit = ( flags & LPP_OPTION_NO_KILL_ON_EXIT ) ? 1 : 0;
+		{
+			CTEXTSTR nameStart = StrRChr( (CTEXTSTR)program, '/' );
+			CTEXTSTR nameEnd = StrRChr( (CTEXTSTR)program, '.' );
+			if( !nameStart ) {
+				nameStart = StrRChr( (CTEXTSTR)program, '\\' );
+				if( !nameStart ) nameStart = program;
+				else nameStart++;
+			} else nameStart++;
+			if( !nameEnd ) nameEnd = nameStart + StrLen( nameStart );
+			snprintf( task->name, 256, "%.*s", (int)(nameEnd-nameStart), nameStart );
+			//lprintf( "Set Spawned Task Name to : %s", task->name );
+		}
 		task->psvEnd = psv;
 		task->flags.runas_root = (flags & LPP_OPTION_ELEVATE) != 0;
 		task->EndNotice = EndNotice;
@@ -66702,16 +71917,18 @@ SYSTEM_PROC( PTASK_INFO, LaunchPeerProgram_v2 )( CTEXTSTR program, CTEXTSTR path
 			needs_quotes = FALSE;
 		if( needs_quotes )
 			vtprintf( pvt,  "\"" );
-		/*
-		if( !IsAbsolutePath( expanded_path ) && expanded_working_path )
-		{
-			//lprintf( "needs working path too" );
-			vtprintf( pvt, "%s/", expanded_working_path );
-		}
-		*/
 		vtprintf( pvt, "%s", expanded_path );
 		if( needs_quotes )
 			vtprintf( pvt, "\"" );
+		{
+			PTEXT tmpText = VarTextPeek( pvt );
+			int i;
+			int len = (int)GetTextSize( tmpText );
+			char* tmp = GetText( tmpText );
+			for( i = 0; i < len; i++, tmp++ ) {
+				if( tmp[0] == '/' ) tmp[0] = '\\';
+			}
+		}
 		if( flags & LPP_OPTION_FIRST_ARG_IS_ARG )
 			;
 		else
@@ -66728,7 +71945,7 @@ SYSTEM_PROC( PTASK_INFO, LaunchPeerProgram_v2 )( CTEXTSTR program, CTEXTSTR path
 				vtprintf( pvt, " \"%s\"", args[0] );
 			else
 				vtprintf( pvt, " %s", args[0] );
-			first = FALSE;
+			//first = FALSE;
 			args++;
 		}
 		cmdline = VarTextGet( pvt );
@@ -66749,18 +71966,27 @@ SYSTEM_PROC( PTASK_INFO, LaunchPeerProgram_v2 )( CTEXTSTR program, CTEXTSTR path
 		*/
 		task->OutputEvent = OutputHandler;
 		task->OutputEvent2 = OutputHandler2;
-		if( OutputHandler )
+		if( OutputHandler || OutputHandler2 )
 		{
 			SECURITY_ATTRIBUTES sa;
+			//lprintf( "setting IO handles." );
 			sa.bInheritHandle = TRUE;
 			sa.lpSecurityDescriptor = NULL;
 			sa.nLength = sizeof( sa );
-			CreatePipe( &task->hReadOut, &task->hWriteOut, &sa, 0 );
-			CreatePipe( &task->hReadErr, &task->hWriteErr, &sa, 0 );
+			if( OutputHandler )
+				CreatePipe( &task->hReadOut, &task->hWriteOut, &sa, 0 );
+			if( OutputHandler2 )
+				CreatePipe( &task->hReadErr, &task->hWriteErr, &sa, 0 );
 			CreatePipe( &task->hReadIn, &task->hWriteIn, &sa, 0 );
 			task->si.hStdInput = task->hReadIn;
-			task->si.hStdError = task->hWriteErr;
-			task->si.hStdOutput = task->hWriteOut;
+			if( OutputHandler2 )
+				task->si.hStdError = task->hWriteErr;
+			if( OutputHandler )
+				task->si.hStdOutput = task->hWriteOut;
+			if( OutputHandler && !OutputHandler2 ) {
+ // if this is not set, then stderr gets inherited.
+				task->si.hStdError = task->hWriteOut;
+			}
 			task->si.dwFlags |= STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
 			if( !( flags & LPP_OPTION_DO_NOT_HIDE ) )
 				task->si.wShowWindow = SW_HIDE;
@@ -66769,6 +71995,7 @@ SYSTEM_PROC( PTASK_INFO, LaunchPeerProgram_v2 )( CTEXTSTR program, CTEXTSTR path
 		}
 		else
 		{
+			//lprintf( "Not setting IO handles." );
 			task->si.dwFlags |= STARTF_USESHOWWINDOW;
 			if( !( flags & LPP_OPTION_DO_NOT_HIDE ) )
 				task->si.wShowWindow = SW_HIDE;
@@ -66776,8 +72003,6 @@ SYSTEM_PROC( PTASK_INFO, LaunchPeerProgram_v2 )( CTEXTSTR program, CTEXTSTR path
 				task->si.wShowWindow = SW_SHOW;
 		}
 		{
-			HINSTANCE hShellProcess = 0;
-			int success = 0;
 			if( flags & LPP_OPTION_IMPERSONATE_EXPLORER )
 			{
 				HANDLE hExplorer = GetImpersonationToken();
@@ -66823,42 +72048,39 @@ SYSTEM_PROC( PTASK_INFO, LaunchPeerProgram_v2 )( CTEXTSTR program, CTEXTSTR path
 			}
 			else
 			{
-				if( ( (!task->flags.runas_root) && ( CreateProcess( program
+				//lprintf( "Using launch flags; %s %08x", task->name, launch_flags );
+				if( ( (!task->flags.runas_root) && ( _CreateProcess( program
 										, GetText( cmdline )
 										, NULL, NULL, TRUE
-//CREATE_NEW_PROCESS_GROUP
-										, launch_flags | ( OutputHandler?CREATE_NO_WINDOW:0 )
+										, launch_flags
 										, NULL
 										, expanded_working_path
 										, &task->si
 										, &task->pi ) || FixHandles(task) || DumpError()) ) ||
  //program
-					((!task->flags.runas_root) && (CreateProcess( NULL
+					((!task->flags.runas_root) && (_CreateProcess( NULL
 										 , GetText( cmdline )
 										 , NULL, NULL, TRUE
-//CREATE_NEW_PROCESS_GROUP
-										 , launch_flags | ( OutputHandler?CREATE_NO_WINDOW:0 )
+										 , launch_flags
 										 , NULL
 										 , expanded_working_path
 										 , &task->si
 										 , &task->pi ) || FixHandles(task) || DumpError()) ) ||
-					((!task->flags.runas_root) && (CreateProcess( program
+					((!task->flags.runas_root) && (_CreateProcess( program
  // GetText( cmdline )
 										, NULL
 										, NULL, NULL, TRUE
-//CREATE_NEW_PROCESS_GROUP
-										, launch_flags | ( OutputHandler?CREATE_NO_WINDOW:0 )
+										, launch_flags
 										, NULL
 										, expanded_working_path
 										, &task->si
 										, &task->pi ) || FixHandles(task) || DumpError()) ) ||
-					( TryShellExecute( task, expanded_working_path, program, cmdline ) ) ||
+					( (shellExec=1),TryShellExecute( task, expanded_working_path, program, cmdline ) ) ||
 //"cmd.exe"
-					( CreateProcess( NULL
+					( (shellExec=0),_CreateProcess( NULL
 										, GetText( final_cmdline )
 										, NULL, NULL, TRUE
-//CREATE_NEW_PROCESS_GROUP
-										, launch_flags | ( OutputHandler?CREATE_NO_WINDOW:0 )
+										, launch_flags
 										, NULL
 										, expanded_working_path
 										, &task->si
@@ -66876,20 +72098,23 @@ SYSTEM_PROC( PTASK_INFO, LaunchPeerProgram_v2 )( CTEXTSTR program, CTEXTSTR path
 #ifdef _DEBUG
 				//xlprintf(LOG_NOISE)( "Success running %s[%s] in %s (%p): %d", program, GetText( cmdline ), expanded_working_path, task->pi.hProcess, GetLastError() );
 #endif
-				if( OutputHandler )
+				if( !shellExec && ( OutputHandler || OutputHandler2 ) )
 				{
 					task->hStdIn.handle	  = task->hWriteIn;
 					task->hStdIn.pLine	  = NULL;
 					//task->hStdIn.pdp		 = pdp;
 					task->hStdIn.hThread  = 0;
 					task->hStdIn.bNextNew = TRUE;
-					task->hStdOut.handle   = task->hReadOut;
-					task->hStdOut.pLine	   = NULL;
-					//task->hStdOut.pdp		  = pdp;
-					task->hStdOut.bNextNew = TRUE;
-					task->args1.task       = task;
-					task->args1.stdErr     = FALSE;
-					task->hStdOut.hThread  = ThreadTo( HandleTaskOutput, (uintptr_t)&task->args1 );
+					if( task->OutputEvent ) {
+						task->hStdOut.handle   = task->hReadOut;
+						task->hStdOut.pLine	   = NULL;
+						//task->hStdOut.pdp		  = pdp;
+						task->hStdOut.bNextNew = TRUE;
+						task->args1.task       = task;
+						task->args1.stdErr     = FALSE;
+						task->hStdOut.hThread  = ThreadTo( HandleTaskOutput, (uintptr_t)&task->args1 );
+					}
+					if( task->OutputEvent2 )
 					{
 						task->hStdErr.handle   = task->hReadErr;
 						task->hStdErr.pLine	   = NULL;
@@ -66903,40 +72128,64 @@ SYSTEM_PROC( PTASK_INFO, LaunchPeerProgram_v2 )( CTEXTSTR program, CTEXTSTR path
 				}
 				else
 				{
+					if( shellExec ) {
+						// shell exec doesn't get any of this specified... it doesn't use any of it.
+						if( OutputHandler2 ) {
+							CloseHandle( task->hWriteErr );
+							CloseHandle( task->hReadErr );
+							task->hReadErr = task->hWriteErr = INVALID_HANDLE_VALUE;
+						}
+						if( OutputHandler ) {
+							CloseHandle( task->hWriteOut );
+							CloseHandle( task->hReadOut );
+							task->hReadOut = task->hWriteOut = INVALID_HANDLE_VALUE;
+						}
+						CloseHandle( task->hWriteIn );
+						CloseHandle( task->hReadIn );
+						task->hReadIn = task->hWriteIn = INVALID_HANDLE_VALUE;
+					}
 					//task->hThread =
 					ThreadTo( WaitForTaskEnd, (uintptr_t)task );
+				}
+				// close my side of the pipes...
+				if( task->hWriteOut != INVALID_HANDLE_VALUE ) {
+					CloseHandle( task->hWriteOut );
+					task->hWriteOut = INVALID_HANDLE_VALUE;
+				}
+				if( task->hWriteErr != INVALID_HANDLE_VALUE ) {
+					CloseHandle( task->hWriteErr );
+					task->hWriteErr = INVALID_HANDLE_VALUE;
+				}
+				if( task->hReadIn != INVALID_HANDLE_VALUE ) {
+					CloseHandle( task->hReadIn );
+					task->hReadIn = INVALID_HANDLE_VALUE;
 				}
 			}
 			else
 			{
 				xlprintf(LOG_NOISE)( "Failed to run %s[%s]: %d", program, GetText( cmdline ), GetLastError() );
-				CloseHandle( task->hWriteIn );
-				CloseHandle( task->hReadIn );
-				CloseHandle( task->hWriteOut );
-				CloseHandle( task->hReadOut );
-				CloseHandle( task->pi.hProcess );
-				CloseHandle( task->pi.hThread );
+				if( task->hWriteIn    != INVALID_HANDLE_VALUE ) CloseHandle( task->hWriteIn );
+				if( task->hReadIn     != INVALID_HANDLE_VALUE ) CloseHandle( task->hReadIn );
+				if( task->hWriteOut   != INVALID_HANDLE_VALUE ) CloseHandle( task->hWriteOut );
+				if( task->hReadOut    != INVALID_HANDLE_VALUE ) CloseHandle( task->hReadOut );
+				if( task->pi.hProcess != INVALID_HANDLE_VALUE ) CloseHandle( task->pi.hProcess );
+				if( task->pi.hThread  != INVALID_HANDLE_VALUE ) CloseHandle( task->pi.hThread );
 				Release( task );
 				task = NULL;
 			}
 		}
 		LineRelease( cmdline );
 		LineRelease( final_cmdline );
-		Release( expanded_working_path );
-		Release( expanded_path );
-		/*
-		if( path )
-		SetCurrentPath( saved_path );
-		*/
-		return task;
+		goto reset_env;
 #endif
 #ifdef __LINUX__
 		{
 			pid_t newpid;
-			TEXTCHAR saved_path[256];
+			//TEXTCHAR saved_path[256];
 			task = (PTASK_INFO)Allocate( sizeof( TASK_INFO ) );
 			MemSet( task, 0, sizeof( TASK_INFO ) );
 			//task->flags.log_input = TRUE;
+			task->spawn_flags = flags;
 			task->psvEnd = psv;
 			task->EndNotice = EndNotice;
 			task->OutputEvent = OutputHandler;
@@ -66945,68 +72194,109 @@ SYSTEM_PROC( PTASK_INFO, LaunchPeerProgram_v2 )( CTEXTSTR program, CTEXTSTR path
 			task->args1.stdErr     = FALSE;
 			task->args2.task       = task;
 			task->args2.stdErr     = TRUE;
+			task->pty              = -1;
 			if( OutputHandler )
 			{
-				if( pipe(task->hStdIn.pair) < 0 ) {
-					if( expanded_working_path )
-						Release( expanded_working_path );
-					Release( expanded_path );
-					return NULL;
-				}
-				task->hStdIn.handle = task->hStdIn.pair[1];
-				if( pipe(task->hStdOut.pair) < 0 ) {
-					if (expanded_working_path)
-						Release( expanded_working_path );
-					Release( expanded_path );
-					return NULL;
-				}
-				task->hStdOut.handle = task->hStdOut.pair[0];
-				if( OutputHandler2 ) {
-					if( pipe(task->hStdErr.pair) < 0 ) {
-						if (expanded_working_path)
-							Release( expanded_working_path );
-						Release( expanded_path );
-						return NULL;
+				if( !(flags & LPP_OPTION_INTERACTIVE ) ) {
+ // pipe failed
+					if( pipe(task->hStdIn.pair) < 0 ) {
+						Release( task );
+						task = NULL;
+						goto reset_env;
 					}
-					task->hStdErr.handle = task->hStdErr.pair[0];
-				} else
-					task->hStdErr.handle =task->hStdOut.pair[0];
+					task->hStdIn.handle = task->hStdIn.pair[1];
+					if( pipe(task->hStdOut.pair) < 0 ) {
+						close( task->hStdIn.pair[0] );
+						close( task->hStdIn.pair[1] );
+						Release( task );
+						task = NULL;
+						goto reset_env;
+					}
+					task->hStdOut.handle = task->hStdOut.pair[0];
+					if( OutputHandler2 ) {
+						if( pipe(task->hStdErr.pair) < 0 ) {
+							close( task->hStdIn.pair[0] );
+							close( task->hStdIn.pair[1] );
+							close( task->hStdOut.pair[0] );
+							close( task->hStdOut.pair[1] );
+							Release( task );
+							task = NULL;
+							goto reset_env;
+						}
+						task->hStdErr.handle = task->hStdErr.pair[0];
+					} else
+						task->hStdErr.handle =task->hStdOut.pair[0];
+				}
 			}
 			// always have to thread to taskend so waitpid can clean zombies.
 			ThreadTo( WaitForTaskEnd, (uintptr_t)task );
-			if( !( newpid = fork() ) )
+			int waitPipe[2];
+			pipe(waitPipe);
+			if( ( !( flags & LPP_OPTION_INTERACTIVE ) )
+			    ? !( newpid = fork() )
+			    : !( newpid = forkpty( &task->pty, NULL, NULL, NULL ) ) )
 			{
+				{
+					INDEX idx;
+					struct environmentValue* val;
+					LIST_FORALL( list, idx, struct environmentValue*, val ) {
+						//lprintf( "Waited until in the fork to set environment variable %s=%s", val->field, val->value );
+						if( !val->value )
+							unsetenv( val->field );
+						else
+							setenv( val->field, val->value, TRUE );
+					}
+				}
 				// after fork; check that args has a space for
 				// the program name to get filled into.
 				// this memory doesn't leak; it's squashed by exec.
 				if( flags & LPP_OPTION_FIRST_ARG_IS_ARG ) {
 					char ** newArgs;
 					int n;
-					for( n = 0; args[n]; n++ );
+					if( args )
+						for( n = 0; args[n]; n++ );
+					else n = 0;
 					newArgs = NewArray( char *, n + 2 );
-					for( n = 0; args[n]; n++ ) {
+					if( args ) {
+						for( n = 0; args[n]; n++ ) {
+							newArgs[n + 1] = (char*)args[n];
+						}
 						newArgs[n + 1] = (char*)args[n];
+					} else {
+						newArgs[1] = NULL;
 					}
-					newArgs[n + 1] = (char*)args[n];
 					newArgs[0] = (char*)program;
 					args = (PCTEXTSTR)newArgs;
 				}
-				if( path )
-					chdir( path );
+				if( expanded_working_path ) {
+					chdir( expanded_working_path );
+					//lprintf( "Change directory(in child): %s", expanded_working_path );
+					//Release( expanded_working_path );
+				}
+				// keep a copy of program name so main thread can continue - which may be fast enough
+				// to release the program name before the child gets to it.
 				char *_program = CStrDup( program );
 				// in case exec fails, we need to
 				// drop any registered exit procs...
-				//close( task->hStdIn.pair[1] );
-				//close( task->hStdOut.pair[0] );
-				//close( task->hStdErr.pair[0] );
-				if( OutputHandler ) {
-					dup2( task->hStdIn.pair[0], 0 );
-					dup2( task->hStdOut.pair[1], 1 );
-					dup2( task->hStdErr.pair[1], 2 );
+				if( !(flags & LPP_OPTION_INTERACTIVE) ) {
+					//close( task->hStdIn.pair[1] );
+					//close( task->hStdOut.pair[0] );
+					//close( task->hStdErr.pair[0] );
+					if( OutputHandler ) {
+						dup2( task->hStdIn.pair[0], 0 );
+						dup2( task->hStdOut.pair[1], 1 );
+					}
+					if( OutputHandler || OutputHandler2 )
+						dup2( task->hStdErr.pair[1], 2 );
 				}
+				// mark the child as started...
+				write( waitPipe[1], "", 1 );
+				close( waitPipe[0] );
+				close( waitPipe[1] );
 				DispelDeadstart();
 				execve( _program, (char *const*)args, environ );
 				//lprintf( "Direct execute failed... trying along path..." );
+				if( _program[0] != '/' )
 				{
 					char *tmp = strdup( getenv( "PATH" ) );
 					char *tok;
@@ -67014,18 +72304,24 @@ SYSTEM_PROC( PTASK_INFO, LaunchPeerProgram_v2 )( CTEXTSTR program, CTEXTSTR path
 					{
 						char fullname[256];
 						snprintf( fullname, sizeof( fullname ), "%s/%s", tok, _program );
-						lprintf( "program:[%s]", fullname );
+						if( l.flags.bLogExec )
+							lprintf( "program:[%s]", fullname );
 						((char**)args)[0] = fullname;
 						execve( fullname, (char*const*)args, environ );
+						if( l.flags.bLogExec )
+							lprintf( "exec in PATH failed - and this is ALLL bad... %s %d", fullname, errno );
 					}
 					Release( tmp );
 				}
-				lprintf( "exec failed - and this is ALLL bad... %d", errno );
-				if( OutputHandler ) {
-					close( task->hStdIn.pair[0] );
-					close( task->hStdOut.pair[1] );
-					if( OutputHandler2 )
-						close( task->hStdErr.pair[1] );
+				if( l.flags.bLogExec )
+					lprintf( "exec failed - and this is ALLL bad... %s %d", _program, errno );
+				if( !(flags & LPP_OPTION_INTERACTIVE ) ) {
+					if( OutputHandler ) {
+						close( task->hStdIn.pair[0] );
+						close( task->hStdOut.pair[1] );
+						if( OutputHandler2 )
+							close( task->hStdErr.pair[1] );
+					}
 				}
 				//close( task->hWriteErr );
 				close( 0 );
@@ -67041,13 +72337,26 @@ SYSTEM_PROC( PTASK_INFO, LaunchPeerProgram_v2 )( CTEXTSTR program, CTEXTSTR path
 			}
 			else
 			{
-				if( OutputHandler ) {
-					close( task->hStdIn.pair[0] );
-					close( task->hStdOut.pair[1] );
+				if( flags & LPP_OPTION_INTERACTIVE ) {
+					// otherwise these are set earlier, when the pipe()'s
+					// are created, and before the fork().
+					task->hStdIn.handle = task->pty;
+					task->hStdOut.handle = task->pty;
+					task->hStdErr.handle = task->pty;
+				}else {
+					if( OutputHandler ) {
+						close( task->hStdIn.pair[0] );
+						close( task->hStdOut.pair[1] );
+					}
 					if( OutputHandler2 )
 						close( task->hStdErr.pair[1] );
 				}
+				Release( (POINTER)path );
 			}
+			char buf;
+			int rc = read( waitPipe[0], &buf, 1 );
+			close( waitPipe[0] );
+			close( waitPipe[1] );
 			if( OutputHandler )
 				ThreadTo( HandleTaskOutput, (uintptr_t)&task->args1 );
  // only if it was opened as a separate handle...
@@ -67055,19 +72364,25 @@ SYSTEM_PROC( PTASK_INFO, LaunchPeerProgram_v2 )( CTEXTSTR program, CTEXTSTR path
 				ThreadTo( HandleTaskOutput, (uintptr_t)&task->args2 );
 			}
 			task->pid = newpid;
-			// how can I know if the command failed?
-			// well I can't - but the user's callback will be invoked
-			// when the above exits.
-			if (expanded_working_path)
-				Release( expanded_working_path );
-			Release( expanded_path );
-			return task;
 		}
 #endif
 	}
-	Release( expanded_working_path );
+reset_env:
+	if( expanded_working_path )
+		Release( expanded_working_path );
 	Release( expanded_path );
-	return FALSE;
+	if( oldStrings )
+	{
+		INDEX idx;
+		struct environmentValue* val;
+		LIST_FORALL( list, idx, struct environmentValue*, val ) {
+			const char *oldVal = (const char*)GetLink( &oldStrings, idx );
+			OSALOT_SetEnvironmentVariable( val->field, oldVal );
+			if( oldVal ) Deallocate( const char *, oldVal );
+		}
+		DeleteList( &oldStrings );
+	}
+	return task;
 }
 SYSTEM_PROC( PTASK_INFO, LaunchPeerProgramEx )( CTEXTSTR program, CTEXTSTR path, PCTEXTSTR args
 															 , TaskOutput OutputHandler
@@ -67099,13 +72414,14 @@ static void CPROC SystemOutputHandler( uintptr_t psvUser, PTASK_INFO Task, CTEXT
 }
 ATEXIT( SystemAutoShutdownTasks )
 {
+	// this just ends commands run by SystemEx()...
 	INDEX idx;
 	PTASK_INFO task;
-	if( local_systemlib )
+	if( local_systemlib ) {
+		( *local_systemlib ).flags.shutdown = TRUE;
 		LIST_FORALL( (*local_systemlib).system_tasks, idx, PTASK_INFO, task )
-		{
-			TerminateProgram( task );
-		}
+				TerminateProgram( task );
+	}
 }
 SYSTEM_PROC( PTASK_INFO, SystemEx )( CTEXTSTR command_line
 															  , TaskOutput OutputHandler
@@ -67156,17 +72472,12 @@ SYSTEM_PROC( PTASK_INFO, SystemEx )( CTEXTSTR command_line
 //----------------------- Utility to send to launched task's stdin ----------------------------
 int vpprintf( PTASK_INFO task, CTEXTSTR format, va_list args )
 {
+	size_t written = 0;
 	PVARTEXT pvt = VarTextCreate();
 	PTEXT output;
 	vvtprintf( pvt, format, args );
 	output = VarTextGet( pvt );
-	if(
-#ifdef _WIN32
-		WaitForSingleObject( task->pi.hProcess, 0 )
-#else
-		task->pid != waitpid( task->pid, NULL, WNOHANG )
-#endif
-	  )
+	if( !task->flags.process_signaled_end )
 	{
 #ifdef _WIN32
 		DWORD dwWritten;
@@ -67180,23 +72491,24 @@ int vpprintf( PTASK_INFO task, CTEXTSTR format, va_list args )
 				//LogBinary( GetText( seg )
 				//			, GetTextSize( seg ) );
 					WriteFile( task->hStdIn.handle
-							, GetText( seg )
-							, (DWORD)GetTextSize( seg )
-							, &dwWritten
-							, NULL );
+					          , GetText( seg )
+					          , (DWORD)GetTextSize( seg )
+					          , &dwWritten
+					          , NULL );
+					written += dwWritten;
 #else
 				{
 					struct pollfd pfd = { task->hStdIn.handle, POLLHUP|POLLERR, 0 };
 					if( poll( &pfd, 1, 0 ) &&
 						 pfd.revents & POLLERR )
 					{
-						Log( "Pipe has no readers..." );
-							break;
+						//Log( "Pipe has no readers..." );
+						break;
 					}
-					LogBinary( (uint8_t*)GetText( seg ), GetTextSize( seg ) );
-					write( task->hStdIn.handle
-						 , GetText( seg )
-						 , GetTextSize( seg ) );
+					//LogBinary( (uint8_t*)GetText( seg ), GetTextSize( seg ) );
+					written = write( task->hStdIn.handle
+					               , GetText( seg )
+					               , GetTextSize( seg ) );
 				}
 #endif
 				seg = NEXTLINE(seg);
@@ -67206,10 +72518,48 @@ int vpprintf( PTASK_INFO task, CTEXTSTR format, va_list args )
 	}
 	else
 	{
-		lprintf( "Task has ended, write  aborted." );
+		//lprintf( "Task has ended, write  aborted." );
 	}
 	VarTextDestroy( &pvt );
-	return 0;
+	return written;
+}
+//----------------------- Utility to send to launched task's stdin ----------------------------
+size_t task_send( PTASK_INFO task, const uint8_t*buffer, size_t buflen )
+{
+	size_t written = 0;
+	if( !task->flags.process_signaled_end )
+	{
+		//lprintf( "Allowing write to process pipe..." );
+		//LogBinary( (uint8_t*)buffer, buflen );
+#ifdef _WIN32
+		DWORD dwWritten;
+		//LogBinary( GetText( seg )
+		//			, GetTextSize( seg ) );
+		WriteFile( task->hStdIn.handle
+				, buffer
+				, (DWORD)buflen
+				, &dwWritten
+				, NULL );
+		written = dwWritten;
+#else
+		struct pollfd pfd = { task->hStdIn.handle, POLLHUP|POLLERR, 0 };
+		if( poll( &pfd, 1, 0 ) &&
+				pfd.revents & POLLERR )
+		{
+			//Log( "Pipe has no readers..." );
+		} else {
+			written = write( task->hStdIn.handle
+					, buffer
+					, buflen );
+			//flush( task->hStdIn.handle );
+		}
+#endif
+	}
+	else
+	{
+		//lprintf( "Task has ended, write  aborted." );
+	}
+	return written;
 }
 int pprintf( PTASK_INFO task, CTEXTSTR format, ... )
 {
@@ -67217,6 +72567,11 @@ int pprintf( PTASK_INFO task, CTEXTSTR format, ... )
 	va_start( args, format );
 	return vpprintf( task, format, args );
 }
+#ifdef __LINUX__
+int GetTaskPTY( PTASK_INFO task ){
+	return task->pty;
+}
+#endif
 SACK_SYSTEM_NAMESPACE_END
 //-------------------------------------------------------------------------
 #ifndef __LINUX__
@@ -67443,10 +72798,10 @@ struct procreg_local_tag {
 		BIT_FIELD bDisableMemoryLogging : 1;
  // having read the configuration file
 		BIT_FIELD bReadConfiguration : 1;
-		BIT_FIELD bHeldDeadstart : 1;
 	} flags;
 	PTREEDEF Names;
 	PTREEROOT NameIndex;
+	PTREEROOT NameIndex_literal;
 	PTREEDEFSET TreeNodes;
 	PNAMESET NameSet;
 	PNAMESPACE NameSpace;
@@ -67479,7 +72834,7 @@ PTREEDEF GetClassTreeEx( PCTREEDEF root
 										, PTREEDEF alias, LOGICAL bCreate );
 #define GetClassTree( root, name_class ) GetClassTreeEx( root, name_class, NULL, TRUE )
 //---------------------------------------------------------------------------
-static int CPROC SavedNameCmpEx(CTEXTSTR dst, CTEXTSTR src, size_t srclen)
+static int CPROC SavedNameCmpEx(CTEXTSTR dst, CTEXTSTR src, size_t srclen, LOGICAL case_sensitive )
 {
 	// NUL does not nessecarily terminate strings
 	// instead slave off the length...
@@ -67501,10 +72856,15 @@ static int CPROC SavedNameCmpEx(CTEXTSTR dst, CTEXTSTR src, size_t srclen)
 			l1 = 0;
 			break;
 		}
-		if ( ((f = (TEXTCHAR)(*(dst++))) >= 'A') && (f <= 'Z') )
-			f -= ('A' - 'a');
-		if ( ((last = (TEXTCHAR)(*(src++))) >= 'A') && (last <= 'Z') )
-			last -= ('A' - 'a');
+		if( !case_sensitive ) {
+			if( (( f = (TEXTCHAR)(*(dst++))) >= 'A') && (f <= 'Z') )
+				f -= ('A' - 'a');
+			if( (( last = (TEXTCHAR)(*(src++))) >= 'A') && (last <= 'Z') )
+				last -= ('A' - 'a');
+		} else {
+			f = (TEXTCHAR)( *( dst++ ) );
+			last = (TEXTCHAR)( *( src++ ) );
+		}
 		--l2;
 		--l1;
 	} while ( l2 && l1 && (f == last) );
@@ -67539,7 +72899,21 @@ static int CPROC SavedNameCmp(CTEXTSTR dst, CTEXTSTR src)
 	}
 	if( !dst && src )
 		return -1;
-	return SavedNameCmpEx( dst, src, src[-1]-2 );
+	return SavedNameCmpEx( dst, src, src[-1]-2, FALSE );
+}
+//---------------------------------------------------------------------------
+static int CPROC SavedNameCmpCS(CTEXTSTR dst, CTEXTSTR src)
+{
+	//lprintf( "Compare names... (tree) %s,%s", dst, src );
+	if( !src && !dst )
+		return 0;
+	if( !src ) {
+		DebugBreak();
+		return 1;
+	}
+	if( !dst && src )
+		return -1;
+	return SavedNameCmpEx( dst, src, src[-1]-2, TRUE );
 }
 //---------------------------------------------------------------------------
 static TEXTSTR StripName( TEXTSTR buf, CTEXTSTR name )
@@ -67620,8 +72994,8 @@ static CTEXTSTR DressName( TEXTSTR buf, CTEXTSTR name )
 	return savebuf + 1;
 }
 //---------------------------------------------------------------------------
-static CTEXTSTR DoSaveNameEx( CTEXTSTR stripped, size_t len DBG_PASS )
-#define DoSaveName(a,b) DoSaveNameEx(a,b DBG_SRC )
+static CTEXTSTR DoSaveNameEx( CTEXTSTR stripped, size_t len, LOGICAL case_sensitive DBG_PASS )
+#define DoSaveName(a,b,c) DoSaveNameEx(a,b,c DBG_SRC )
 {
 	PNAMESPACE space = l.NameSpace;
 	TEXTCHAR *p = NULL;
@@ -67644,7 +73018,7 @@ static CTEXTSTR DoSaveNameEx( CTEXTSTR stripped, size_t len DBG_PASS )
 	if( l.flags.bIndexNameTable )
 	{
 		POINTER p;
-		p = (POINTER)FindInBinaryTree( l.NameIndex, (uintptr_t)stripped );
+		p = (POINTER)FindInBinaryTree( case_sensitive?l.NameIndex_literal:l.NameIndex, (uintptr_t)stripped );
 		if( p )
 		{
 			// otherwise it will be single threaded?
@@ -67667,7 +73041,7 @@ static CTEXTSTR DoSaveNameEx( CTEXTSTR stripped, size_t len DBG_PASS )
 			while( p[0] && len )
 			{
 				//lprintf( "Compare %s(%d) vs %s(%d)", p+1, p[0], stripped,len );
-				if( SavedNameCmpEx( p+1, stripped, len ) == 0 )
+				if( SavedNameCmpEx( p+1, stripped, len, case_sensitive ) == 0 )
 				{
 					// otherwise it will be single threaded?
 					if( procreg_local_private_data.flags.enable_critical_sections )
@@ -67725,7 +73099,7 @@ static CTEXTSTR DoSaveNameEx( CTEXTSTR stripped, size_t len DBG_PASS )
 		if( l.flags.bIndexNameTable )
 		{
 			AddBinaryNode( l.NameIndex, p, (uintptr_t)p );
-			//BalanceBinaryTree( l.NameIndex );
+			AddBinaryNode( l.NameIndex_literal, p, (uintptr_t)p );
 		}
 	}
 	// otherwise it will be single threaded?
@@ -67775,7 +73149,7 @@ static CTEXTSTR SaveName( CTEXTSTR name )
 		StrCpyEx( stripped + 1, name, len + 1 );
 		stripped[0] = (TEXTCHAR)(len + 2);
 		{
-			CTEXTSTR result = DoSaveName( stripped + 1, len );
+			CTEXTSTR result = DoSaveName( stripped + 1, len, FALSE );
 			EnqueLink( &l.tmp_names, tmp_namebuf );
 			return result;
 		}
@@ -67784,7 +73158,7 @@ static CTEXTSTR SaveName( CTEXTSTR name )
 }
 //---------------------------------------------------------------------------
 CTEXTSTR SaveNameConcatN( CTEXTSTR name1, ... )
-#define SaveNameConcat(n1,n2) SaveNameConcatN( (n1),(n2),NULL )
+//#define SaveNameConcat(n1,n2) SaveNameConcatN( (n1),(n2),NULL )
 {
 	// space concat since that's eaten by strip...
 	TEXTCHAR _stripbuffer[256];
@@ -67811,19 +73185,40 @@ CTEXTSTR SaveNameConcatN( CTEXTSTR name1, ... )
 	// and add another - final part of string is \0\0
 	//stripbuffer[len] = 0;
 	//len++;
-	return DoSaveName( stripbuffer, len );
+	return DoSaveName( stripbuffer, len, FALSE );
 }
 //---------------------------------------------------------------------------
 CTEXTSTR SaveText( CTEXTSTR text )
-#define SaveNameConcat(n1,n2) SaveNameConcatN( (n1),(n2),NULL )
 {
 	size_t len = StrLen( text );
 	TEXTSTR stripped = NewArray( TEXTCHAR, len + 2 );
 	CTEXTSTR result;
 	StrCpyEx( stripped + 1, text, len + 1 );
 	stripped[0] = (TEXTCHAR)(len + 2);
-	result = DoSaveName( stripped + 1, len);
+	result = DoSaveName( stripped + 1, len, FALSE);
 	Release( stripped );
+	return result;
+}
+//---------------------------------------------------------------------------
+CTEXTSTR SaveTextCS( CTEXTSTR text )
+{
+	static uint32_t volatile lock;
+	static char stripped[258];
+#ifdef XCHG
+	while( XCHG( &lock, 1 ) )
+		Relinquish();
+#else
+	while( LockedExchange( &lock, 1 ) )
+		Relinquish();
+#endif
+	size_t len = StrLen( text );
+	//TEXTSTR stripped = NewArray( TEXTCHAR, len + 2 );
+	CTEXTSTR result;
+	StrCpyEx( stripped + 1, text, len + 1 );
+	stripped[0] = (TEXTCHAR)(len + 2);
+	result = DoSaveName( stripped + 1, len, TRUE);
+	//Release( stripped );
+	lock = 0;
 	return result;
 }
 //---------------------------------------------------------------------------
@@ -67856,6 +73251,7 @@ static void CPROC InitGlobalSpace( POINTER p, uintptr_t size )
 	// if we have 500 names, 9 searches is much less than 250 avg
 	(*(struct procreg_local_tag*)p).flags.bIndexNameTable = 1;
 	(*(struct procreg_local_tag*)p).NameIndex = CreateBinaryTreeExx( BT_OPT_NODUPLICATES, (int(CPROC *)(uintptr_t,uintptr_t))SavedNameCmp, KillName );
+	(*(struct procreg_local_tag*)p).NameIndex_literal = CreateBinaryTreeExx( BT_OPT_NODUPLICATES, (int(CPROC *)(uintptr_t,uintptr_t))SavedNameCmpCS, KillName );
 	(*(struct procreg_local_tag*)p).reference_count++;
 }
 static void Init( void )
@@ -67872,7 +73268,9 @@ static void Init( void )
 	}
 #endif
 }
+#ifndef __NO_INTERFACE_SUPPORT__
 static void ReadConfiguration( void );
+#endif
 //PRIORITY_UNLOAD( InitProcreg, NAMESPACE_PRELOAD_PRIORITY )
 //{
 	// release other members too, kindly
@@ -67892,7 +73290,9 @@ PRIORITY_PRELOAD( InitProcreg, NAMESPACE_PRELOAD_PRIORITY )
 	if( !l.flags.bReadConfiguration )
 	{
 		l.flags.bReadConfiguration = 1;
+		SuspendDeadstart();
 		ReadConfiguration();
+		ResumeDeadstart();
 	}
 #endif
 #endif
@@ -68089,7 +73489,7 @@ PTREEDEF GetClassTreeEx( PCTREEDEF root, PCTREEDEF _name_class, PTREEDEF alias, 
 									continue;
 								}
 #ifndef NO_LOGGING
-								SystemLog( "Failed to register..." );
+								SystemLogFL( "Failed to register..." FILELINE_SRC );
 								lprintf( "name not found, adding.. [%s] %s", start, class_root->self?class_root->self->name:"." );
 #endif
 								return NULL;
@@ -69137,11 +74537,6 @@ static uintptr_t CPROC HandleModule( uintptr_t psv, arg_list args )
 	}
 	if( l.flags.bTraceInterfaceLoading )
 		lprintf( "load module %s", module );
-	if( !l.flags.bHeldDeadstart )
-	{
-		l.flags.bHeldDeadstart = 1;
-		SuspendDeadstart();
-	}
 	LoadFunction( module, NULL );
 	if( tempPath )
 		Deallocate( TEXTCHAR*, module );
@@ -69155,11 +74550,6 @@ static uintptr_t CPROC HandlePrivateModule( uintptr_t psv, arg_list args )
 		return psv;
 	if( l.flags.bTraceInterfaceLoading )
 		lprintf( "load private module %s", module );
-	if( !l.flags.bHeldDeadstart )
-	{
-		l.flags.bHeldDeadstart = 1;
-		SuspendDeadstart();
-	}
 	LoadPrivateFunction( module, NULL );
 	return psv;
 }
@@ -69369,22 +74759,15 @@ static uintptr_t CPROC SetTrace( uintptr_t psv, arg_list args )
 }
 static uintptr_t CPROC IncludeAdditional( uintptr_t psv, arg_list args )
 {
+	//int skipResume = 0;
 	PARAM( args, CTEXTSTR, path );
 	TEXTSTR old_configname = l.config_filename;
 	l.config_filename = ExpandPath( path );
 	if( l.flags.bTraceInterfaceLoading )
 		lprintf( "include:%s from %s", l.config_filename, old_configname );
-	if( !l.flags.bHeldDeadstart )
-	{
-		l.flags.bHeldDeadstart = 1;
-		SuspendDeadstart();
-	}
+	SuspendDeadstart();
 	ReadConfiguration();
-	if( l.flags.bHeldDeadstart )
-	{
-		ResumeDeadstart();
-		l.flags.bHeldDeadstart = 0;
-	}
+	ResumeDeadstart();
 	Release( l.config_filename );
 	l.config_filename = old_configname;
 	return psv;
@@ -69433,38 +74816,45 @@ void ReadConfiguration( void )
 #ifdef __ANDROID__
 				= ".";
 #else
-				= GetProgramPath();
+				= NULL;
 #endif
+			size_t pathlen;
+			PLIST loadnames = NULL;
 			TEXTSTR loadname;
+			TEXTSTR path_loadname = NULL;
 			size_t len;
+			INDEX idx;
 			int success = FALSE;
-			if( !filepath )
-				filepath = "@";
 			if( l.config_filename )
 			{
 				success = ProcessConfigurationFile( pch, l.config_filename, 0 );
-				//if( !success )
-				//	lprintf( "Failed to open custom interface configuration file:%s", l.config_filename );
+				if( !success )
+					lprintf( "Failed to open custom interface configuration file:%s", l.config_filename );
 				return;
 			}
 			if( !success )
 			{
 				CTEXTSTR dot;
-				loadname = NewArray( TEXTCHAR, (uint32_t)(len = StrLen( GetProgramName() ) + StrLen( "interface.conf" ) + 3) );
-				tnprintf( loadname, len, "%s.%s", GetProgramName(), "interface.conf" );
+				CTEXTSTR tmpdot;
+				dot = GetProgramName();
+				tmpdot = pathrchr( dot );
+				if( tmpdot ) dot = tmpdot + 1;
+/*StrLen( "interface.conf" )*/
+				loadname = NewArray( TEXTCHAR, len = StrLen( dot ) + 14 + 3);
+				tnprintf( loadname, len, "%s.%s", dot, "interface.conf" );
 				success = ProcessConfigurationFile( pch, loadname, 0 );
-				if( !success )
-					dot = GetProgramName();
-				while( !success )
+				while( !success && dot )
 				{
+					AddLink( &loadnames, loadname );
 					dot = StrChr( dot + 1, '.' );
 					if( dot )
 					{
+						loadname = NewArray( TEXTCHAR, len );
 						tnprintf( loadname, len, "%s.%s", dot+1, "interface.conf" );
 						success = ProcessConfigurationFile( pch, loadname, 0 );
+						if( !success )
+							AddLink( &loadnames, loadname );
 					}
-					else
-						break;
 				}
 			}
 			if( !success )
@@ -69473,36 +74863,41 @@ void ReadConfiguration( void )
 			}
 			if( !success )
 			{
-				CTEXTSTR dot;
-				loadname = NewArray( TEXTCHAR, (uint32_t)(len = StrLen( filepath ) + StrLen( GetProgramName() ) + StrLen( "interface.conf" ) + 3) );
-				tnprintf( loadname, len, "%s/%s.%s", filepath, GetProgramName(), "interface.conf" );
-				success = ProcessConfigurationFile( pch, loadname, 0 );
-				if( !success )
-					dot = GetProgramName();
-				while( !success )
-				{
-					dot = StrChr( dot + 1, '.' );
-					if( dot )
-					{
-						tnprintf( loadname, len, "%s/%s.%s", filepath, dot+1, "interface.conf" );
-						success = ProcessConfigurationFile( pch, loadname, 0 );
-					}
-					else
-						break;
+				INDEX max_count = GetLinkCount( loadnames );
+				if( !filepath )
+					filepath = ExpandPath( "@/../share/SACK/conf" );
+				pathlen = StrLen( filepath );
+				//printf( "Configuration path? %s\n", filepath );
+				LIST_FORALL( loadnames, idx, TEXTSTR, loadname ) {
+					if( idx >= max_count ) break;
+					path_loadname = NewArray( TEXTCHAR, len = pathlen + SizeOfMemBlock( loadname ) );
+					AddLink( &loadnames, path_loadname );
+					tnprintf( path_loadname, len, "%s/%s", filepath, loadname );
+					success = ProcessConfigurationFile( pch, path_loadname, 0 );
+					if( success ) printf( "Configuration path? %s\n", path_loadname );
+					if( success ) break;
 				}
 			}
 			if( !success )
 			{
-				tnprintf( loadname, len, "%s/%s", filepath, "interface.conf" );
-				success = ProcessConfigurationFile( pch, loadname, 0 );
+				if( !path_loadname ) path_loadname = NewArray( TEXTCHAR, len = strlen(filepath) + 13 + 1 );
+				tnprintf( path_loadname, len, "%s/%s", filepath, "interface.conf" );
+				success = ProcessConfigurationFile( pch, path_loadname, 0 );
+				if( success ) printf( "Configuration path? %s\n", path_loadname );
 			}
 			if( !success )
 			{
 				//lprintf( "Failed to open interface configuration file:%s - assuming it will never exist, and aborting trying this again"
 				//		 , l.config_filename?l.config_filename:"interface.conf" );
 			}
-			if( loadname )
-				Release( loadname );
+			LIST_FORALL( loadnames, idx, TEXTSTR, loadname ) {
+				if( loadname )
+					Deallocate( TEXTSTR, loadname );
+			}
+#ifndef __ANDROID__
+			if( filepath ) Deallocate( CTEXTSTR, filepath );
+#endif
+			DeleteListEx( &loadnames DBG_SRC );
 		}
 		DestroyConfigurationHandler( pch );
 		//at this point... we should probably NOT
@@ -69517,11 +74912,6 @@ void ReadConfiguration( void )
 	}
 	//else
 	//	lprintf( "already loaded." );
-	if( l.flags.bHeldDeadstart )
-	{
-		l.flags.bHeldDeadstart = 0;
-		ResumeDeadstart();
-	}
 }
 #endif
 //-----------------------------------------------------------------------
@@ -69532,7 +74922,9 @@ POINTER GetInterface_v4( CTEXTSTR pServiceName, LOGICAL ReadConfig, int quietFai
 {
 	TEXTCHAR interface_name[256];
 	POINTER (CPROC *load)( void );
+#ifndef __NO_INTERFACE_SUPPORT__
 	static int reading_configuration;
+#endif
 	// this might be the first clean chance to run deadstarts
 	// for ill behaved platforms that have forgotten to do this.
 	if( !IsRootDeadstartStarted() )
@@ -70188,6 +75580,7 @@ RCOORD EXTERNAL_NAME(DirectedDistance)( PC_POINT pvOn, PC_POINT pvOf )
 	return 0;
 }
 //----------------------------------------------------------------
+#if 0
 #undef LogVector
  static void LogVector( char *lpName, VECTOR v )
 #define LogVector(v) LogVector( #v, v )
@@ -70195,6 +75588,7 @@ RCOORD EXTERNAL_NAME(DirectedDistance)( PC_POINT pvOn, PC_POINT pvOf )
    Log4( "Vector %s = <%lg, %lg, %lg>",
             lpName, v[0], v[1], v[2] );
 }
+#endif
 RCOORD EXTERNAL_NAME(CosAngle)( PC_POINT pv1, PC_POINT pv2 )
 {
 	RCOORD len = DOFUNC(Length)( pv1 ) * DOFUNC(Length)( pv2 );
@@ -70816,9 +76210,11 @@ LOGICAL EXTERNAL_NAME(MoveEx)( PTRANSFORM pt, struct motion_frame_tag *motion)
 #endif
 	{
 		{
+#if HAVE_CHEAP_CPU_FREQUENCY
 			static uint64_t tick_freq_cpu;
 			static uint64_t last_tick_cpu;
 			static uint32_t tick_cpu;
+#endif
 			if( motion->last_tick )
 			{
 				// how much time passed between then and no
@@ -71513,7 +76909,7 @@ void EXTERNAL_NAME(PrintMatrixEx)( CTEXTSTR lpName, MATRIX m DBG_PASS )
    }
 }
 #undef ShowTransform
-void EXTERNAL_NAME(ShowTransformEx)( PTRANSFORM pt, char *header DBG_PASS )
+void EXTERNAL_NAME(ShowTransformEx)( PTRANSFORM pt, const char *header DBG_PASS )
 {
    _xlprintf( 1 DBG_RELAY )( "transform %s", header );
 	_xlprintf( 1 DBG_RELAY )( "     -----------------");
@@ -71531,11 +76927,11 @@ void EXTERNAL_NAME(ShowTransformEx)( PTRANSFORM pt, char *header DBG_PASS )
 //   F(rcosf);
    F(s);
 }
-void EXTERNAL_NAME(ShowTransform)( PTRANSFORM pt, char *header )
+void EXTERNAL_NAME(ShowTransform)( PTRANSFORM pt, const char *header )
 {
 	EXTERNAL_NAME(ShowTransformEx)( pt, header DBG_SRC );
 }
-void EXTERNAL_NAME(showstd)( PTRANSFORM pt, char *header )
+void EXTERNAL_NAME(showstd)( PTRANSFORM pt, const char *header )
 {
 	TEXTCHAR byMsg[256];
 #undef F4
@@ -71984,6 +77380,7 @@ static void MD5_memset (uint8_t* output, int value, unsigned int len)
  *      a multiple of the size of an 8-bit character.
  *
  */
+/* SHA1 Standard library from somewhere... */
 /*
  *  sha1.h
  *
@@ -72052,6 +77449,8 @@ typedef struct SHA1Context
     int Computed;
     int Corrupted;
 } SHA1Context;
+#define SHA1_DIGEST_SIZE SHA1HashSize
+typedef SHA1Context sha1_ctx;
 /*
  *  Function Prototypes
  */
@@ -72456,10 +77855,14 @@ void SHA1PadMessage(SHA1Context *context)
  */
 #ifndef SHA2_H
 #define SHA2_H
-#ifdef SHA2_SOURCE
-#define SHA2_PROC   EXPORT_METHOD
+#ifdef SHA2_LOCAL
+#  define SHA2_PROC   static
 #else
-#define SHA2_PROC   IMPORT_METHOD
+#  ifdef SHA2_SOURCE
+#    define SHA2_PROC   EXPORT_METHOD
+#  else
+#    define SHA2_PROC   IMPORT_METHOD
+#  endif
 #endif
 #define SHA224_DIGEST_SIZE ( 224 / 8)
 #define SHA256_DIGEST_SIZE ( 256 / 8)
@@ -72519,6 +77922,9 @@ SHA2_PROC void sha512(const unsigned char *message, unsigned int len,
 #ifdef __cplusplus
 }
 #endif
+#endif
+#ifdef __cplusplus
+extern "C"{
 #endif
 #define SHFR(x, n)    (x >> n)
 #define ROTR(x, n)   ((x >> n) | (x << ((sizeof(x) << 3) - n)))
@@ -73219,6 +78625,9 @@ int main(void)
     printf("\n");
     printf("All tests passed.\n");
     return 0;
+}
+#endif
+#ifdef __cplusplus
 }
 #endif
 // http://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.202.pdf
@@ -74855,9 +80264,11 @@ struct random_context {
  // 512 bits
 #define SHA3_DIGEST_SIZE 64
 		uint8_t entropy3[SHA3_DIGEST_SIZE];
-  // 512 bits
-#define K12_DIGEST_SIZE 64
-		uint8_t entropy4[K12_DIGEST_SIZE];
+  // 4096 bytes
+#define K12_SQUEEZE_LENGTH 32768
+  // used for re-seeding
+#define K12_DIGEST_SIZE    64
+		uint8_t entropy4[K12_SQUEEZE_LENGTH >> 3];
 	} s;
 	size_t bits_used;
 	size_t bits_avail;
@@ -74933,7 +80344,8 @@ void NeedBits( struct random_context *ctx )
 		if( ctx->f.K12i.phase == ABSORBING || ctx->total_bits_used >= K12_SQUEEZE_LENGTH ) {
 			if( ctx->f.K12i.phase == SQUEEZING ) {
 				KangarooTwelve_Initialize( &ctx->f.K12i, 0 );
-				KangarooTwelve_Update( &ctx->f.K12i, ctx->s.entropy4, K12_DIGEST_SIZE );
+ /* 1600/8 */
+				KangarooTwelve_Update( &ctx->f.K12i, ctx->s.entropy4, 200 );
 			}
 			if( ctx->getsalt ) {
 				ctx->getsalt( ctx->psv_user, &ctx->salt, &ctx->salt_size );
@@ -74945,8 +80357,9 @@ void NeedBits( struct random_context *ctx )
 		}
 		if( ctx->f.K12i.phase == SQUEEZING )
  // customization is a final pad string.
-			KangarooTwelve_Squeeze( &ctx->f.K12i, ctx->s.entropy4, K12_DIGEST_SIZE );
+			KangarooTwelve_Squeeze( &ctx->f.K12i, ctx->s.entropy4, K12_SQUEEZE_LENGTH>>3 );
 #else
+		lprintf( "Use Long Squeeze instead!" );
 		if( ctx->getsalt ) {
 			ctx->getsalt( ctx->psv_user, &ctx->salt, &ctx->salt_size );
 			KangarooTwelve_Update( &ctx->f.K12i, (const uint8_t*)ctx->salt, (unsigned int)ctx->salt_size );
@@ -75023,7 +80436,7 @@ struct random_context *SRG_CreateEntropyInternal( void (*getsalt)( uintptr_t, PO
 	ctx->use_version2_256 = version2_256;
 	ctx->use_version2 = version2;
 	if( ctx->use_versionK12 )
-		KangarooTwelve_Initialize( &ctx->f.K12i, USE_K12_LONG_SQUEEZE ?0: K12_DIGEST_SIZE );
+		KangarooTwelve_Initialize( &ctx->f.K12i, 0 );
 	if( ctx->use_version3 )
 		sha3_init( &ctx->f.sha3, SHA3_DIGEST_SIZE );
 	else if( ctx->use_version2_256 )
@@ -75140,7 +80553,7 @@ void SRG_GetEntropyBuffer( struct random_context *ctx, uint32_t *buffer, uint32_
 #if defined( __cplusplus ) || defined( __GNUC__ )
 				buffer = (uint32_t*)(((uintptr_t)buffer) + 1);
 #else
-				((intptr_t)buffer)++;
+				( *( (uintptr_t*)&buffer ) )++;
 #endif
 				resultBits -= 8;
 			}
@@ -75166,7 +80579,7 @@ void SRG_ResetEntropy( struct random_context *ctx )
 {
 	ctx->total_bits_used = 0;
 	if( ctx->use_versionK12 )
-		KangarooTwelve_Initialize( &ctx->f.K12i, USE_K12_LONG_SQUEEZE ? 0:K12_DIGEST_SIZE  );
+		KangarooTwelve_Initialize( &ctx->f.K12i, 0 );
 	else if( ctx->use_version3 )
 		sha3_init( &ctx->f.sha3, SHA3_DIGEST_SIZE );
 	else if( ctx->use_version2_256 )
@@ -75181,7 +80594,8 @@ void SRG_ResetEntropy( struct random_context *ctx )
 void SRG_StreamEntropy( struct random_context *ctx )
 {
 	if( ctx->use_versionK12 )
-		KangarooTwelve_Update( &ctx->f.K12i, ctx->s.entropy4, K12_DIGEST_SIZE );
+ /* 1600/8 */
+		KangarooTwelve_Update( &ctx->f.K12i, ctx->s.entropy4, 200 );
 	else if( ctx->use_version3 )
 		sha3_update( &ctx->f.sha3, ctx->s.entropy4, SHA3_DIGEST_SIZE );
 	else if( ctx->use_version2_256 )
@@ -75298,9 +80712,9 @@ char *SRG_ID_Generator4( void ) {
 	int usingCtx;
 	usingCtx = 0;
 	ctx = getGenerator( _ctx, used, SRG_CreateEntropy4, &usingCtx );
-	do {
-		SRG_GetEntropyBuffer( ctx, buf, 8 * (16 + 16) );
-	} while( (buf[0] & 0x3f) < 10 );
+	//do {
+	SRG_GetEntropyBuffer( ctx, buf, 8 * (16 + 16) );
+	//} while( (buf[0] & 0x3f) < 10 );
 	used[usingCtx] = 0;
 	return EncodeBase64Ex( (uint8*)buf, (16 + 16), &outlen, (const char *)1 );
 }
@@ -76389,6 +81803,7 @@ void BlockShuffle_BusBytes( struct byte_shuffle_key *key
 // useful logging is now controlled with l.flags.bLog
 #define DISABLE_DEBUG_REGISTER_AND_DISPATCH
 //#define DEBUG_SHUTDOWN
+//#define DEBUG_ATEXIT
 #define LOG_ALL 0
 //
 // core library load
@@ -76413,14 +81828,8 @@ void BlockShuffle_BusBytes( struct byte_shuffle_key *key
 #define BAG_Exit exit
 #else
 #endif
-//#define lprintf(f,...) printf(f "\n",##__VA_ARGS__)
-//#define _lprintf(n) lprintf
-#ifdef UNDER_CE
-#define LockedExchange InterlockedExchange
+#ifdef __LINUX__
 #endif
-SACK_DEADSTART_NAMESPACE
-//#undef PRELOAD
-EXPORT_METHOD void RunDeadstart( void );
 typedef struct startup_proc_tag {
 	DeclareLink( struct startup_proc_tag );
 	int bUsed;
@@ -76447,6 +81856,10 @@ struct deadstart_local_data_
 {
 	// this is a lot of procs...
 	int nShutdownProcs;
+#ifdef __LINUX__
+	LOGICAL registerdSigint ;
+	struct sigaction prior_sigint;
+#endif
 #define nShutdownProcs l.nShutdownProcs
 	SHUTDOWN_PROC shutdown_procs[512];
 #define shutdown_procs l.shutdown_procs
@@ -76473,42 +81886,53 @@ struct deadstart_local_data_
 		BIT_FIELD bLog : 1;
 	} flags;
 };
+//#define lprintf(f,...) printf(f "\n",##__VA_ARGS__)
+//#define _lprintf(n) lprintf
 #ifdef UNDER_CE
-#  ifndef __STATIC_GLOBALS__
-#    define __STATIC_GLOBALS__
-#  endif
+#define LockedExchange InterlockedExchange
 #endif
 #ifndef __STATIC_GLOBALS__
-static struct deadstart_local_data_ *deadstart_local_data;
-#define l (*deadstart_local_data)
+#  ifdef __cplusplus
+extern "C" {
+#  endif
+	IMPORT_METHOD struct deadstart_local_data_* GetDeadstartSharedGlobal( void );
+#  ifdef __cplusplus
+}
+#  endif
+#endif
+SACK_DEADSTART_NAMESPACE
+//#undef PRELOAD
+EXPORT_METHOD void RunDeadstart( void );
+#ifdef __STATIC_GLOBALS__
+struct deadstart_local_data_ deadstart_local_data;
+#  define l (deadstart_local_data)
 #else
-static struct deadstart_local_data_ deadstart_local_data;
-#define l (deadstart_local_data)
+static struct deadstart_local_data_ *deadstart_local_data;
+#  define l (*deadstart_local_data)
 #endif
 EXPORT_METHOD void RunExits( void )
 {
+#ifdef DEBUG_ATEXIT
+	fprintf( stderr, "Run Exits InvokeExits()\n" );
+#endif
 	InvokeExits();
 }
 static void InitLocal( void )
 {
 #ifndef __STATIC_GLOBALS__
-	if( !deadstart_local_data )
-	{
-		SimpleRegisterAndCreateGlobal( deadstart_local_data );
-	}
+	if( !deadstart_local_data ) deadstart_local_data = GetDeadstartSharedGlobal();
 #endif
 	if( !l.flags.bInitialized )
 	{
-		//atexit( RunExits );
 		l.flags.bInitialized = 1;
 	}
 }
 #ifndef  DISABLE_DEBUG_REGISTER_AND_DISPATCH
 #define ENQUE_STARTUP_DBG_SRC DBG_SRC
-void EnqueStartupProc( PSTARTUP_PROC *root, PSTARTUP_PROC proc DBG_PASS )
+static void EnqueStartupProc( PSTARTUP_PROC *root, PSTARTUP_PROC proc DBG_PASS )
 #else
 #define ENQUE_STARTUP_DBG_SRC
-void EnqueStartupProc( PSTARTUP_PROC *root, PSTARTUP_PROC proc )
+static void EnqueStartupProc( PSTARTUP_PROC *root, PSTARTUP_PROC proc )
 #endif
 {
 	PSTARTUP_PROC check;
@@ -76568,13 +81992,11 @@ void RegisterPriorityStartupProc( void (CPROC*proc)(void), CTEXTSTR func,int pri
 {
 	int use_proc;
 	InitLocal();
-	if( LOG_ALL ||
+	if( LOG_ALL || (
 #ifndef __STATIC_GLOBALS__
-		 (deadstart_local_data
-#else
-		(1
+		 deadstart_local_data &&
 #endif
-		&& l.flags.bLog ))
+		  l.flags.bLog ))
 		lprintf( "Register %s@" DBG_FILELINEFMT_MIN " %d", func DBG_RELAY, priority);
 	if( nProcs == 1024 )
 	{
@@ -76613,7 +82035,6 @@ void RegisterPriorityStartupProc( void (CPROC*proc)(void), CTEXTSTR func,int pri
 	*/
 	if( bInitialDone && !bSuspend )
 	{
-#define ONE_MACRO(a,b) a,b
 #ifdef _DEBUG
 		_xlprintf(LOG_NOISE,pFile,nLine)( "Initial done, not suspended, dispatch immediate." );
 #endif
@@ -76634,36 +82055,69 @@ void ClearDeadstarts( void )
 	// this is just a clone..
 }
 #endif
+static int ignoreBreak;
+void IgnoreBreakHandler( int ignore) {
+	ignoreBreak = ignore;
+}
 #ifndef UNDER_CE
 #  if defined( WIN32 )
 #    ifndef __cplusplus_cli
 static BOOL WINAPI CtrlC( DWORD dwCtrlType )
 {
+	if( ignoreBreak & ( 1 << dwCtrlType ) ) return TRUE;
+#ifdef DEBUG_ATEXIT
+	fprintf( stderr, "Received ctrlC Event %08x %d\n", ignoreBreak, dwCtrlType );
+#endif
 	switch( dwCtrlType )
 	{
 	case CTRL_BREAK_EVENT:
 	case CTRL_C_EVENT:
+	case CTRL_CLOSE_EVENT:
+	case CTRL_LOGOFF_EVENT:
+	case CTRL_SHUTDOWN_EVENT:
 		InvokeExits();
 		// allow C api to exit, whatever C api we're using
 		// (allows triggering atexit functions)
-		exit(3);
-		return TRUE;
-	case CTRL_CLOSE_EVENT:
-		break;
-	case CTRL_LOGOFF_EVENT:
-		break;
-	case CTRL_SHUTDOWN_EVENT:
+		//exit(3);
 		break;
 	}
 	// default... return not processed.
+ // allow others to process this too
 	return FALSE;
 }
 #    endif
 #  endif
 #  ifndef WIN32
-static void CtrlC( int signal )
+static void CtrlC( int signal, siginfo_t* siginfo, void*p )
 {
-	exit(3);
+	static int tries;
+	static int in_self;
+#ifdef DEBUG_ATEXIT
+	fprintf( stderr, "linux system SIGINT... %d\n", in_self);
+#endif
+	if( in_self ) return;
+	in_self = 1;
+	if( ignoreBreak ) return;
+	if( l.prior_sigint.sa_handler ) {
+		if( l.prior_sigint.sa_handler == SIG_DFL ){
+			fprintf( stderr, "default handler...\n");
+		}
+		else if( l.prior_sigint.sa_handler == SIG_IGN ){
+			fprintf( stderr, "ignore handler...\n");
+		}
+		else if( l.prior_sigint.sa_handler ){
+			if( 1 || (l.prior_sigint.sa_flags & SA_SIGINFO) )
+			{
+				l.prior_sigint.sa_sigaction( signal, siginfo, p );
+			} else {
+				l.prior_sigint.sa_handler( signal );
+			}
+		}
+	}
+	in_self = 0;
+	InvokeExits();
+	if( tries++ == 10 )
+		exit(3);
 }
 #  endif
 #endif
@@ -76675,9 +82129,10 @@ void InvokeDeadstart( void )
 {
 	PSTARTUP_PROC proc;
 	PSTARTUP_PROC resumed_proc;
-	//if( !bInitialDone /*|| bDispatched*/ )
-	//   return;
-	InitLocal();
+#ifndef __STATIC_GLOBALS__
+ // nothing was registerd to run.
+	if( !deadstart_local_data ) return;
+#endif
 	if( bInitialStarted )
 		return;
 	bInitialStarted = 1;
@@ -76695,31 +82150,54 @@ void InvokeDeadstart( void )
 #  ifndef UNDER_CE
 		if( GetConsoleWindow() )
 		{
-#    ifndef __cplusplus_cli
-			//MessageBox( NULL, "!!--!! CtrlC", "blah", MB_OK );
-			SetConsoleCtrlHandler( CtrlC, TRUE );
-#    endif
+			if( !SetConsoleCtrlHandler( CtrlC, TRUE ) ) fprintf( stderr, "failed to SetConsoleCtrlHandler? %lu\n", GetLastError() );
 		}
 		else
 		{
 			//MessageBox( NULL, "!!--!! NO CtrlC", "blah", MB_OK );
- // do nothing if we're no actually a console window. this should fix ctrl-c not working in CMD prompts launched by MILK/InterShell
-			;
+			// do nothing if not actually a console window. this should fix ctrl-c not working in CMD prompts launched by MILK/InterShell
 		}
 #  endif
+	}
+#else
+	if( !bInitialDone && !l.bDispatched )
+	{
+		struct sigaction sact;
+		/*
+           struct sigaction {
+			union{
+               void     (*sa_handler)(int);
+               void     (*sa_sigaction)(int, siginfo_t *, void *);
+			}
+               sigset_t   sa_mask;
+               int        sa_flags;
+               void     (*sa_restorer)(void);
+           };
+		*/
+		if( !l.registerdSigint )
+		{
+			l.registerdSigint = TRUE;
+			MemSet( &sact, 0, sizeof( sact ));
+			sact.sa_sigaction = CtrlC;
+			sigemptyset(&sact.sa_mask);
+			//sigaddset( &sact.sa_mask, SIGINT );
+			sact.sa_flags = SA_SIGINFO | SA_NODEFER;
+			sact.sa_restorer = NULL;
+			// this means I have to generate a terminate myself....
+			//sigaction(SIGINT, &sact, &l.prior_sigint);
+			//fprintf( stderr, "Registered sigint handler...\n");
+		}
 	}
 #endif
 	while( ( proc = (PSTARTUP_PROC)LockedExchangePtrSzVal( (PVPTRSZVAL)&proc_schedule, 0 ) ) != NULL )
 	{
 		// need to set this to point to new head of list... it's not in proc_schedule anymore
 		//proc->me = &proc;
-		if( LOG_ALL ||
+		if( LOG_ALL || (
 #ifndef __STATIC_GLOBALS__
-		 (deadstart_local_data
-#else
-		(1
+		   deadstart_local_data  &&
 #endif
-		&& l.flags.bLog ))
+		   l.flags.bLog ))
 		{
 #ifdef _DEBUG
 			lprintf( "Dispatch %s@%s(%d)p:%d ", proc->func,proc->file,proc->line, proc->priority );
@@ -76800,13 +82278,11 @@ PRIORITY_PRELOAD( InitDeadstartOptions, NAMESPACE_PRELOAD_PRIORITY+1 )
 void RegisterPriorityShutdownProc( void (CPROC*proc)(void), CTEXTSTR func, int priority,void *use_label DBG_PASS )
 {
 	InitLocal();
-	if( LOG_ALL ||
+	if( LOG_ALL || (
 #ifndef __STATIC_GLOBALS__
-		(deadstart_local_data
-#else
-		 (1
+		deadstart_local_data &&
 #endif
-		  && l.flags.bLog ))
+		   l.flags.bLog ))
 		lprintf( "Exit Proc %s(%p) from " DBG_FILELINEFMT_MIN " registered..."
 				 , func
 				 , proc DBG_RELAY );
@@ -76856,6 +82332,9 @@ void InvokeExits( void )
 	PSHUTDOWN_PROC proc;
 	// shutdown is much easier than startup cause more
 	// procedures shouldn't be added as a property of shutdown.
+#ifdef DEBUG_ATEXIT
+	fprintf( stderr, "InvokeExits()\n" );
+#endif
 	// don't allow shutdown procs to schedule more shutdown procs...
 	// although in theory we could; if the first list contained
 	// ReleaseAllMemory(); then there is no memory.
@@ -76869,12 +82348,12 @@ void InvokeExits( void )
 		// just before all memory goes away
 		// global memory goes away (including mine) so deadstart_local_data is invalidated.
 #ifndef __STATIC_GLOBALS__
-		struct deadstart_local_data_ *local_pointer = (struct deadstart_local_data_*)(((uintptr_t)deadstart_local_data)-sizeof(PLIST));
+		//struct deadstart_local_data_ *local_pointer = (struct deadstart_local_data_*)(((uintptr_t)deadstart_local_data)-sizeof(PLIST));
 #endif
 		PSHUTDOWN_PROC proclist = proc;
 		// link list to myself..
 #ifndef __STATIC_GLOBALS__
-		Hold( local_pointer );
+		//Hold( local_pointer );
 #endif
 		proc->me = &proclist;
 		while( ( proc = proclist ) )
@@ -76927,6 +82406,9 @@ void DispelDeadstart( void )
 #ifdef __cplusplus
 ROOT_ATEXIT(AutoRunExits)
 {
+#ifdef DEBUG_ATEXIT
+	fprintf( stderr, "ROOT_ATEXIT()" );
+#endif
 	InvokeExits();
 }
 #endif
@@ -76949,9 +82431,10 @@ SACK_NAMESPACE
 // this then invokes an exit in the mainline program (if available)
 void BAG_Exit( int code )
 {
-#ifndef __cplusplus_cli
-	InvokeExits();
+#ifdef DEBUG_ATEXIT
+	fprintf( stderr, "BAG_Exit();" );
 #endif
+	InvokeExits();
 #undef exit
 	exit( code );
 }
@@ -76989,33 +82472,38 @@ LOGICAL IsRootDeadstartComplete( void )
 #endif
 }
 #ifndef __STATIC__
-#ifndef __WATCOMC__
-#if !defined( __cplusplus_cli )
-#if !defined( NO_DEADSTART_DLLMAIN ) && !defined( BUILD_PORTABLE_EXECUTABLE )
-#  if !defined( __LINUX__ ) && !defined( __GNUC__ )
-#    ifdef __cplusplus
+#  ifndef __WATCOMC__
+#    if !defined( NO_DEADSTART_DLLMAIN ) && !defined( BUILD_PORTABLE_EXECUTABLE )
+#      if !defined( __LINUX__ ) && !defined( __GNUC__ )
+#        ifdef __cplusplus
 extern "C"
-#    endif
+#        endif
 __declspec(dllexport)
 	BOOL WINAPI DllMain(  HINSTANCE hinstDLL,
    DWORD fdwReason,
    LPVOID lpvReserved
 		   )
 {
-	if( fdwReason == DLL_PROCESS_DETACH )
+	if( fdwReason == DLL_PROCESS_DETACH ) {
+#ifdef DEBUG_ATEXIT
+		fprintf( stderr, "DLL_DETACH\n" );
+#endif
 		InvokeExits();
+	}
 	return TRUE;
 }
-#  else
+#      else
 void RootDestructor(void) __attribute__((destructor));
 void RootDestructor( void )
 {
+#ifdef DEBUG_ATEXIT
+	fprintf( stderr, "RootDestructor\n" );
+#endif
 	InvokeExits();
 }
+#      endif
+#    endif
 #  endif
-#endif
-#endif
-#endif
 #endif
 #undef l
 SACK_DEADSTART_NAMESPACE_END
