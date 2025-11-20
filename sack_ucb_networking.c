@@ -5411,6 +5411,20 @@ SYSTEM_PROC(void, SACKSystemSetWorkingPath)( CTEXTSTR name );
 // Set the path of this library.
 SYSTEM_PROC(void, SACKSystemSetLibraryPath)( CTEXTSTR name );
 #endif
+/*
+* Creates a process-identified exit event which can be signaled to terminate the process.
+*/
+SYSTEM_PROC( void, EnableExitEvent )( void );
+/*
+  Add callback which is called when the exit event is executed.
+  The callback can return non-zero to prevent the task from exiting; but the event is no
+  longer valid, and cannot be triggered again.
+*/
+SYSTEM_PROC( void, AddKillSignalCallback )( int( *cb )( uintptr_t ), uintptr_t );
+/*
+  Remove a callback which was added to event callback list.
+*/
+SYSTEM_PROC( void, RemoveKillSignalCallback )( int( *cb )( uintptr_t ), uintptr_t );
 #if _WIN32
 /*
   moves the window of the task; if there is a main window for the task within the timeout perioud.
@@ -5440,20 +5454,6 @@ SYSTEM_PROC( void, MoveTaskWindowToDisplay )( PTASK_INFO task, int timeout, int 
   1+ is the first monitor and subsequent monitors
 */
 SYSTEM_PROC( void, MoveTaskWindowToMonitor )( PTASK_INFO task, int timeout, int display, void cb( uintptr_t, LOGICAL ), uintptr_t psv );
-/*
-* Creates a process-identified exit event which can be signaled to terminate the process.
-*/
-SYSTEM_PROC( void, EnableExitEvent )( void );
-/*
-  Add callback which is called when the exit event is executed.
-  The callback can return non-zero to prevent the task from exiting; but the event is no
-  longer valid, and cannot be triggered again.
-*/
-SYSTEM_PROC( void, AddKillSignalCallback )( int( *cb )( uintptr_t ), uintptr_t );
-/*
-  Remove a callback which was added to event callback list.
-*/
-SYSTEM_PROC( void, RemoveKillSignalCallback )( int( *cb )( uintptr_t ), uintptr_t );
 /*
   Refresh internal window handle for task; uses internal handle as cached value for performance.
 */
@@ -23030,6 +23030,7 @@ typedef struct space_pool_structure {
 #ifdef _WIN32
 //(0x10000 * 0x1000) //256 megs?
 #define FILE_GRAN g.si.dwAllocationGranularity
+//static SYSTEM_INFO const zero_si = {{{0}}}; /* C++ is complicating how to inizialize this, {} used to work, now {0} is wanted, which then wants {{{0}}}... */
 #else
 #define FILE_GRAN g.pagesize
 #endif
@@ -23081,7 +23082,7 @@ static struct global_memory_tag global_memory_data = { 0x10000 * 0x08
 																	  , 0
 																	  , NULL
 #ifdef _WIN32
-																	  , {}
+																	  , {{{0}}}
 #endif
 																	  , 0
 																	  , 0
@@ -23106,7 +23107,7 @@ struct global_memory_tag global_memory_data = { 0x10000 * 0x08, 0, 0
 																	  , 0
 																	  , NULL
 #ifdef _WIN32
-																	  , {}
+																	  , {{{0}}}
 #endif
 																	  , 0
 																	  , 0
@@ -23129,7 +23130,7 @@ struct global_memory_tag global_memory_data = { 0x10000 * 0x08, 1, 1
 																	  , 0
 																	  , NULL
 #ifdef _WIN32
-																	  , {}
+																	  , {{{0}}}
 #endif
 																	  , 0
 																	  , 0
@@ -37398,7 +37399,6 @@ IDLE_PROC( int, IdleFor )( uint32_t dwMilliseconds )
 //#define LOG_WRITE_AGGREGATION
 //#define LOG_WRITE_NOTICES
 //#define LOG_PENDING_WRITES // lasst bit of logging around wakeOnUnlock and pending writes.
-//#define LOG_CLIENT_LISTS
 //#define LOG_NETWORK_LOCKING
 /// for windows - this logs detailed info about the new threaded events
 //#define LOG_NETWORK_EVENT_THREAD
@@ -37693,8 +37693,10 @@ struct NetworkClient
 	PTHREAD pWaiting;
  // current incoming buffer
 	PendingBuffer RecvPending, FirstWritePending;
+ // the next recv should use this first and then recv()...
+	PendingBuffer prefixData;
  // outgoing buffers
-	PendingBuffer *volatile lpFirstPending,*volatile lpLastPending;
+	PendingBuffer *volatile lpFirstPending, *volatile lpLastPending;
  // GetTickCount() of last event...
 	uint32_t    LastEvent;
 	DeclareLink( struct NetworkClient );
@@ -37995,52 +37997,6 @@ PRIORITY_PRELOAD( InitNetworkGlobal, CONFIG_SCRIPT_PRELOAD_PRIORITY - 1 )
 	}
 }
 //----------------------------------------------------------------------------
-#ifdef LOG_CLIENT_LISTS
-void DumpLists( void )
-{
-	int c = 0;
-	PCLIENT pc;
-	for( pc = globalNetworkData.AvailableClients; c < 50 && pc; pc = pc->next )
-	{
-		//lprintf( "Available %p", pc );
-		if( (*pc->me) != pc )
-			DebugBreak();
-		c++;
-	}
-	if( c > 50 )
-	{
-		lprintf( "Overflow available clients." );
-		//DebugBreak();
-	}
-	c = 0;
-	for( pc = globalNetworkData.ActiveClients; c < 50 && pc; pc = pc->next )
-	{
-		//lprintf( WIDE( "Active %p(%d)" ), pc, pc->Socket );
-		if( (*pc->me) != pc )
-			DebugBreak();
-		c++;
-	}
-	if( c > 50 )
-	{
-		lprintf( "Overflow active clients." );
-		DebugBreak();
-	}
-	c = 0;
-	for( pc = globalNetworkData.ClosedClients; c < 50 && pc; pc = pc->next )
-	{
-		//lprintf( "Closed %p(%d)", pc, pc->Socket );
-		if( (*pc->me) != pc )
-			DebugBreak();
-		c++;
-	}
-	if( c > 50 )
-	{
-		lprintf( "Overflow closed clients." );
-		DebugBreak();
-	}
-}
-#endif
-//----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 static char flag_buf[16][1024];
 static int flag_bufidx;
@@ -38083,16 +38039,6 @@ PCLIENT GrabClientEx( PCLIENT pClient DBG_PASS )
 {
 	if( pClient )
 	{
-#ifdef LOG_CLIENT_LISTS
-		_lprintf(DBG_RELAY)( "grabbed client %p(%d)", pClient, pClient->Socket );
-		lprintf( "grabbed client %p Ac:%p(%p(%d)) Av:%p(%p(%d)) Cl:%p(%p(%d))"
-				 , pClient->me
-					 , &globalNetworkData.ActiveClients, globalNetworkData.ActiveClients, globalNetworkData.ActiveClients?globalNetworkData.ActiveClients->Socket:0
-					 , &globalNetworkData.AvailableClients, globalNetworkData.AvailableClients, globalNetworkData.AvailableClients?globalNetworkData.AvailableClients->Socket:0
-					 , &globalNetworkData.ClosedClients, globalNetworkData.ClosedClients, globalNetworkData.ClosedClients?globalNetworkData.ClosedClients->Socket:0
-				 );
-		DumpLists();
-#endif
 		pClient->dwFlags &= ~CF_STATEFLAGS;
 		if( pClient->dwFlags & CF_AVAILABLE )
 			lprintf( "Grabbed. %p  %08x", pClient, pClient->dwFlags );
@@ -38107,10 +38053,6 @@ static PCLIENT AddAvailable( PCLIENT pClient )
 {
 	if( pClient )
 	{
-#ifdef LOG_CLIENT_LISTS
-		lprintf( "Add Avail client %p(%d)", pClient, pClient->Socket );
-		DumpLists();
-#endif
 		pClient->dwFlags |= CF_AVAILABLE;
 		pClient->LastEvent = timeGetTime();
 		pClient->me = &globalNetworkData.AvailableClients;
@@ -38126,10 +38068,6 @@ PCLIENT AddActive( PCLIENT pClient )
 {
 	if( pClient )
 	{
-#ifdef LOG_CLIENT_LISTS
-		lprintf( "Add Active client %p(%d)", pClient, pClient->Socket );
-		DumpLists();
-#endif
 		pClient->dwFlags |= CF_ACTIVE;
 		pClient->LastEvent = timeGetTime();
 		pClient->me = &globalNetworkData.ActiveClients;
@@ -38148,10 +38086,6 @@ static PCLIENT AddClosed( PCLIENT pClient )
 {
 	if( pClient )
 	{
-#ifdef LOG_CLIENT_LISTS
-		lprintf( "Add Closed client %p(%d)", pClient, pClient->Socket );
-		DumpLists();
-#endif
 		pClient->dwFlags |= CF_CLOSED;
 		pClient->LastEvent = timeGetTime();
 		pClient->me = &globalNetworkData.ClosedClients;
@@ -39257,7 +39191,7 @@ void RemoveClientExx(PCLIENT lpClient, LOGICAL bBlockNotify, LOGICAL bLinger DBG
 		//lprintf( "This will end up resetting the socket?" );
 		EnterCriticalSec( &globalNetworkData.csNetwork );
 		InternalRemoveClientExx( lpClient, bBlockNotify, bLinger DBG_RELAY );
-		if( NetworkLock( lpClient, 0 ) && ((n=1),NetworkLock( lpClient, 1 )) ) {
+		if( NetworkLockEx( lpClient, 0 DBG_RELAY ) && ((n=1),NetworkLockEx( lpClient, 1 DBG_RELAY )) ) {
 			TerminateClosedClient( lpClient );
 			NetworkUnlock( lpClient, 0 );
 			NetworkUnlock( lpClient, 1 );
@@ -40059,13 +39993,6 @@ static void HandleEvent( PCLIENT pClient )
 			}
 			else
 			{
-#ifdef LOG_CLIENT_LISTS
-				lprintf( "client lists Ac:%p(%p(%d)) Av:%p(%p(%d)) Cl:%p(%p(%d))"
-						 , &globalNetworkData.ActiveClients, globalNetworkData.ActiveClients, globalNetworkData.ActiveClients?globalNetworkData.ActiveClients->Socket:0
-						 , &globalNetworkData.AvailableClients, globalNetworkData.AvailableClients, globalNetworkData.AvailableClients?globalNetworkData.AvailableClients->Socket:0
-						 , &globalNetworkData.ClosedClients, globalNetworkData.ClosedClients, globalNetworkData.ClosedClients?globalNetworkData.ClosedClients->Socket:0
-						 );
-#endif
 #ifdef LOG_NETWORK_LOCKING
 				lprintf( "Handle Event left global" );
 #endif
@@ -43394,7 +43321,7 @@ void AcceptClient(PCLIENT pListen)
 			{
  // may be... at least we can fail sooner...
 				pNewClient->dwFlags |= CF_READREADY;
-				if( pListen->dwFlags & CF_CPPREAD )
+				if( pNewClient->dwFlags & CF_CPPREAD )
   // process read to get data already pending...
 					pNewClient->read.CPPReadComplete( pNewClient->psvRead, NULL, 0 );
 				else
@@ -43476,6 +43403,15 @@ static void openSocket( PCLIENT pClient, SOCKADDR *pFromAddr, SOCKADDR *pAddr, L
 				uint32_t dwError = WSAGetLastError();
 				lprintf( "Failed to set socket option REUSEADDR : %d", dwError );
 			}
+#ifndef WIN32
+			// reuse port isn't a windows feature.
+			err = setsockopt( pClient->Socket, SOL_SOCKET, SO_REUSEPORT, (const char *)&opt, sizeof( opt ) );
+			if( err )
+			{
+				uint32_t dwError = WSAGetLastError();
+				lprintf( "Failed to set socket option REUSEPORT : %d", dwError );
+			}
+#endif
 			// client's don't normally have a from, but when they do, it gets overwritten with another duplicate...
 			if( pClient->saSource != pFromAddr ) {
 				if( !pClient->saSource )
@@ -43503,7 +43439,8 @@ static void openSocket( PCLIENT pClient, SOCKADDR *pFromAddr, SOCKADDR *pAddr, L
 						// have to have the base one open or pcOther cannot be set.
 						SOCKADDR* lpMyAddr = CreateSockAddress( ":::", ntohs(((uint16_t*)(pClient->saSource->sa_data+0))[0]) );
 						pClient->pcOther = CPPOpenTCPListenerAddr_v3d( lpMyAddr, pClient->connect.CPPClientConnected, pClient->psvConnect, pClient->flags.bWaiting, TRUE DBG_SRC );
-						pClient->pcOther->pcOther = pClient;
+                  if( pClient->pcOther )
+							pClient->pcOther->pcOther = pClient;
 						ReleaseAddress( lpMyAddr );
 					}
 				} else if( pClient->saSource->sa_family == AF_INET6 ) {
@@ -43511,7 +43448,8 @@ static void openSocket( PCLIENT pClient, SOCKADDR *pFromAddr, SOCKADDR *pAddr, L
 					if( MemCmp( pClient->saSource->sa_data+6, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 16 ) == 0 ) {
 						SOCKADDR* lpMyAddr = CreateSockAddress( "0.0.0.0", ntohs(((uint16_t*)(pClient->saSource->sa_data+0))[0]) );
 						pClient->pcOther = CPPOpenTCPListenerAddr_v3d( lpMyAddr, pClient->connect.CPPClientConnected, pClient->psvConnect, pClient->flags.bWaiting, TRUE DBG_SRC );
-						pClient->pcOther->pcOther = pClient;
+                  if( pClient->pcOther )
+							pClient->pcOther->pcOther = pClient;
 						ReleaseAddress( lpMyAddr );
 					}
 				}
@@ -43589,13 +43527,18 @@ PCLIENT CPPOpenTCPListenerAddr_v3d( SOCKADDR *pAddr
 	scheduleSocket( pListen, NULL );
 	if(listen(pListen->Socket, SOMAXCONN ) == SOCKET_ERROR )
 	{
-		lprintf( "listen(5) failed: %d", WSAGetLastError() );
+		PCLIENT other = pListen->pcOther;
+		if( other ) {
+			pListen->pcOther = NULL;
+			other->pcOther = NULL;
+		} else
+			lprintf( "listen(5) failed: (autosocket %d)%d", autoSocket, WSAGetLastError() );
 		EnterCriticalSec( &globalNetworkData.csNetwork );
 		InternalRemoveClientEx( pListen, TRUE, FALSE );
 		LeaveCriticalSec( &globalNetworkData.csNetwork );
 		NetworkUnlockEx( pListen, 0 DBG_SRC );
 		NetworkUnlockEx( pListen, 1 DBG_SRC );
-		return NULL;
+		return other;
 	}
 	NetworkUnlockEx( pListen, 0 DBG_SRC );
 	NetworkUnlockEx( pListen, 1 DBG_SRC );
@@ -44155,32 +44098,18 @@ int FinishPendingRead(PCLIENT lpClient DBG_PASS )
 #ifdef VERBOSE_DEBUG
 	nCount = 0;
 #endif
-	if( !( lpClient->dwFlags & CF_READPENDING ) )
-	{
-		//lpClient->dwFlags |= CF_READREADY; // read ready is set if FinishPendingRead returns 0; and it's from the core read...
-		//lprintf( "Finish pending - return, no pending read. %08x", lpClient->dwFlags );
-	}
 	do
 	{
-#if 0 && !DrainSupportDeprecated
-		if( lpClient->bDraining )
-		{
-			lprintf("LOG:ERROR trying to read during a drain state..." );
- // why error on draining with pending finish??
-			return -1;
-		}
-#endif
 		if( !(lpClient->dwFlags & CF_CONNECTED)  )
 		{
 #ifdef DEBUG_SOCK_IO
-			lprintf( "Finsih pending - return, not connected." );
+			lprintf( "Finish pending - return, not connected." );
 #endif
  // amount of data available...
 			return (int)lpClient->RecvPending.dwUsed;
 		}
 		//lprintf( ("FinishPendingRead of %d"), lpClient->RecvPending.dwAvail );
-		if( !( lpClient->dwFlags & CF_READPENDING ) )
-		{
+		if( !( lpClient->dwFlags & CF_READPENDING ) ) {
 			//lpClient->dwFlags |= CF_READREADY; // read ready is set if FinishPendingRead returns 0; and it's from the core read...
 			if( lpClient->dwFlags & CF_WANTCLOSE ) {
 				// the application didn't queue a buffer to read into, have to force accepting a close.
@@ -44194,6 +44123,25 @@ int FinishPendingRead(PCLIENT lpClient DBG_PASS )
 			// without a pending read, don't read, the buffers are not correct.
 			return 0;
 		}
+                if( lpClient->prefixData.dwAvail != lpClient->prefixData.dwUsed ) {
+			// if more room left than is in prefix, put all of prefix data into buffer.
+			if( ( lpClient->RecvPending.dwAvail - lpClient->RecvPending.dwUsed )
+			    >= ( lpClient->prefixData.dwAvail - lpClient->prefixData.dwUsed ) ){
+				MemCpy( (uint8_t*)lpClient->RecvPending.buffer.p + lpClient->RecvPending.dwUsed
+				      , (uint8_t*)lpClient->prefixData.buffer.p + lpClient->prefixData.dwUsed
+				      , ( lpClient->prefixData.dwAvail - lpClient->prefixData.dwUsed ) );
+				lpClient->RecvPending.dwUsed += lpClient->prefixData.dwAvail - lpClient->prefixData.dwUsed;
+				lpClient->prefixData.dwAvail = lpClient->prefixData.dwUsed = 0;
+			} else {
+				MemCpy( (uint8_t*)lpClient->RecvPending.buffer.p + lpClient->RecvPending.dwUsed
+				      , (uint8_t*)lpClient->prefixData.buffer.p + lpClient->prefixData.dwUsed
+				      , ( lpClient->RecvPending.dwAvail - lpClient->RecvPending.dwUsed ) );
+				// use a part of the data...
+				lpClient->prefixData.dwUsed = lpClient->RecvPending.dwAvail - lpClient->RecvPending.dwUsed;
+				lpClient->RecvPending.dwUsed += lpClient->RecvPending.dwAvail - lpClient->RecvPending.dwUsed;
+			}
+		}
+		// if readpending is not set, don't call recv... (doesn't mean we have 0 data though)
   // if any room is availiable.
 		while( lpClient->RecvPending.dwAvail )
 		{
@@ -44218,6 +44166,7 @@ int FinishPendingRead(PCLIENT lpClient DBG_PASS )
  // no data avail yet...
 				case WSAEWOULDBLOCK:
 					//lprintf( "Pending Receive would block..." );
+					goto dispatch_ReadEvent;
 					lpClient->dwFlags &= ~CF_READREADY;
 					return (int)lpClient->RecvPending.dwUsed;
 #ifdef __LINUX__
@@ -44288,8 +44237,12 @@ int FinishPendingRead(PCLIENT lpClient DBG_PASS )
 				//else
 				//	lprintf( "Was not a stream read - try reading more..." );
 			}
+ // end while
 		}
 		// if read notification okay - then do callback.
+		// read waiting is that the read is waiting in block mode for the result
+		// so do not dispatch to callback.
+dispatch_ReadEvent:
 		if( !( lpClient->dwFlags & CF_READWAITING ) )
 		{
 #ifdef LOG_PENDING
@@ -44352,7 +44305,8 @@ int FinishPendingRead(PCLIENT lpClient DBG_PASS )
 				  ( lpClient->RecvPending.dwUsed &&
 					lpClient->RecvPending.s.bStream ) ) )
 			{
-				lprintf( "Wake waiting thread... clearing pending read flag." );
+				// this like never happens... so maybe remove this sort of wake logic
+				//lprintf( "Wake waiting thread... clearing pending read flag." );
 				lpClient->dwFlags &= ~CF_READPENDING;
 				if( lpClient->pWaiting )
 					WakeThread( lpClient->pWaiting );
@@ -44441,7 +44395,8 @@ size_t doReadExx2(PCLIENT lpClient,POINTER lpBuffer,size_t nBytes, LOGICAL bIsSt
 		}
 		//else
 		//   lprintf( "No read waiting... allow forward going..." );
-		if( lpClient->dwFlags & CF_READREADY )
+		if( ( lpClient->dwFlags & CF_READREADY )
+		  || ( lpClient->prefixData.dwAvail != lpClient->prefixData.dwUsed ) )
 		{
 #ifdef LOG_PENDING
 			lprintf( "Data already present for read..." );
@@ -44923,7 +44878,8 @@ uintptr_t WaitToWrite( PTHREAD thread ) {
 				if(pending.pc->dwFlags & CF_TOCLOSE)
 					lprintf( "Socket is intended to close already... %08x %p" , pending.pc->dwFlags, pending.pc );
 				else
-					lprintf( "Socket is is inactive already... %08x %p" , pending.pc->dwFlags, pending.pc );
+//lprintf( "Socket is inactive already... %08x %p" , pending.pc->dwFlags, pending.pc );
+					;
 				continue;
 			}
 			if( !NetworkLockEx( pending.pc, 0 DBG_SRC ) ) {
@@ -44985,16 +44941,16 @@ LOGICAL doTCPWriteV2( PCLIENT lpClient
                      DBG_PASS
                      )
 {
-	if( !lpClient )
+	if( !lpClient || !sack_network_is_active( lpClient ) )
 	{
 //#ifdef VERBOSE_DEBUG
-		lprintf( "TCP Write failed - invalid client." );
+		_lprintf(DBG_RELAY)( "TCP Write failed - invalid client." );
 //#endif
   // cannot process a closed channel. data not sent.
 		return FALSE;
 	}
 /*hasPending(lpClient)*/
-	while( ( pend_on_fail && lpClient->wakeOnUnlock ) || !NetworkLockEx( lpClient, 0 DBG_SRC ) )
+	while( ( pend_on_fail && lpClient->wakeOnUnlock ) || !NetworkLockEx( lpClient, 0 DBG_RELAY ) )
 	{
 #ifdef LOG_NETWORK_LOCKING
 		if( lpClient->wakeOnUnlock )
@@ -47683,6 +47639,7 @@ static int handleServerName( SSL* ssl, int* al, void* param ) {
 		if( !hostctx->host ) {
 			//lprintf(" No host - setup default result?" );
 			defaultHostctx = hostctx;
+			continue;
 		}
 		//lprintf( "Host:%s", hostctx->host );
 		for( checkName = hostctx->host; checkName ? (nextName = StrChr( checkName, '~' )), 1 : 0; checkName = nextName ) {
@@ -47702,8 +47659,9 @@ static int handleServerName( SSL* ssl, int* al, void* param ) {
 		}
 	}
 	if( defaultHostctx ) {
-		SSL_set_SSL_CTX( ssl, defaultHostctx->ctx );
-		return SSL_TLSEXT_ERR_OK;
+		//SSL_set_SSL_CTX( ssl, defaultHostctx->ctx );
+		//return SSL_TLSEXT_ERR_OK;
+		return SSL_TLSEXT_ERR_NOACK;
 	}
 	//lprintf( "NOACK! %p", ssl_Accept );
 	ssl_Accept->noHost = TRUE;
@@ -47732,7 +47690,7 @@ static int pem_password( char *buf, int size, int rwflag, void *u )
 	return len;
 }
 struct ssl_hostContext* ssl_setupHost( struct ssl_session* ses, CTEXTSTR hosts, CTEXTSTR cert, size_t certlen, CTEXTSTR keypair, size_t keylen, CTEXTSTR keypass, size_t keypasslen ) {
-	struct internalCert* certStruc;
+	struct internalCert* certStruc = NULL;
 	struct ssl_hostContext* ctx;
 	//lprintf( "Setuphost: %s", hosts );
 	if( !cert ) {
@@ -47740,12 +47698,14 @@ struct ssl_hostContext* ssl_setupHost( struct ssl_session* ses, CTEXTSTR hosts, 
 			lprintf( "Ignoring hostname for anonymous, quickshot server certificate" );
 		}
 		// should probably pass smme host names for certificate...
-		certStruc = MakeRequest();
+//MakeRequest();
+		certStruc = NULL;
 		ctx = New( struct ssl_hostContext );
 		ctx->defaultHost = FALSE;
 		ctx->host = StrDup( hosts );
 		ctx->ctx = NULL;
-		ctx->certToUse = certStruc;
+//certStruc;
+		ctx->certToUse = NULL;
 		AddLink( &ses->hosts, ctx );
 	} else {
 		certStruc = New( struct internalCert );
@@ -47783,9 +47743,9 @@ struct ssl_hostContext* ssl_setupHost( struct ssl_session* ses, CTEXTSTR hosts, 
 		ctx->defaultHost = TRUE;
 	}
 	if( !keypair ) {
-		if( !certStruc->pkey )
+		if( certStruc && !certStruc->pkey )
 			certStruc->pkey = genKey();
-	} else {
+	} else if( certStruc ) {
 		BIO *keybuf = BIO_new( BIO_s_mem() );
 		struct info_params params;
 		EVP_PKEY *result;
@@ -47799,12 +47759,8 @@ struct ssl_hostContext* ssl_setupHost( struct ssl_session* ses, CTEXTSTR hosts, 
 		}
 		BIO_free( keybuf );
 	}
-#if NODE_MAJOR_VERSION < 10
-	ctx->ctx = SSL_CTX_new( TLSv1_2_server_method() );
-#else
 	ctx->ctx = SSL_CTX_new( TLS_server_method() );
 	SSL_CTX_set_min_proto_version( ctx->ctx, TLS1_2_VERSION );
-#endif
 	{
 		int r;
 		SSL_CTX_set_cipher_list( ctx->ctx, "ALL:!ADH:!LOW:!EXP:!MD5:@STRENGTH" );
@@ -47814,26 +47770,33 @@ struct ssl_hostContext* ssl_setupHost( struct ssl_session* ses, CTEXTSTR hosts, 
 			ERR_print_errors_cb( logerr, (void*)__LINE__ );
 		}
 		*/
-		r = SSL_CTX_use_certificate( ctx->ctx, sk_X509_value( certStruc->chain, 0 ) );
-		if( r <= 0 ) {
-			ERR_print_errors_cb( logerr, (void*)__LINE__ );
-		}
-		r = SSL_CTX_use_PrivateKey( ctx->ctx, certStruc->pkey );
-		if( r <= 0 ) {
-			ERR_print_errors_cb( logerr, (void*)__LINE__ );
-		}
-		{
-			int n;
-			for( n = 1; n < sk_X509_num( certStruc->chain ); n++ ) {
-				r = SSL_CTX_add_extra_chain_cert( ctx->ctx, sk_X509_value( certStruc->chain, n ) );
-				if( r <= 0 ) {
-					ERR_print_errors_cb( logerr, (void*)__LINE__ );
+		if( certStruc && certStruc->chain ) {
+			lprintf( "checking cert because chain was made?");
+			r = SSL_CTX_use_certificate( ctx->ctx, sk_X509_value( certStruc->chain, 0 ) );
+			if( r <= 0 ) {
+				ERR_print_errors_cb( logerr, (void*)__LINE__ );
+			}
+			r = SSL_CTX_use_PrivateKey( ctx->ctx, certStruc->pkey );
+			if( r <= 0 ) {
+				ERR_print_errors_cb( logerr, (void*)__LINE__ );
+			}
+			{
+				int n;
+				for( n = 1; n < sk_X509_num( certStruc->chain ); n++ ) {
+					r = SSL_CTX_add_extra_chain_cert( ctx->ctx, sk_X509_value( certStruc->chain, n ) );
+					if( r <= 0 ) {
+						ERR_print_errors_cb( logerr, (void*)__LINE__ );
+					}
 				}
 			}
+		} else {
+			lprintf( "no cert on this context... it's the default fail context");
 		}
-		r = SSL_CTX_check_private_key( ctx->ctx );
-		if( r <= 0 ) {
-			ERR_print_errors_cb( logerr, (void*)__LINE__ );
+		if( certStruc && certStruc->pkey ) {
+			r = SSL_CTX_check_private_key( ctx->ctx );
+			if( r <= 0 ) {
+				ERR_print_errors_cb( logerr, (void*)__LINE__ );
+			}
 		}
 //sizeof( ctx->ctx ) );
 		r = SSL_CTX_set_session_id_context( ctx->ctx, (const unsigned char*)"12345678", 8 );
@@ -47864,30 +47827,54 @@ LOGICAL ssl_BeginServer_v2( PCLIENT pc, CPOINTER cert, size_t certlen
                           , CPOINTER keypair, size_t keylen
                           , CPOINTER keypass, size_t keypasslen
                           , char *hosts ) {
+	struct ssl_session * ses_o = NULL;
+	struct ssl_hostContext* ctx_o = NULL;
 	struct ssl_session * ses;
 	struct ssl_hostContext* ctx;
 	if( !pc ) return FALSE;
 	ses = pc->ssl_session;
+	ses_o = pc->pcOther?pc->pcOther->ssl_session:NULL;
 	// this can also be used to register additional hosts... the new function SHOULD be used instead though....
 	if( !ses ) {
 		ssl_InitLibrary();
 		ses = New( struct ssl_session );
 		MemSet( ses, 0, sizeof( struct ssl_session ) );
 	}
+	if( !ses_o && pc->pcOther ) {
+		ses_o = New( struct ssl_session );
+		MemSet( ses_o, 0, sizeof( struct ssl_session ) );
+	}
 	pc->flags.bSecure = 1;
+	if( pc->pcOther ) pc->pcOther->flags.bSecure = 1;
 	// from here down can do
 	ctx = ssl_setupHost( ses, (CTEXTSTR)hosts, (CTEXTSTR)cert, certlen, (CTEXTSTR)keypair, keylen, (CTEXTSTR)keypass, keypasslen );
+	if( ses_o )
+		ctx_o = ssl_setupHost( ses_o, (CTEXTSTR)hosts, (CTEXTSTR)cert, certlen, (CTEXTSTR)keypair, keylen, (CTEXTSTR)keypass, keypasslen );
 	if( !pc->ssl_session ) {
 		ses->ctx = ctx->ctx;
+		if( ses_o ) ses_o->ctx = ctx_o->ctx;
 		ses->dwOriginalFlags = pc->dwFlags;
+		if( ses_o ) ses_o->dwOriginalFlags = pc->pcOther->dwFlags;
 		ses->user_connected = pc->connect.ClientConnected;
 		ses->cpp_user_connected = pc->connect.CPPClientConnected;
+		if( ses_o ) {
+			ses_o->user_connected = pc->pcOther->connect.ClientConnected;
+			ses_o->cpp_user_connected = pc->pcOther->connect.CPPClientConnected;
+		}
 		pc->connect.ClientConnected = ssl_ClientConnected;
 		pc->dwFlags &= ~CF_CPPCONNECT;
-		if( pc->pcOther ) pc->pcOther->dwFlags &= ~CF_CPPCONNECT;
+		if( pc->pcOther ) {
+			pc->pcOther->dwFlags &= ~CF_CPPCONNECT;
+			pc->pcOther->connect.ClientConnected = ssl_ClientConnected;
+		}
 		ses->errorCallback = pc->errorCallback;
 		ses->psvErrorCallback = pc->psvErrorCallback;
+		if( ses_o ) ses_o->errorCallback = pc->errorCallback;
+		if( ses_o ) ses_o->psvErrorCallback = pc->psvErrorCallback;
 		pc->ssl_session = ses;
+		if( pc->pcOther ) {
+			pc->pcOther->ssl_session = ses_o;
+		}
 	}
 	// at this point pretty much have to assume
 	// that it will be OK.
@@ -48154,17 +48141,22 @@ void ssl_EndSecure(PCLIENT pc, POINTER buffer, size_t length ) {
 				pc->pcServer->ssl_session->cpp_user_connected( pc->pcServer->psvConnect, pc );
 			else
 				pc->pcServer->ssl_session->user_connected( pc->pcServer, pc );
+			pc->prefixData.dwAvail = length;
+			pc->prefixData.buffer.p = buffer;
+			pc->prefixData.dwUsed = 0;
+			pc->prefixData.s.bStream = 0;
+			pc->prefixData.s.bDynBuffer = 0;
 			if( buffer && pc->read.CPPReadComplete ) {
 				if( pc->dwFlags & CF_CPPREAD ) {
   // process read to get data already pending...
 					pc->read.CPPReadComplete( pc->psvRead, NULL, 0 );
-					if( buffer )
-						pc->read.CPPReadComplete( pc->psvRead, buffer, length );
+					//if( buffer )
+					//	pc->read.CPPReadComplete( pc->psvRead, buffer, length );
 				}
 				else {
 					pc->read.ReadComplete( pc, NULL, 0 );
-					if( buffer )
-						pc->read.ReadComplete( pc, buffer, length );
+					//if( buffer )
+					//	pc->read.ReadComplete( pc, buffer, length );
 				}
 #if defined( DEBUG_SSL_FALLBACK )
 				lprintf( "Sent buffer to app?");
@@ -48413,7 +48405,7 @@ void loadSystemCerts( SSL_CTX* ctx,X509_STORE *store )
 	HCERTSTORE hStore;
 	PCCERT_CONTEXT pContext = NULL;
 	X509 *x509;
-lprintf( "Loading System Certs");
+	//lprintf( "Loading System Certs");
 	hStore = CertOpenSystemStore((HCRYPTPROV_LEGACY)NULL, "ROOT");
 	if( !hStore ) {
 		lprintf( "FATAL, CANNOT OPEN ROOT STORE" );
@@ -49293,7 +49285,7 @@ void ProcessWebSockProtocol( WebSocketInputState websock, const uint8_t* msg, si
 						if( websock->do_close)
 							websock->do_close( websock->psvCloser );
 						else
-							lprintf( "Pipe handle close: This should probably release weboscket and all other stuff" );
+							lprintf( "Pipe handle close: This should probably release websocket and all other stuff" );
 					}
 					// resetInputstate after this would squash next memory....
 					return;
@@ -50812,14 +50804,16 @@ PLIST GetWebSocketHeaders( PCLIENT pc ) {
 	return NULL;
 }
 PTEXT GetWebSocketResource( PCLIENT pc ) {
-	HTML5WebSocket socket = (HTML5WebSocket)GetNetworkLong( pc, 0 );
-	if( socket && socket->Magic == 0x20130912 ) {
-		return GetHttpResource( socket->http_state );
+	if( sack_network_is_active( pc ) ) {
+		HTML5WebSocket socket = (HTML5WebSocket)GetNetworkLong( pc, 0 );
+		if( socket && socket->Magic == 0x20130912 ) {
+			return GetHttpResource( socket->http_state );
+		}
 	}
 	return NULL;
 }
 HTTPState GetWebSocketHttpState( PCLIENT pc ) {
-	if( pc ) {
+	if( pc && sack_network_is_active( pc ) ) {
 		HTML5WebSocket socket = (HTML5WebSocket)GetNetworkLong( pc, 0 );
 		if( socket && socket->Magic == 0x20130912 ) {
 			return socket->http_state;
@@ -59317,6 +59311,8 @@ static void threadInit( void ) {
  // edge case the main thread might init twice.
 	if( !FileSysThreadInfo.cwd ) {
 		FileSysThreadInfo.cwd = ExpandPath( "." );
+	}
+	if( !FileSysThreadInfo._mounted_file_systems ) {
 		FileSysThreadInfo.default_mount = ( *winfile_local )._default_mount;
 		FileSysThreadInfo._mounted_file_systems = &( *winfile_local )._mounted_file_systems;
 		//FileSysThreadInfo.mounted_file_systems = ( *winfile_local )._mounted_file_systems;
@@ -59338,6 +59334,7 @@ static void LocalInit( void )
 			sack_register_filesystem_interface( "native", &native_fsi );
 		if( !( *winfile_local )._default_mount )
 			( *winfile_local )._default_mount = sack_mount_filesystem( "native", &native_fsi, 1000, (uintptr_t)NULL, TRUE );
+ // this only works for threads WE create... maybe that's fixable someday
 		OnThreadCreate( threadInit );
 		OnThreadExit( threadExit );
 		InitializeCriticalSec( &( *winfile_local ).cs_files );
@@ -61166,7 +61163,7 @@ LOGICAL sack_exists( const char* filename )
 //----------------------------------------------------------------------------
 LOGICAL sack_isPathEx( const char* filename, struct file_system_mounted_interface* mount )
 {
-	if( mount && mount->fsi && mount->fsi->exists ) {
+	if( mount && mount->fsi && mount->fsi->is_directory ) {
 		{
 			struct directory* d;
 			INDEX i;
@@ -61179,7 +61176,7 @@ LOGICAL sack_isPathEx( const char* filename, struct file_system_mounted_interfac
 		}
 		int result = mount->fsi->is_directory( mount->psvInstance, filename );
 		return result;
-	}
+	} else if( !mount || !mount->fsi ) return sack_isPath( filename );
 	return FALSE;
 }
 //----------------------------------------------------------------------------
@@ -61424,6 +61421,7 @@ typedef struct _FILE_DISPOSITION_INFORMATION {
 	BOOLEAN DeleteFile;
 } FILE_DISPOSITION_INFORMATION, * PFILE_DISPOSITION_INFORMATION;
 #endif
+static FILE_BASIC_INFORMATION zero_file_basic_information;
 LOGICAL windowDeepDelete( const char* path )
 {
 	WCHAR* pathw = CharWConvert( path );
@@ -61472,7 +61470,7 @@ LOGICAL windowDeepDelete( const char* path )
 	}
 	if( info.dwFileAttributes & FILE_ATTRIBUTE_READONLY ) {
 		/* Remove read-only attribute */
-		FILE_BASIC_INFORMATION basic = {};
+		FILE_BASIC_INFORMATION basic = zero_file_basic_information;
 		basic.FileAttributes = ( info.dwFileAttributes & ~FILE_ATTRIBUTE_READONLY ) |
 			FILE_ATTRIBUTE_ARCHIVE;
 		status = pNtSetInformationFile( handle,
@@ -61874,6 +61872,7 @@ static int CPROC sack_filesys_exists( uintptr_t psv, const char* filename ) {
 	return FALSE;
 }
 struct file_system_mounted_interface* sack_get_default_mount( void ) {
+	if( !FileSysThreadInfo._mounted_file_systems ) threadInit();
 	return FileSysThreadInfo.default_mount;
 }
 struct file_system_interface* sack_get_mounted_filesystem_interface( struct file_system_mounted_interface* mount ) {
@@ -68415,6 +68414,7 @@ SACK_SYSTEM_NAMESPACE_END
 #ifndef _POSIX_C_SOURCE
 #  define _POSIX_C_SOURCE 2
 #endif
+#define _POSIX_SOURCE
 #ifdef WIN32
 //#undef StrDup
 //#undef StrRChr
@@ -68580,9 +68580,9 @@ struct local_systemlib_data {
 	LOGICAL (CPROC*ExternalLoadLibrary)( const char *filename );
  // please Release or Deallocate the reutrn value
 	char * (CPROC*ExternalFindProgram)( const char *filename );
-	// on XP this is in PSAPI.DLL later it's in Kernel32.DLL
-#ifdef WIN32
 	PDATALIST killEventCallbacks;
+#ifdef WIN32
+	// on XP this is in PSAPI.DLL later it's in Kernel32.DLL
 	BOOL (WINAPI* EnumProcessModules)( HANDLE hProcess, HMODULE *lphModule
 	                                 , DWORD cb, LPDWORD lpcbNeeded );
 #endif
@@ -68963,32 +68963,89 @@ static uintptr_t KillEventThread( PTHREAD thread ) {
 	CloseHandle( hRestartEvent );
 	return 0;
 }
-void AddKillSignalCallback( int( *cb )( uintptr_t ), uintptr_t psv ) {
+void EnableExitEvent( void ) {
+	char eventName[256];
+	snprintf( eventName, 256, "Global\\%s:exit", GetProgramName() );
+	//lprintf( "Starting exit event thread... %s", eventName );
+	ThreadTo( KillEventThread, (uintptr_t)eventName );
+	while( eventName[0] ) Relinquish();
+}
+#endif
+#ifdef __LINUX__
+static char *exitEventName;
+static int hDir;
+ATEXIT( cleanupEvent ) {
+	if( exitEventName ) {
+		unlinkat( hDir, exitEventName, 0 );
+		Deallocate( char*, exitEventName ); exitEventName = NULL;
+	}
+}
+static uintptr_t KillEventThread( PTHREAD thread ) {
+	char *eventName      = (char *)GetThreadParam( thread );
+	exitEventName = StrDup( eventName );
+	char bRestartEvent = 0;
+	{
+		int hDir = open( "/tmp", O_RDONLY | O_DIRECTORY );
+		int rc   = mkfifoat( hDir, eventName, 0666 );
+		if( rc ) {
+			// failure
+		}
+		int file = openat( hDir, eventName, O_RDONLY );
+ // ack done init...
+		eventName[ 0 ] = 0;
+		int status = read( file, &bRestartEvent, sizeof( bRestartEvent ) );
+		if( status > 0 ) {
+			INDEX idx;
+			struct callback_info *ci;
+			unlinkat( hDir, exitEventName, 0 );
+			Deallocate( char*, exitEventName );
+			exitEventName = NULL;
+			close( file );
+			// int( *cb )( void );
+			int preventShutdown = 0;
+			DATA_FORALL( l.killEventCallbacks, idx, struct callback_info *, ci ) {
+				// lprintf( "callback: %p %p %d", ci->cb, ci->psv, ci->deleted );
+				if( !ci->deleted )
+					preventShutdown |= ci->cb( ci->psv );
+			}
+			// lprintf( "Callbacks done: %d", preventShutdown );
+			if( !preventShutdown ) {
+				InvokeExits();
+				exit( 0 );
+			}
+		}
+else lprintf( "Failure %d", status );
+	}
+	return 0;
+}
+void EnableExitEvent( void ) {
+	char eventName[ 256 ];
+	snprintf( eventName, 256, "Global\\%s:exit", GetProgramName() );
+	// lprintf( "Starting exit event thread... %s", eventName );
+	ThreadTo( KillEventThread, (uintptr_t)eventName );
+	while( eventName[ 0 ] )
+		Relinquish();
+}
+#endif
+void AddKillSignalCallback( int ( *cb )( uintptr_t ), uintptr_t psv ) {
 	struct callback_info ci;
-	ci.cb = cb;
-	ci.psv = psv;
+	ci.cb      = cb;
+	ci.psv     = psv;
 	ci.deleted = 0;
-	if( !l.killEventCallbacks ) l.killEventCallbacks = CreateDataList( sizeof( struct callback_info ) );
+	if( !l.killEventCallbacks )
+		l.killEventCallbacks = CreateDataList( sizeof( struct callback_info ) );
 	AddDataItem( &l.killEventCallbacks, &ci );
 }
-void RemoveKillSignalCallback( int( *cb )( uintptr_t ), uintptr_t psv ) {
+void RemoveKillSignalCallback( int ( *cb )( uintptr_t ), uintptr_t psv ) {
 	struct callback_info *ci;
 	INDEX idx;
-	DATA_FORALL( l.killEventCallbacks, idx, struct callback_info*, ci ) {
+	DATA_FORALL( l.killEventCallbacks, idx, struct callback_info *, ci ) {
 		if( ci->cb == cb && ci->psv == psv ) {
 			ci->deleted = TRUE;
 			break;
 		}
 	}
 }
-void EnableExitEvent( void ) {
-	char eventName[256];
-	snprintf( eventName, 256, "Global\\%s(%d):exit", GetProgramName(), GetCurrentProcessId() );
-	//lprintf( "Starting exit event thread... %s", eventName );
-	ThreadTo( KillEventThread, (uintptr_t)eventName );
-	while( eventName[0] ) Relinquish();
-}
-#endif
 static void CPROC SetupSystemServices( POINTER mem, uintptr_t size )
 {
 	struct local_systemlib_data *init_l = (struct local_systemlib_data *)mem;
@@ -69882,7 +69939,7 @@ LOGICAL CPROC StopProgram( PTASK_INFO task )
 		{
 			char eventName[256];
 			HANDLE hEvent;
-			snprintf( eventName, 256, "Global\\%s(%d):exit", task->name, task->pi.dwProcessId );
+			snprintf( eventName, 256, "Global\\%s:exit", task->name );
 			hEvent = OpenEvent( EVENT_MODIFY_STATE, FALSE, eventName );
 			//lprintf( "Signal process event: %s", eventName );
 			if( hEvent != NULL ) {
@@ -70887,15 +70944,16 @@ SYSTEM_PROC( generic_function, LoadFunctionExx )( CTEXTSTR libname, CTEXTSTR fun
 		library->loading--;
 	}
 	SuspendDeadstart();
+	{
 	int err1 = 0, err2 = 0, err3 = 0, err4 = 0;
 	if( !library->library ) {
  //-V595
 		library->library = LoadLibraryExW( library->cur_full_name, NULL, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR| LOAD_LIBRARY_SEARCH_DEFAULT_DIRS );
 		err1             = GetLastError();
-#ifdef _DEBUG
+#  ifdef _DEBUG
 		errors[0].name = library->cur_full_name;
 		errors[0].error = GetLastError();
-#endif
+#  endif
 	}
 	if( !library->library ) {
 #  ifdef DEBUG_LIBRARY_LOADING
@@ -70903,35 +70961,35 @@ SYSTEM_PROC( generic_function, LoadFunctionExx )( CTEXTSTR libname, CTEXTSTR fun
 #  endif
 		library->library = LoadLibraryExW( library->full_name, NULL, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS );
 		err2             = GetLastError();
-#ifdef _DEBUG
+#  ifdef _DEBUG
 		errors[1].name = library->full_name;
 		errors[1].error = GetLastError();
-#endif
+#  endif
 	}
 	if( !library->library ) {
 		library->library = LoadLibraryExW( library->alt_full_name, NULL, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS );
 		err3             = GetLastError();
-#ifdef _DEBUG
+#  ifdef _DEBUG
 		errors[2].name = library->alt_full_name;
 		errors[2].error = GetLastError();
-#endif
+#  endif
 	}
 	if( !library->library ) {
 		library->library = LoadLibraryExW( library->name, NULL, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS );
 		err4 = GetLastError();
-#ifdef _DEBUG
+#  ifdef _DEBUG
 		errors[3].name = library->name;
 		errors[3].error = GetLastError();
-#endif
+#  endif
 		//if( !library->library ) lprintf( "Failed load basic:%s %d", library->name, GetLastError() );
 	}
 	if( !library->library ) {
 		if( !library->loading ) {
 			//if( l.flags.bLog )
-#ifdef _DEBUG
+#  ifdef _DEBUG
 			for( int i = 0; i < 4; i++ )
-				lprintf( "Error LoadLibrary: %5d %ls", errors[i].error, errors[i].name );
-#else
+				lprintf( "Error LoadLibrary: %5d %ls %d", errors[i].error, errors[i].name, i==0?err1:i==1?err2:i==2?err3:err4 );
+#  else
 			_xlprintf( 2 DBG_RELAY )("Attempt to load [%ls][%ls][%ls]%ls(%s) failed. %d %d %d %d"
 					, library->cur_full_name
 					, library->full_name
@@ -70941,7 +70999,7 @@ SYSTEM_PROC( generic_function, LoadFunctionExx )( CTEXTSTR libname, CTEXTSTR fun
 					, err1, err2, err3, err4
  //-V595
 					);
-#endif
+#  endif
 			ReleaseEx( library->cur_full_name DBG_SRC );
 			ReleaseEx( library->full_name DBG_SRC );
 			ReleaseEx( library->alt_full_name DBG_SRC );
@@ -70951,6 +71009,7 @@ SYSTEM_PROC( generic_function, LoadFunctionExx )( CTEXTSTR libname, CTEXTSTR fun
 		}
 		ResumeDeadstart();
 		return NULL;
+	}
 	}
 #else
 	}
@@ -75536,7 +75595,7 @@ static const _POINT EXTERNAL_NAME(__X) = { ONE, ZERO, ZERO};
 static const _POINT EXTERNAL_NAME(__Y) = {ZERO,  ONE, ZERO};
 static const _POINT EXTERNAL_NAME(__Z) = {ZERO, ZERO,  ONE};
 #if (DIMENSIONS > 3 )
-static const _POINT __W = {ZERO, ZERO, ZERO, ONE};
+static const _POINT EXTERNAL_NAME(__W) = {ZERO, ZERO, ZERO, ONE};
 #endif
 #if defined( __GNUC__  ) && defined( __cplusplus )
 #ifdef __STATIC__
